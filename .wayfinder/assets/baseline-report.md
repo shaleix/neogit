@@ -195,3 +195,7 @@ warm lib-only 133ms 的 9 个 spawn 若换成 libgit2 内存对象:
 ### 5.3 复现清单(`baseline-profile-data/`)
 
 `gen-stress-repo.sh`(造库)→ `git-probe.c`(编译后作 git_executable)→ `neogit-refresh.lua` + `neogit-minimal.lua`(refresh 全链路,配 `NEOGIT_LOG_LEVEL=debug NEOGIT_LOG_FILE=1` 取每模块耗时)→ `cli-bench.sh`(裸 CLI)→ `parse-bench.lua`(解析分离)→ `libgit2-bench.lua`(fugit2 对照)→ `spawn-bench.lua`(单进程固定开销)。原始输出见同名 `.txt` / `rep-*.txt` / `probe-5.log`。
+
+---
+
+> **勘误(2026-09-20,main session 复核)**:§5.2.2 所称 "stash 无 libgit2 绑定(fugit2 未声明)" **有误**——fugit2 cdef 已声明 `git_stash_save/apply/pop/drop/foreach`(libgit2.lua:672–686,封装在 git2.lua:4152–4201),stash 读(list 经 `git_stash_foreach`)与写均可走 libgit2;**describe 确实无绑定**,保留 CLI 的结论不变。本条已由 `混合后端架构边界拍板` 票采信。
