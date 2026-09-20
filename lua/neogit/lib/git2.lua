@@ -93,6 +93,8 @@ local function ensure_extra_cdefs()
     int git_reference_foreach_name(git_repository *repo, git_reference_foreach_cb callback, void *payload);
 
     int git_revparse_single(git_object **out, git_repository *repo, const char *spec);
+
+    const git_index_entry *git_index_get_byindex(git_index *index, size_t n);
   ]]
 
   extra_cdefs_done = true
