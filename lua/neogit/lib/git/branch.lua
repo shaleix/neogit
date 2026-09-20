@@ -2,6 +2,7 @@ local git = require("neogit.lib.git")
 local config = require("neogit.config")
 local util = require("neogit.lib.util")
 local GitResult = require("neogit.lib.git.result")
+local backend = require("neogit.lib.git.backend")
 
 local FuzzyFinderBuffer = require("neogit.buffers.fuzzy_finder")
 
@@ -97,8 +98,13 @@ function M.track(name, args)
 end
 
 ---@param include_current? boolean
+---@param include_current? boolean
 ---@return string[]
 function M.get_local_branches(include_current)
+  if backend.capability("query_branch") == "libgit2" then
+    return require("neogit.lib.git.libgit2.branch").get_local_branches(include_current)
+  end
+
   local branches = git.cli.branch.sort(config.values.sort_branches).call({ hidden = true }).stdout
   return parse_branches(branches, include_current)
 end
@@ -106,6 +112,10 @@ end
 ---@param include_current? boolean
 ---@return string[]
 function M.get_remote_branches(include_current)
+  if backend.capability("query_branch") == "libgit2" then
+    return require("neogit.lib.git.libgit2.branch").get_remote_branches(include_current)
+  end
+
   local branches = git.cli.branch.remotes.sort(config.values.sort_branches).call({ hidden = true }).stdout
   return parse_branches(branches, include_current)
 end
@@ -141,6 +151,10 @@ end
 ---@param branch string
 ---@return boolean
 function M.exists(branch)
+  if backend.capability("query_branch") == "libgit2" then
+    return require("neogit.lib.git.libgit2.branch").exists(branch)
+  end
+
   local result = git.cli["rev-parse"].verify.quiet
     .args(string.format("refs/heads/%s", branch))
     .call { hidden = true, ignore_error = true }
@@ -189,6 +203,10 @@ end
 ---Returns current branch name, or nil if detached HEAD
 ---@return string|nil
 function M.current()
+  if backend.capability("query_branch") == "libgit2" then
+    return require("neogit.lib.git.libgit2.branch").current()
+  end
+
   local head = git.repo.state.head.branch
   if head and head ~= "(detached)" then
     return head
@@ -206,6 +224,10 @@ end
 function M.current_full_name()
   local current = M.current()
   if current then
+    if backend.capability("query_branch") == "libgit2" then
+      return require("neogit.lib.git.libgit2.branch").current_full_name()
+    end
+
     return git.cli["rev-parse"].symbolic_full_name.args(current).call({ hidden = true }).stdout[1]
   end
 end
