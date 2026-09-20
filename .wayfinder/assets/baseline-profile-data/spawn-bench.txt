@@ -1,0 +1,3 @@
+jobstart_revparse_HEAD_ms	n=20	min=3.490	med=3.774	mean=3.820	max=4.294
+jobstart_true_ms	n=20	min=1.811	med=3.313	mean=3.532	max=6.572
+jobstart_status_z_ms	n=10	min=26.231	med=33.207	mean=32.483	max=45.686

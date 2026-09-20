@@ -1,0 +1,52 @@
+18244.838875724	-C	.	rev-parse	--show-toplevel
+18244.846997145	-C	/tmp/opencode/stress-repo	rev-parse	--is-inside-work-tree
+18244.854599226	-C	/tmp/opencode/stress-repo	rev-parse	--show-toplevel
+18244.858974471	-C	/tmp/opencode/stress-repo	rev-parse	--git-dir
+18244.863343497	-C	/tmp/opencode/stress-repo	rev-parse	--git-common-dir
+18244.875501184	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	status	--porcelain=2	-b
+18244.880760167	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	status	--porcelain=2	-b
+18244.884822586	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	rev-parse	HEAD
+18244.892911656	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	status	-z	--porcelain=2
+18244.899916048	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	stash	list
+18244.922702885	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	describe	--long	--tags	HEAD
+18244.936239419	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	log	--format=parent%x1D%P%x1Fabbreviated_tree%x1D%t%x1Fauthor_email%x1D%aE%x1Fabbreviated_parent%x1D%p%x1Fauthor_date%x1D%aD%x1Fcommitter_name%x1D%cN%x1Fsanitized_subject_line%x1D%f%x1Fcommitter_date%x1D%cD%x1Fref_name%x1D%D%x1Foid%x1D%H%x1Funix_date%x1D%ct%x1Flog_date%x1D%cd%x1Fauthor_name%x1D%aN%x1Frel_date%x1D%cr%x1Fabbreviated_commit%x1D%h%x1Fsubject%x1D%s%x1Fcommitter_email%x1D%cE%x1Fbody%x1D%b%x1Ftree%x1D%T%x1Fcommit_notes%x1D%N%x1Fencoding%x1D%e%x1E	--no-patch	--max-count=10	--topo-order
+18244.956963483	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	status	--porcelain=2	-b
+18244.967295131	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	submodule
+18245.097432521	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	rev-parse	--show-superproject-working-tree
+18245.126226277	-C	/tmp/opencode/stress-repo	rev-parse	--git-dir
+18245.133918815	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	status	--porcelain=2	-b
+18245.145933573	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	status	--porcelain=2	-b
+18245.155802965	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	rev-parse	HEAD
+18245.173266049	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	status	-z	--porcelain=2
+18245.177674719	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	stash	list
+18245.187787829	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	describe	--long	--tags	HEAD
+18245.206417833	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	log	--format=parent%x1D%P%x1Fabbreviated_tree%x1D%t%x1Fauthor_email%x1D%aE%x1Fabbreviated_parent%x1D%p%x1Fauthor_date%x1D%aD%x1Fcommitter_name%x1D%cN%x1Fsanitized_subject_line%x1D%f%x1Fcommitter_date%x1D%cD%x1Fref_name%x1D%D%x1Foid%x1D%H%x1Funix_date%x1D%ct%x1Flog_date%x1D%cd%x1Fauthor_name%x1D%aN%x1Frel_date%x1D%cr%x1Fabbreviated_commit%x1D%h%x1Fsubject%x1D%s%x1Fcommitter_email%x1D%cE%x1Fbody%x1D%b%x1Ftree%x1D%T%x1Fcommit_notes%x1D%N%x1Fencoding%x1D%e%x1E	--no-patch	--max-count=10	--topo-order
+18245.207977175	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	status	--porcelain=2	-b
+18245.231131815	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	rev-parse	--short	8efa772321203b0498a7de363d5ad9e4de02c006
+18245.250603674	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	branch	--show-current
+18245.263190068	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	log	--format=parent%x1D%P%x1Fabbreviated_tree%x1D%t%x1Fauthor_email%x1D%aE%x1Fabbreviated_parent%x1D%p%x1Fauthor_date%x1D%aD%x1Fcommitter_name%x1D%cN%x1Fsanitized_subject_line%x1D%f%x1Fcommitter_date%x1D%cD%x1Fref_name%x1D%D%x1Foid%x1D%H%x1Funix_date%x1D%ct%x1Flog_date%x1D%cd%x1Fauthor_name%x1D%aN%x1Frel_date%x1D%cr%x1Fabbreviated_commit%x1D%h%x1Fsubject%x1D%s%x1Fcommitter_email%x1D%cE%x1Fbody%x1D%b%x1Ftree%x1D%T%x1Fcommit_notes%x1D%N%x1Fencoding%x1D%e%x1E	--no-patch	HEAD	--max-count=1
+18245.276116732	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	log	--format=%x1E%H%x00	--graph	--color	--max-count=10	--topo-order
+18245.279909755	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	branch	--show-current
+18245.286054113	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	log	--max-count=1	--format=%s	8efa772321203b0498a7de363d5ad9e4de02c006
+18245.292991830	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	config	--list	--null	--local
+18245.299780286	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	log	--max-count=1	--format=%s	8efa772321203b0498a7de363d5ad9e4de02c006
+18245.310659338	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	remote
+18245.316455371	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	branch	--show-current
+18245.351192653	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	status	--porcelain=2	-b
+18245.356569417	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	status	--porcelain=2	-b
+18245.363696407	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	rev-parse	HEAD
+18245.391859861	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	status	-z	--porcelain=2
+18245.409238829	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	stash	list
+18245.418856314	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	describe	--long	--tags	HEAD
+18245.448086179	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	status	--porcelain=2	-b
+18245.457166637	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	log	--max-count=1	--format=%s	8efa772321203b0498a7de363d5ad9e4de02c006
+18245.466165723	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	log	--max-count=1	--format=%s	8efa772321203b0498a7de363d5ad9e4de02c006
+18245.496480508	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	status	--porcelain=2	-b
+18245.502964793	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	status	--porcelain=2	-b
+18245.515597999	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	rev-parse	HEAD
+18245.540609809	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	status	-z	--porcelain=2
+18245.540727540	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	stash	list
+18245.560741653	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	describe	--long	--tags	HEAD
+18245.573871252	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	status	--porcelain=2	-b
+18245.589247076	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	log	--max-count=1	--format=%s	8efa772321203b0498a7de363d5ad9e4de02c006
+18245.598234590	--no-pager	--literal-pathspecs	--no-optional-locks	-c	core.preloadindex=true	-c	color.ui=always	-c	diff.noprefix=false	log	--max-count=1	--format=%s	8efa772321203b0498a7de363d5ad9e4de02c006

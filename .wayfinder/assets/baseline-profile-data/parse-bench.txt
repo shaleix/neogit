@@ -1,0 +1,8 @@
+capture_status_bytes	9421
+capture_status_popen_ms	43.500
+capture_log_bytes	123557
+capture_log_popen_ms	38.384
+parse_status_update_ms	n=10	min=1.067	med=2.627	mean=3.090	max=6.575
+parse_status_items	staged=20,unstaged=50,untracked=10
+parse_log_commits	200
+parse_log_record_decode_ms	n=10	min=8.487	med=22.494	mean=20.481	max=38.379
