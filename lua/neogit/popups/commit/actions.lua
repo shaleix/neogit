@@ -2,7 +2,6 @@ local M = {}
 
 local CommitSelectViewBuffer = require("neogit.buffers.commit_select_view")
 local git = require("neogit.lib.git")
-local client = require("neogit.client")
 local input = require("neogit.lib.input")
 local notification = require("neogit.lib.notification")
 local config = require("neogit.config")
@@ -33,16 +32,22 @@ local function confirm_modifications()
   return true
 end
 
-local function do_commit(popup, cmd)
-  client.wrap(cmd.arg_list(popup:get_arguments()), {
-    autocmd = "NeogitCommitComplete",
-    msg = {
-      success = "Committed",
-      fail = "Commit failed",
-    },
-    interactive = true,
-    show_diff = config.values.commit_editor.show_staged_diff,
-  })
+---@param popup PopupData
+---@param args string[] Additional positional/flag arguments
+---@param opts table See git.commit.create opts (edit/no_edit/all/amend/only)
+---@return GitResult
+local function do_commit(popup, args, opts)
+  return git.commit.create(
+    vim.list_extend(vim.list_extend({}, popup:get_arguments()), args),
+    vim.tbl_extend("keep", opts or {}, {
+      autocmd = "NeogitCommitComplete",
+      msg = {
+        success = "Committed",
+        fail = "Commit failed",
+      },
+      show_diff = config.values.commit_editor.show_staged_diff,
+    })
+  )
 end
 
 local function commit_special(popup, method, opts)
@@ -85,19 +90,12 @@ local function commit_special(popup, method, opts)
     end
   end
 
-  local cmd = git.cli.commit
-  if opts.edit then
-    cmd = cmd.edit
-  else
-    cmd = cmd.no_edit
-  end
-
-  if opts.all then
-    cmd = cmd.all
-  end
-
   a.util.scheduler()
-  do_commit(popup, cmd.args(method:format(commit)))
+  do_commit(popup, { method:format(commit) }, {
+    edit = opts.edit,
+    no_edit = not opts.edit,
+    all = opts.all,
+  })
 
   if opts.rebase then
     a.util.scheduler()
@@ -111,7 +109,7 @@ function M.commit(popup)
     return
   end
 
-  do_commit(popup, git.cli.commit)
+  do_commit(popup, {}, {})
 end
 
 function M.extend(popup)
@@ -131,7 +129,7 @@ function M.extend(popup)
     return
   end
 
-  do_commit(popup, git.cli.commit.no_edit.amend)
+  do_commit(popup, {}, { no_edit = true, amend = true })
 end
 
 function M.reword(popup)
@@ -139,7 +137,7 @@ function M.reword(popup)
     return
   end
 
-  do_commit(popup, git.cli.commit.amend.only)
+  do_commit(popup, {}, { amend = true, only = true })
 end
 
 function M.amend(popup)
@@ -147,7 +145,7 @@ function M.amend(popup)
     return
   end
 
-  do_commit(popup, git.cli.commit.amend)
+  do_commit(popup, {}, { amend = true })
 end
 
 function M.fixup(popup)
@@ -216,7 +214,7 @@ function M.absorb(popup)
     return
   end
 
-  git.cli.absorb.verbose.base(commit .. "^").and_rebase.env({ GIT_SEQUENCE_EDITOR = ":" }).call()
+  git.commit.absorb(commit)
 end
 
 return M

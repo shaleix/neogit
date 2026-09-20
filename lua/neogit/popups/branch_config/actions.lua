@@ -1,6 +1,5 @@
 local a = require("neogit.lib.async")
 local git = require("neogit.lib.git")
-local client = require("neogit.client")
 
 local FuzzyFinderBuffer = require("neogit.buffers.fuzzy_finder")
 
@@ -66,12 +65,12 @@ end
 function M.description_config(branch)
   local fn = function()
     vim.o.eventignore = "WinLeave"
-    client.wrap(git.cli.branch.edit_description, {
+    git.branch.edit_description {
       autocmd = "NeogitDescriptionComplete",
       msg = {
         success = "Description Updated",
       },
-    })
+    }
     vim.o.eventignore = ""
 
     return git.config.get_local("branch." .. branch .. ".description"):read()

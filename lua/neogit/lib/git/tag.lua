@@ -1,7 +1,24 @@
 local git = require("neogit.lib.git")
+local client = require("neogit.client")
+local GitResult = require("neogit.lib.git.result")
 
 ---@class NeogitGitTag
 local M = {}
+
+---Create a tag, editor flow handled by client.wrap.
+---@param args string[] Positional/flag arguments (tag name, target, "-m", ...)
+---@param opts? { autocmd?: string, msg?: { success: string, fail: string } }
+---@return GitResult
+function M.create(args, opts)
+  opts = opts or {}
+
+  local code = client.wrap(git.cli.tag.arg_list(args), {
+    autocmd = opts.autocmd,
+    msg = opts.msg,
+  })
+
+  return GitResult.new(code)
+end
 
 --- Outputs a list of tags locally
 ---@param filter string?

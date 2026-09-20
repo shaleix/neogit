@@ -71,4 +71,10 @@ function M.move(from, to)
   return git.cli.mv.args(from, to).call():success()
 end
 
+---Remove files from the index and working tree (`git rm -- <paths>`).
+---@param paths string[]
+function M.remove(paths)
+  git.cli.rm.files(unpack(paths)).call { await = true }
+end
+
 return M
