@@ -170,3 +170,12 @@
 - **写后刷新链**:libgit2 写 `.git/index` 与 CLI 相同(原子 rename),watcher 照常触发;popup 动作后的显式 refresh 不变。
 - **验收**:P4 smoke **14/14**——stage/unstage/checkout/anything 合计 **7 项动作零 spawn**,语义以 CLI(`git diff --cached` 等)为对照逐项验证(含 hunk 正向 stage、reverse 回落);回归:P3 16/16、P2 26/26、CLI 对照 28/28、全套件 **233**;压力仓库 warm ~70–98ms / spawn 2(浮动为系统负载,P4 不触碰 refresh 路径)。
 - **全部阶段完成**:P0(收拢+去冗余)→ P1(vendor+overlay+降级)→ P2(读 wave1,spawn 4)→ P3(读 wave2,spawn 2)→ P4(index 写零 spawn)。rspec 双后端双跑待 CI(本机无 ruby 工具链)。
+
+## 附录 E:CI 差分守护首绿记录(2026-09-20)
+
+fork 无绿基线(rspec 存在 25–26 个预存失败,`ci-baseline` 分支证实与迁移无关),故 CI 采用**差分守护**而非绝对绿:
+
+- 两个 E2E 步骤(CLI 对照 / libgit2)非阻断;Guard 步骤当且仅当 **libgit2 出现 CLI 没有的失败**才判红,并在首差分非空时自动重跑一轮 libgit2 滤除时序噪声(实测 `branch_popup:32`/`stash_popup:159` 为 flaky,重跑即消)
+- 首绿数据:stable CLI 25 / libgit2 25;nightly CLI 26 / libgit2 25(libgit2 反而少一个)——**无后端特有失败**,plenary(含 twins spec)全绿
+- 差分守护在合入前共抓出并修复 4 个真实回归:status 条目 file_mode 空缺、submodule 标志空缺(含 bit12 实测纠偏)、以及 generate_patch 裸补丁的三层格式不兼容(缺 `diff --git` 头 / `+0,N` 起始行 / 新文件旧侧 `--- a/`)——后者连带修掉两个 Lua 模式陷阱(`-` 为懒惰量词需转义 `%-%-git`;`+++` 行需行锚定)
+- fork 上 push 事件不触发 workflow(原因未明),CI 依赖 `workflow_dispatch` 手动点火
