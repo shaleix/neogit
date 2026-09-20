@@ -3,7 +3,7 @@ title: libgit2 版本分布与 ABI 风险调研
 slug: libgit2-versions
 labels: [wayfinder:research]
 status: open
-assignee:
+assignee: research-subagent/libgit2-versions
 blocked-by: []
 created: 2026-09-20
 ---
