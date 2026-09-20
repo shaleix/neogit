@@ -38,7 +38,26 @@ jobs:
           cd tmp/telescope-fzf-native
           make
 
-      - name: E2E Test
+      # libgit2 backend (migration spec §6): runtime library for the FFI
+      # binding; plenary twins engage automatically, rspec runs per backend.
+      - name: Install libgit2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgit2-dev
+
+      - name: libgit2 probe sanity
+        run: |
+          nvim --headless -u NONE +'lua local ffi=require("ffi"); local lib=ffi.load("libgit2"); ffi.cdef("void git_libgit2_version(int*,int*,int*)"); local a,b,c=ffi.new("int[1]"),ffi.new("int[1]"),ffi.new("int[1]"); lib.git_libgit2_version(a,b,c); print(("libgit2 %d.%d.%d"):format(a[0],b[0],c[0]))' +qa
+
+      - name: E2E Test (CLI backend)
+        env:
+          NEOGIT_GIT_BACKEND: cli
+        run: |
+          bundle exec rspec
+
+      - name: E2E Test (libgit2 backend)
+        env:
+          NEOGIT_GIT_BACKEND: auto
         run: |
           bundle exec rspec
 
