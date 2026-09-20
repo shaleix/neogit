@@ -3,7 +3,7 @@ title: 绑定与分发方案拍板
 slug: binding-distribution-decision
 labels: [wayfinder:grilling]
 status: open
-assignee:
+assignee: main-session/ses_f41e510deffeMfC1qkcd4Q5YVY
 blocked-by: [libgit2-versions, binding-poc]
 created: 2026-09-20
 ---
