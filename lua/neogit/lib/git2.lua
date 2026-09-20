@@ -117,7 +117,7 @@ local function apply_version_overrides(minor)
   -- Known struct-layout caveats the consumers must respect (feature flags):
   --   blame_boundary: git_blame_hunk gained committer/summary fields in 1.9,
   --   so `boundary` reads garbage on >= 1.9 with the 1.8-baseline cdef.
-  M.limits = {
+  M.feature_flags = {
     blame_boundary = minor < 9,
     config_entry_level = minor >= 8, -- 1.7 layout differs at that offset
   }

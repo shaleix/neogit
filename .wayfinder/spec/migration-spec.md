@@ -134,3 +134,13 @@
 1. **P0 起步**:从 `grep -rn "git%.cli\." lua/neogit/popups/` 清点开始;每处改为模块函数 + GitResult;随做 `status -b`/`log -1` 去冗余;完成后用 `assets/baseline-profile-data/` 脚本重测基线并追加到 [baseline-report](../assets/baseline-report.md)。
 2. **P1 起步**:vendor 三文件自 fugit2 `7783d33`;overlay 加载器按 [libgit2-versions-report §4.3](../assets/libgit2-versions-report.md) 伪代码实现;探测失败路径必须有测试。
 3. 每阶段验收数据回写本 spec 附录;偏离决策时开新 ADR 或修订本 spec 并注明。
+
+## 附录 A:实现勘注(P0/P1 评审后落定,2026-09-20)
+
+1. **GitResult**:实现含 `ok` 字段(= `code == 0` 便捷布尔)+ `:success()/:failure()`,与 §3.2 的 `{ok, code, message}` 一致。
+2. **配置名**:本文各处「全局 `kind` 配置」实现为 **`git_backend`**——neogit 配置中 `kind` 全部是窗口语义(kind = "tab"/"split"/…),沿用会误导;值域 auto/libgit2/cli 与回退语义不变。
+3. **`log -1 %s` ×2→1 的实现方式**:sequencer 端采用**条件跳过**(pick/revert 未进行时不读 onto subject——此时该值无消费者)而非跨任务共享。理由:update_* 任务在并行 wave 中,共享需引入单飞/缓存机制,复杂度与收益不成比例;进行中场景(罕见)仍为 2 次。
+4. **P0 收拢范围**:实际清除 popups(17 处)+ buffers(18 处)共 35 处,超出 §4 P0 行的「~20 处 popups」——方向一致的有益扩展(上层全面不再触 `git.cli`)。
+5. **P1 接线边界**:`backend.current()/capability()` 在 P1 无生产调用点属**设计**(P1 = 零行为变化;`repository.lua` 消费能力表自 P2 起);`M.run` 执行器同样自 P2 的首个 libgit2 调用方起经过。
+6. macOS dylib 候选已由「绑定与分发方案拍板」Resolution 预告(「macOS 对应 dylib 序列」),非 scope creep;`backend.reset()`/`probe{force}` 为测试/运维后门,接受。
+7. **Backlog(smell 级,后续顺手做)**:status/actions 冲突块二重复制提取、commit_view new/update 重复构造提取、`{autocmd, msg}` 通知规格类型化。

@@ -6,6 +6,7 @@ local util = require("neogit.lib.util")
 ---backend (mapping GIT_ERROR codes) produce this, so callers can check
 ---outcomes without depending on which backend executed the operation.
 ---@class GitResult
+---@field ok boolean Convenience: true when code == 0.
 ---@field code integer Exit or error code; 0 means success.
 ---@field message string User-readable message (stderr summary or libgit2 error text).
 local GitResult = {}
@@ -15,7 +16,7 @@ GitResult.__index = GitResult
 ---@param message? string
 ---@return GitResult
 function GitResult.new(code, message)
-  return setmetatable({ code = code, message = message or "" }, GitResult)
+  return setmetatable({ ok = code == 0, code = code, message = message or "" }, GitResult)
 end
 
 ---Wrap a ProcessResult (CLI backend) into a GitResult.

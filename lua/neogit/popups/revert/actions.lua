@@ -48,7 +48,9 @@ function M.commits(popup)
     commit_opts.no_edit = true
   end
 
-  git.commit.create(args, commit_opts)
+  -- Only the --edit choice applies to the finalizing commit; the revert
+  -- popup's other arguments belong to `git revert` (already run above).
+  git.commit.create({}, commit_opts)
 end
 
 function M.changes(popup)

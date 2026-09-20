@@ -409,6 +409,10 @@ end
 ---@field builders? { [string]: fun(builder: PopupBuilder) }
 ---@field hooks? { [NeogitHook]: fun(data: table?) }
 
+---Allowed values for the git_backend config option (single source;
+---also consumed by lib/git/backend.lua).
+M.GIT_BACKENDS = { "auto", "libgit2", "cli" }
+
 ---Returns the default Neogit configuration
 ---@return NeogitConfig
 function M.get_default_values()
@@ -1239,8 +1243,8 @@ function M.validate_config()
     validate_type(config.disable_signs, "disable_signs", "boolean")
     validate_type(config.git_executable, "git_executable", "string")
     validate_type(config.git_backend, "git_backend", { "string", "nil" })
-    if config.git_backend and not vim.tbl_contains({ "auto", "libgit2", "cli" }, config.git_backend) then
-      err(config.git_backend, "git_backend must be one of auto, libgit2, cli")
+    if config.git_backend and not vim.tbl_contains(M.GIT_BACKENDS, config.git_backend) then
+      err(config.git_backend, "git_backend must be one of " .. table.concat(M.GIT_BACKENDS, ", "))
     end
     validate_type(config.libgit2_path, "libgit2_path", { "string", "nil" })
     validate_type(config.telescope_sorter, "telescope_sorter", "function")
