@@ -144,3 +144,12 @@
 5. **P1 接线边界**:`backend.current()/capability()` 在 P1 无生产调用点属**设计**(P1 = 零行为变化;`repository.lua` 消费能力表自 P2 起);`M.run` 执行器同样自 P2 的首个 libgit2 调用方起经过。
 6. macOS dylib 候选已由「绑定与分发方案拍板」Resolution 预告(「macOS 对应 dylib 序列」),非 scope creep;`backend.reset()`/`probe{force}` 为测试/运维后门,接受。
 7. **Backlog(smell 级,后续顺手做)**:status/actions 冲突块二重复制提取、commit_view new/update 重复构造提取、`{autocmd, msg}` 通知规格类型化。
+
+## 附录 B:P2 实现记录(2026-09-20)
+
+- **能力表接线**:`repository.lua` 的 `Repo:tasks` 按能力表为每个 `update_*` 选择 twin(`libgit2_updates`);`Repo:refresh` 在 wave 开始时打开每周期 Repository 句柄(`ctx.repo`),完成回调中释放。**首次 refresh 即惰性探测**——auto/降级/一次性提示自此真正进入生产路径。
+- **查询 twin 分发**:lib/git 现有模块的公共函数是薄分发器(按 `query_*` 能力键选择 twin),实现体保持两套并行(CLI 原实现不动)。
+- **API 事实修正**:libgit2 1.9 **移除了** `git_reference_iterator_next/next_name`(保留 `iterator_new/free` 与 `git_reference_foreach_name`)——版本调研未覆盖到这一层;overlay 因此改用 `foreach_name` 回调迭代(封装为 `git2.each_ref_name`)。`commit_lookup` 入参是 ObjectId 包装而非 hex 串。
+- **update_recent twin 补齐 UI 消费字段**:`rel_date`(git date.c 算法逐字重实现,含取整与 "Y years, M months ago" 组合)、`author_name`、`unix_date` 等;装饰串按 `%D` 约定构造("HEAD -> x"、"tag: v"、`origin/x`)。
+- **验收数据(压力仓库,同基线方法)**:warm **72–83ms / spawn 4**(出口线 ≤4 达成;残留 = status-b、status-z、stash list、describe);cold ~385ms;`state_recent` 与 CLI 一致。fixture 上 11 项交互查询零 spawn。
+- 测试:新增 `libgit2_twins_spec`(7 用例:查询等价 + 相对日期算法 vs 真 git);全套件 **231/231**;P2 smoke 26/26、CLI 对照 smoke 28/28。

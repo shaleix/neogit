@@ -22,6 +22,10 @@ local M = {}
 -- never-breaking API that has existed since 0.x, safe to call on any 1.x/2.x.
 ffi.cdef [[ void git_libgit2_version(int *major, int *minor, int *rev); ]]
 
+-- Additional public, ABI-stable APIs the vendored cdef omits are declared
+-- lazily in ensure_extra_cdefs() (below the vendor loader) because they
+-- reference the vendored typedefs.
+
 --------------------------------------------------------------------------------
 -- Namespace-isolated vendor loader
 --------------------------------------------------------------------------------
@@ -69,6 +73,31 @@ M.binding = {
   git2 = function() return vendored_require("core.git2") end,
 }
 
+-- Additional public, ABI-stable APIs the vendored cdef omits (opaque types +
+-- plain functions; declared here per ADR-0003's overlay-carries-changes
+-- rule). Must run AFTER the vendored cdef, which owns the referenced
+-- typedefs — hence lazy.
+local extra_cdefs_done = false
+local function ensure_extra_cdefs()
+  if extra_cdefs_done then
+    return
+  end
+
+  vendored_require("core.libgit2") -- registers git_repository/git_reference/git_object
+
+  ffi.cdef [[
+    typedef struct git_reference_iterator git_reference_iterator;
+    void git_reference_iterator_free(git_reference_iterator *iter);
+
+    typedef int (*git_reference_foreach_cb)(const char *name, void *payload);
+    int git_reference_foreach_name(git_repository *repo, git_reference_foreach_cb callback, void *payload);
+
+    int git_revparse_single(git_object **out, git_repository *repo, const char *spec);
+  ]]
+
+  extra_cdefs_done = true
+end
+
 --------------------------------------------------------------------------------
 -- Version policy
 --------------------------------------------------------------------------------
@@ -77,6 +106,7 @@ M.MINIMUM = { 1, 7 } -- lowest supported libgit2 (Ubuntu 24.04 LTS ships 1.7)
 M.MAXIMUM_MAJOR = 1 -- 2.0 will change git_oid layout: hard-reject until adapted
 
 local probed = nil
+local original_lazy_loader = nil
 
 local function soname_candidates()
   local config = require("neogit.config")
@@ -133,13 +163,22 @@ function M.probe(opts)
   end
 
   local lg2 = vendored_require("core.libgit2")
+
+  -- The vendored loader is lazy: M.C holds a self-metatable'd table whose
+  -- __index ffi.loads M.library_path and rawsets the real handle onto M.C.
+  -- To retry with another soname we must re-arm that lazy table (captured
+  -- before any symbol access); nil-ing M.C would kill the loader entirely.
+  if not original_lazy_loader then
+    original_lazy_loader = lg2.C
+  end
+
   local major, minor, rev = ffi.new("int[1]"), ffi.new("int[1]"), ffi.new("int[1]")
   local tried = {}
   local rejection = nil
 
   for _, candidate in ipairs(soname_candidates()) do
     tried[#tried + 1] = candidate
-    lg2.C = nil -- drop the cached handle so the lazy loader re-runs ffi.load
+    lg2.C = original_lazy_loader
     lg2.libgit2_init_count = 0
     lg2.setup_lib(candidate)
 
@@ -216,8 +255,88 @@ end
 ---@return table? repository git2.Repository
 ---@return integer? err
 function M.open_repo(path, search)
+  ensure_extra_cdefs()
   local git2 = vendored_require("core.git2")
   return git2.Repository.open(path, search)
+end
+
+---Run `fn` against a freshly opened repository (single-shot queries; the
+---refresh path shares one handle per cycle instead — see libgit2/init.lua).
+---@param path string
+---@param fn fun(repo: table): any
+---@return any
+function M.with_repo(path, fn)
+  local repo = M.open_repo(path, true)
+  if not repo then
+    return nil
+  end
+
+  return fn(repo)
+end
+
+---Resolve any revspec ("HEAD", "HEAD~2", branch name, oid) to a full hex oid.
+---@param repo table git2.Repository wrapper
+---@param spec string
+---@return string? oid hex string, or nil when the spec does not resolve
+function M.oid_of(repo, spec)
+  ensure_extra_cdefs()
+  local lg2 = vendored_require("core.libgit2")
+  local obj = ffi.new("git_object*[1]")
+  local err = lg2.C.git_revparse_single(obj, repo.repo, spec)
+  if err ~= 0 then
+    return nil
+  end
+
+  local oid_ptr = lg2.C.git_object_id(obj[0])
+  local hex = ffi.string(lg2.C.git_oid_tostr_s(oid_ptr))
+  lg2.C.git_object_free(obj[0])
+  return hex
+end
+
+---Full hex string of a raw git_oid cdata.
+---@param oid_cdata ffi.cdata
+---@return string
+function M.oid_hex(oid_cdata)
+  local lg2 = vendored_require("core.libgit2")
+  return ffi.string(lg2.C.git_oid_tostr_s(oid_cdata))
+end
+
+---Resolve a revspec and look up the resulting commit.
+---@param repo table git2.Repository wrapper
+---@param spec string revspec
+---@return table? commit git2.Commit wrapper
+function M.commit_of(repo, spec)
+  local hex = M.oid_of(repo, spec)
+  if not hex then
+    return nil
+  end
+
+  local oid = M.binding.git2().ObjectId.from_string(hex)
+  local commit, err = repo:commit_lookup(oid)
+  return commit
+end
+
+---Iterate all reference names in the repository, calling `fn(name)`.
+---Return false from `fn` to stop early. (libgit2 1.9 removed the iterator
+---`next` calls, so foreach_name is the portable iteration API.)
+---@param repo table git2.Repository wrapper
+---@param fn fun(name: string): boolean?
+function M.each_ref_name(repo, fn)
+  ensure_extra_cdefs()
+  local lg2 = vendored_require("core.libgit2")
+
+  local cb = ffi.cast("git_reference_foreach_cb", function(name)
+    if fn(ffi.string(name)) == false then
+      return 1
+    end
+    return 0
+  end)
+
+  pcall(function()
+    lg2.C.git_reference_foreach_name(repo.repo, cb, nil)
+  end)
+
+  cb:free()
 end
 
 return M

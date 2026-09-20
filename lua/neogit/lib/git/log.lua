@@ -3,6 +3,7 @@ local util = require("neogit.lib.util")
 local config = require("neogit.config")
 local record = require("neogit.lib.record")
 local state = require("neogit.lib.state")
+local backend = require("neogit.lib.git.backend")
 
 ---@class NeogitGitLog
 local M = {}
@@ -447,6 +448,10 @@ function M.update_ref(from, to)
 end
 
 function M.message(commit)
+  if backend.capability("query_log_message") == "libgit2" then
+    return require("neogit.lib.git.libgit2.log").message(commit)
+  end
+
   return git.cli.log.max_count(1).format("%s").args(commit).call({ hidden = true }).stdout[1]
 end
 

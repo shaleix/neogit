@@ -227,6 +227,14 @@ function Repo.new(dir)
     require("neogit.lib.git." .. m).register(instance.lib)
   end
 
+  -- libgit2 backend twins: registered best-effort; capability() re-checks
+  -- availability, so absence of a usable libgit2 never breaks this path.
+  instance.libgit2_updates = {}
+  local ok, hub = pcall(require, "neogit.lib.git.libgit2")
+  if ok and hub then
+    pcall(hub.register, instance)
+  end
+
   return instance
 end
 
@@ -244,12 +252,20 @@ function Repo:git_path(...)
   return Path:new(self.git_dir):joinpath(...)
 end
 
-function Repo:tasks(filter, state)
+function Repo:tasks(filter, state, ctx)
+  local backend = require("neogit.lib.git.backend")
+  local use_libgit2 = backend.current() == "libgit2"
+
   local tasks = {}
   for name, fn in pairs(self.lib) do
+    local impl = fn
+    if use_libgit2 and self.libgit2_updates[name] and backend.capability(name) == "libgit2" then
+      impl = self.libgit2_updates[name]
+    end
+
     table.insert(tasks, function()
       local start = vim.uv.now()
-      fn(state, filter)
+      impl(state, filter, ctx)
       logger.debug(("[REPO]: Refreshed %s in %d ms"):format(name, vim.uv.now() - start))
     end)
   end
@@ -317,7 +333,26 @@ function Repo:refresh(opts)
     filter = DEFAULT_FILTER
   end
 
-  self._refresh_task = a.util.run_all(self:tasks(filter, self:current_state(start)), function()
+  -- Per-refresh-cycle repository handle (migration spec §3.3): opened at the
+  -- start of the cycle, shared by every libgit2 twin, released when the wave
+  -- completes. ffi.gc frees the underlying git_repository when dropped.
+  local ctx = nil
+  local backend_ok, backend = pcall(require, "neogit.lib.git.backend")
+  if backend_ok and backend.current() == "libgit2" then
+    local ok, git2 = pcall(require, "neogit.lib.git2")
+    if ok then
+      local repo_handle = git2.open_repo(self.worktree_root, true)
+      if repo_handle then
+        ctx = { repo = repo_handle }
+      end
+    end
+  end
+
+  self._refresh_task = a.util.run_all(self:tasks(filter, self:current_state(start), ctx), function()
+    if ctx then
+      ctx.repo = nil
+    end
+
     if self._refresh_task and self._refresh_task:cancelled() then
       logger.debug("[REPO]: (" .. start .. ") Refresh cancelled before completion")
       return

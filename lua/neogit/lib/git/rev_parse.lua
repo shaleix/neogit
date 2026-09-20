@@ -1,5 +1,7 @@
 local git = require("neogit.lib.git")
 local util = require("neogit.lib.util")
+local backend = require("neogit.lib.git.backend")
+local lg2 = require("neogit.lib.git.libgit2.rev_parse")
 
 ---@class NeogitGitRevParse
 local M = {}
@@ -21,6 +23,10 @@ end, { timeout = math.huge })
 ---@return string
 ---@async
 function M.oid(rev)
+  if backend.capability("query_rev_parse") == "libgit2" then
+    return lg2.oid(rev)
+  end
+
   return git.cli["rev-parse"].args(rev).call({ hidden = true, ignore_error = true }).stdout[1]
 end
 

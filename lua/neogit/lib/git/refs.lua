@@ -2,6 +2,7 @@ local git = require("neogit.lib.git")
 local config = require("neogit.config")
 local record = require("neogit.lib.record")
 local util = require("neogit.lib.util")
+local backend = require("neogit.lib.git.backend")
 
 ---@class NeogitGitRefs
 local M = {}
@@ -17,6 +18,10 @@ end)
 
 ---@return string[]
 function M.list(namespaces, format, sortby)
+  if not format and backend.capability("query_refs_listing") == "libgit2" then
+    return require("neogit.lib.git.libgit2.refs").list(namespaces)
+  end
+
   local filter = util.map(namespaces or {}, function(namespace)
     return namespace:sub(2, -1)
   end)
