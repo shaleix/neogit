@@ -1,7 +1,10 @@
 ---
 title: neogit 迁移 libgit2 混合后端
 labels: [wayfinder:map]
+status: closed
 ---
+
+> **地图已关闭(2026-09-20)**:目的地达成——迁移 Spec 与四份 ADR 定稿,见 [spec/migration-spec.md](spec/migration-spec.md) 与 [adr/](adr/)。施工交棒:从 spec 第 10 章(P0 起步)开始。
 
 # neogit 迁移 libgit2 混合后端
 
@@ -55,13 +58,12 @@ labels: [wayfinder:map]
 - [混合后端架构边界拍板](tickets/backend-architecture-decision.md): 接缝 = **并行后端模块**(update_* 契约两套实现,按模块能力表选择,逐模块灰度);结果对象 = **中立 GitResult**;Phase 0 = 收拢裸 `git.cli` + CLI 去冗余 + 重测基线;写路径 = **读 + index 写**(切分支/commit/stash 留 CLI,GPG 与 hooks 议题随之化解);`.git` 直读保持现状;describe/reflog/submodule 留 CLI;diff 禁用 `tree_to_workdir` 直连。
 - [刷新与线程模型拍板](tickets/threading-refresh-decision.md): Repository **每 refresh 周期重开**(0.19ms,免失效纪律);线程 **同步先行 + 可替换执行器接缝**(worker 线程升级为后续阶段项,触发 = 大仓库实测卡顿);取消 = **任务边界检查点**(单任务原子,debounce 吸收风暴);节流参数统一、后测后调。
 - [迁移阶段划分拍板](tickets/migration-phases-decision.md): **五阶段按收益排序**(P0 清理+去冗余+重测基线 → P1 绑定基建零行为变化 → P2 读 wave1 refs/branch/log → P3 读 wave2 status → P4 index 写),spawn 9→6→4→2;验收 = 量化门禁 + rspec 双后端双跑;回退 = 全局 kind 开关;worker 线程/diff/stash 为 gated 可选项。完整阶段表见票内。
+- [撰写迁移 Spec 与 ADR](tickets/write-spec-adr.md): **目的地达成**——Spec 定稿(术语/架构/五阶段/验收/测试/回退/风险/上游评估/交棒入口)+ ADR×4(原生依赖、混合边界、vendor+overlay、刷新模型)。
 - (charting 阶段约束,记录于 Notes 与 Destination:目的地=完整 Spec、读优先混合共存、性能为验收核心、原生依赖可接受、auto 切换、Linux/macOS 优先、vendor 复用 fugit2 绑定层、先自用后现上游、Spec 落 `.wayfinder/` + ADR。)
 
 ## Not yet specified
 
-- 上游可行性评估的具体形态与判据(等 spec 骨架成形——即终点票工作)。
-
-(原雾区其余各项均已解决:「GPG 签名链路」「hooks 触发语义」「长尾读操作取舍」由 `混合后端架构边界拍板` 化解;「取消语义」由 `刷新与线程模型拍板` 解决;「测试矩阵」由 `迁移阶段划分拍板` 解决——rspec 双后端双跑、单测分后端文件、CI 装 libgit2。)
+(无。最后一项「上游可行性评估」已由终点票在 spec 第 9 章完成;其余雾区各项先前已由对应决策票解决。)
 
 ## Out of scope
 
