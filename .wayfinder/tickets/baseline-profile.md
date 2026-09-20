@@ -3,7 +3,7 @@ title: 性能基线剖析
 slug: baseline-profile
 labels: [wayfinder:research]
 status: open
-assignee:
+assignee: research-subagent/baseline-profile
 blocked-by: []
 created: 2026-09-20
 ---
