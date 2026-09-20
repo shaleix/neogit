@@ -41,6 +41,7 @@ labels: [wayfinder:map]
 
 - [libgit2 直连 PoC](tickets/binding-poc.md): vendored 绑定层零改动可加载;语义与 porcelain v2 等价,工作区 rename 定为**富模型、CLI 降级**;指示性收益 status 2–4x / log ~139x。复现见 [assets/binding-poc-report.md](assets/binding-poc-report.md)。
 - [libgit2 版本分布与 ABI 风险调研](tickets/libgit2-versions.md): 最低支持 **1.7**、积极支持 1.8/1.9;cdef 以 1.8 为基准 + 运行时版本号 gate + CLI 降级(结构体布局差异不可探测,只能版本硬门);fugit2 cdef 在 1.9 上有两处静默枚举/字段错位。详见 [assets/libgit2-versions-report.md](assets/libgit2-versions-report.md)。
+- [性能基线剖析](tickets/baseline-profile.md): 3000 文件 × 200 提交仓库上,warm refresh ~187ms / 9 spawn;**瓶颈是 spawn 次数(~3.5ms/次)而非解析(<5%)**,UI redraw 占 27%;libgit2 理论收益全 refresh 2–3.3×、log 7×、refs ~100×;验收线:spawn ≤ 2、warm ≤ 90ms;`diff_tree_to_workdir` 直连是反模式。详见 [assets/baseline-report.md](assets/baseline-report.md)。
 - (charting 阶段约束,记录于 Notes 与 Destination:目的地=完整 Spec、读优先混合共存、性能为验收核心、原生依赖可接受、auto 切换、Linux/macOS 优先、vendor 复用 fugit2 绑定层、先自用后现上游、Spec 落 `.wayfinder/` + ADR。)
 
 ## Not yet specified
