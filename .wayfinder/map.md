@@ -29,6 +29,10 @@ labels: [wayfinder:map]
 | **绑定层** | fugit2 的 `core/libgit2.lua`(FFI cdef + 枚举 + 惰性 `ffi.load`)+ `core/git2.lua`(OOP 封装),计划 vendor 进 neogit。 |
 | **auto 切换** | 运行时检测绑定可用性并选择后端;检测失败自动降级 CLI,对用户透明。 |
 | **基线** | 迁移前关键读操作的耗时/spawn 次数测量,性能验收的对照组。 |
+| **vendor 层** | fugit2 绑定三文件(`libgit2.lua`/`git2.lua`/`util/stat.lua`)的逐字快照,pin `7783d33`,带 MIT 归属头;永不改动。 |
+| **overlay 层** | neogit 自有的补丁模块:soname 序列加载器、版本 gate、按运行时版本注入的枚举值、功能开关;对 vendor 行为的一切修改只发生在这里。 |
+| **soname 候选序列** | 库加载顺序:`libgit2_path` → `libgit2.so.1.9/.1.8/.1.7`(显式 soname,免 dev 包)→ `libgit2`。 |
+| **版本 gate** | 以 `git_libgit2_version()` 为唯一权威:major≠1 硬拒,minor 落入 1.7/1.8/1.9 矩阵才启用,否则降级 CLI。 |
 
 ### Tracker 约定(local-markdown)
 
@@ -42,6 +46,7 @@ labels: [wayfinder:map]
 - [libgit2 直连 PoC](tickets/binding-poc.md): vendored 绑定层零改动可加载;语义与 porcelain v2 等价,工作区 rename 定为**富模型、CLI 降级**;指示性收益 status 2–4x / log ~139x。复现见 [assets/binding-poc-report.md](assets/binding-poc-report.md)。
 - [libgit2 版本分布与 ABI 风险调研](tickets/libgit2-versions.md): 最低支持 **1.7**、积极支持 1.8/1.9;cdef 以 1.8 为基准 + 运行时版本号 gate + CLI 降级(结构体布局差异不可探测,只能版本硬门);fugit2 cdef 在 1.9 上有两处静默枚举/字段错位。详见 [assets/libgit2-versions-report.md](assets/libgit2-versions-report.md)。
 - [性能基线剖析](tickets/baseline-profile.md): 3000 文件 × 200 提交仓库上,warm refresh ~187ms / 9 spawn;**瓶颈是 spawn 次数(~3.5ms/次)而非解析(<5%)**,UI redraw 占 27%;libgit2 理论收益全 refresh 2–3.3×、log 7×、refs ~100×;验收线:spawn ≤ 2、warm ≤ 90ms;`diff_tree_to_workdir` 直连是反模式。详见 [assets/baseline-report.md](assets/baseline-report.md)。
+- [绑定与分发方案拍板](tickets/binding-distribution-decision.md): 最低 **1.7**、major≠1 硬拒;系统库 + **soname 候选序列**(免 dev 包)+ `libgit2_path` 覆盖;**惰性探测 + 一次性提示降级**;vendor = **三文件 verbatim 快照 + overlay 层承载全部修改**;冻结快照、按需重同步。
 - (charting 阶段约束,记录于 Notes 与 Destination:目的地=完整 Spec、读优先混合共存、性能为验收核心、原生依赖可接受、auto 切换、Linux/macOS 优先、vendor 复用 fugit2 绑定层、先自用后现上游、Spec 落 `.wayfinder/` + ADR。)
 
 ## Not yet specified
