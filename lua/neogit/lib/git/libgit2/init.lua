@@ -56,10 +56,16 @@ function M.register(repo)
   repo.libgit2_updates.update_recent = log.update_recent
   backend.mark_migrated("update_recent")
 
+  local status = require("neogit.lib.git.libgit2.status")
+  repo.libgit2_updates.update_status = status.update_status
+  backend.mark_migrated("update_status")
+
   -- Query twins (dispatched inside the lib/git/* modules).
   backend.mark_migrated("query_rev_parse")
   backend.mark_migrated("query_log_message")
+  backend.mark_migrated("query_log_list")
   backend.mark_migrated("query_branch")
+  backend.mark_migrated("query_branch_status")
   backend.mark_migrated("query_refs_listing")
 end
 

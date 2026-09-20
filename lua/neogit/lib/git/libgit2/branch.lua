@@ -19,6 +19,59 @@ local function current_branch(repo)
   return ref:shorthand()
 end
 
+---BranchStatus twin matching git.branch.status()'s shape
+---({ ab, detached, oid, head, upstream }), killing the `status -b` spawn.
+---@return table
+function M.status()
+  return git2.with_repo(worktree_root(), function(repo)
+    local out = { ab = nil, detached = false, oid = nil, head = nil, upstream = nil }
+
+    local head_ref, err = repo:head()
+    if not head_ref then
+      -- unborn HEAD: report the branch name with the "(initial)" oid, like porcelain
+      local sym, serr = repo:reference_lookup("HEAD")
+      if sym then
+        local target = sym:symbolic_target()
+        out.head = target and target:gsub("^refs/heads/", "") or "(detached)"
+      else
+        out.head = "(detached)"
+      end
+
+      out.oid = "(initial)"
+      return out
+    end
+
+    if head_ref.name == "HEAD" then
+      out.head = "(detached)"
+      out.detached = true
+    else
+      out.head = head_ref:shorthand()
+    end
+
+    local commit = head_ref:peel_commit()
+    if commit then
+      out.oid = git2.oid_hex(commit:id().oid)
+    end
+
+    if not out.detached then
+      local upstream_ref, uerr = head_ref:branch_upstream()
+      if upstream_ref then
+        out.upstream = (upstream_ref.name or ""):gsub("^refs/remotes/", "")
+
+        local upstream_commit = upstream_ref:peel_commit()
+        if upstream_commit and commit then
+          local ahead, behind = repo:ahead_behind(commit:id(), upstream_commit:id())
+          if ahead and behind then
+            out.ab = ("+%d -%d"):format(ahead, behind)
+          end
+        end
+      end
+    end
+
+    return out
+  end)
+end
+
 ---Current branch shorthand, or nil on detached/unborn HEAD.
 ---Mirrors git.branch.current()'s state-first contract.
 ---@return string?

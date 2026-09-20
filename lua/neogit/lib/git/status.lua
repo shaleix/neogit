@@ -287,4 +287,10 @@ M.register = function(meta)
   meta.update_status = update_status
 end
 
+-- Shared with the libgit2 twin (lib/git/libgit2/status.lua); not public API.
+M.internal = {
+  update_file = update_file,
+  item_collection = item_collection,
+}
+
 return M

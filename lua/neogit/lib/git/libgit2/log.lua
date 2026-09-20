@@ -81,16 +81,6 @@ local function relative_date(unix_time)
   end
 end
 M.relative_date = relative_date
-
----Build a map of commit-oid -> %D-style decoration parts ("HEAD -> x",
----"origin/x", "tag: v1", plain branch names), matching what branch_info
----parses out of `git log --format=%D`.
----
----Note: libgit2 1.9 removed `git_reference_iterator_next`; only
----`next_name` remains (it has existed since 0.28), so we iterate names and
----resolve each reference for peeling.
----@param repo table git2.Repository wrapper
----@return table<string, string[]>
 local function decoration_map(repo)
   local map = {}
 
@@ -101,7 +91,6 @@ local function decoration_map(repo)
     elseif full:match("^refs/tags/") then
       entry = "tag: " .. full:sub(#"refs/tags/" + 1)
     end
-
     if entry then
       local ok, commit = pcall(function()
         local ref, err = repo:reference_lookup(full)
@@ -128,13 +117,24 @@ local function decoration_map(repo)
       local hex = git2.oid_hex(commit:id().oid)
       map[hex] = map[hex] or {}
 
+      local arrow_branch = nil
       local marker
       if repo:is_head_detached() then
         marker = "HEAD"
       else
-        marker = "HEAD -> " .. head_ref:shorthand()
+        arrow_branch = head_ref:shorthand()
+        marker = "HEAD -> " .. arrow_branch
       end
       table.insert(map[hex], 1, marker)
+
+      if arrow_branch then
+        -- git's %D shows the arrow form only; drop the plain duplicate
+        for i = #map[hex], 2, -1 do
+          if map[hex][i] == arrow_branch then
+            table.remove(map[hex], i)
+          end
+        end
+      end
     end
   end
 
@@ -203,4 +203,188 @@ function M.update_recent(repo_state, _filter, ctx)
   end)
 end
 
+
+
+--------------------------------------------------------------------------------
+-- log.list twin (records via revwalk; graph delegated to the shared helpers)
+--------------------------------------------------------------------------------
+
+---RFC2822 date like git's %aD/%cD ("Sun, 20 Sep 2026 17:49:39 +0800").
+local function rfc2822(time, offset_minutes)
+  local utc = os.date("!%a, %d %b %Y %H:%M:%S", time + offset_minutes * 60)
+  local sign = offset_minutes < 0 and "-" or "+"
+  local abs = math.abs(offset_minutes)
+  return ("%s %s%02d%02d"):format(utc, sign, math.floor(abs / 60), abs % 60)
+end
+
+---Which option shapes the twin can serve; anything else falls back to CLI.
+---@param options string[]
+---@param files string[]
+---@return boolean
+function M.supports(options, files)
+  if files and #files > 0 then
+    return false
+  end
+
+  for _, o in ipairs(options or {}) do
+    if
+      not o:match("^%-%-max%-count=%d+$")
+      and not o:match("^%-%-topo%-order$")
+      and not o:match("^%-%-date%-order$")
+      and not o:match("^%-%-reverse$")
+      and o ~= "--all"
+      and not o:match("^%x+$")
+    then
+      return false
+    end
+  end
+
+  return true
+end
+
+---git's %s/%b from the raw (cached) commit message: subject = folded first
+---paragraph, body = remainder after the first blank line.
+local function subject_and_body(raw)
+  local head, rest = raw:match("^(.-)\n\n(.*)$")
+  if not head then
+    head, rest = raw, nil
+  end
+
+  local subject = (head:gsub("\n", " ")):gsub("%s+$", "")
+  local body = rest and (rest:gsub("^%s+", "")) or ""
+  return subject, body
+end
+
+---@param options string[]
+---@param graph? table
+---@param files string[]
+---@param graph_color? boolean
+---@return CommitLogEntry[]
+function M.list(options, graph, files, graph_color)
+  local log = require("neogit.lib.git.log")
+
+  local count, order, reverse, all = nil, "topo", false, false
+  for _, o in ipairs(options or {}) do
+    local n = o:match("^%-%-max%-count=(%d+)$")
+    if n then
+      count = tonumber(n)
+    elseif o == "--date-order" then
+      order = "date"
+    elseif o == "--topo-order" then
+      order = "topo"
+    elseif o == "--reverse" then
+      reverse = true
+    elseif o == "--all" then
+      all = true
+    end
+  end
+
+  local records = git2.with_repo(worktree_root(), function(repo)
+    local out = {}
+
+    git2.run(function()
+      local lg2 = git2.binding.libgit2()
+      local lg2C = lg2.C
+
+      local walker = repo:walker()
+      if order == "date" then
+        walker:sort(false, true, false)
+      else
+        walker:sort(true, false, false)
+      end
+
+      if all then
+        walker:push_glob("*")
+      else
+        walker:push_head()
+      end
+
+      local decorations = decoration_map(repo)
+      local abbrev = log.abbreviated_size()
+
+      -- Hot loop: raw C iteration, no per-commit wrapper objects/ffi.gc.
+      local oid_buf = ffi.new("git_oid[1]")
+      local commit_out = ffi.new("git_commit*[1]")
+
+      while count == nil or #out < count do
+        if lg2C.git_revwalk_next(oid_buf, walker.revwalk) ~= 0 then
+          break
+        end
+        if lg2C.git_commit_lookup(commit_out, repo.repo, oid_buf) ~= 0 then
+          break
+        end
+
+        local ccommit = commit_out[0]
+        local hex = git2.oid_hex(oid_buf)
+
+        local a_sig = lg2C.git_commit_author(ccommit)
+        local c_sig = lg2C.git_commit_committer(ccommit)
+
+        local parents = {}
+        local nparents = tonumber(lg2C.git_commit_parentcount(ccommit)) or 0
+        for i = 0, nparents - 1 do
+          parents[#parents + 1] = git2.oid_hex(lg2C.git_commit_parent_id(ccommit, i))
+        end
+
+        local subject, body = subject_and_body(ffi.string(lg2C.git_commit_message(ccommit)))
+        local c_time = tonumber(c_sig.when.time) or 0
+        local c_offset = tonumber(c_sig.when.offset) or 0
+
+        out[#out + 1] = {
+          oid = hex,
+          abbreviated_commit = hex:sub(1, abbrev),
+          parent = table.concat(parents, " "),
+          abbreviated_parent = table.concat(vim.tbl_map(function(p)
+            return p:sub(1, abbrev)
+          end, parents), " "),
+          author_name = ffi.string(a_sig.name),
+          author_email = ffi.string(a_sig.email),
+          committer_name = ffi.string(c_sig.name),
+          committer_email = ffi.string(c_sig.email),
+          author_date = rfc2822(tonumber(a_sig.when.time) or 0, tonumber(a_sig.when.offset) or 0),
+          committer_date = rfc2822(c_time, c_offset),
+          log_date = rfc2822(c_time, c_offset),
+          rel_date = relative_date(c_time),
+          unix_date = c_time,
+          ref_name = table.concat(decorations[hex] or {}, ", "),
+          subject = subject,
+          body = body,
+        }
+
+        lg2C.git_commit_free(ccommit)
+      end
+    end)
+
+    if reverse then
+      local flipped = {}
+      for i = #out, 1, -1 do
+        flipped[#flipped + 1] = out[i]
+      end
+      out = flipped
+    end
+
+    return out
+  end) or {}
+
+  if vim.tbl_isempty(records) then
+    return {}
+  end
+
+  local g = {}
+  if graph then
+    g = log.internal.graph_rows(options, files, records, graph_color)
+  end
+
+  return log.internal.parse_log(records, g)
+end
+
+---Build a map of commit-oid -> %D-style decoration parts ("HEAD -> x",
+---"origin/x", "tag: v1", plain branch names), matching what branch_info
+---parses out of `git log --format=%D`.
+---
+---Note: libgit2 1.9 removed `git_reference_iterator_next`; only
+---`next_name` remains (it has existed since 0.28), so we iterate names and
+---resolve each reference for peeling.
+---@param repo table git2.Repository wrapper
+---@return table<string, string[]>
 return M
