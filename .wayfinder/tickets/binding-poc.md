@@ -3,7 +3,7 @@ title: libgit2 直连 PoC
 slug: binding-poc
 labels: [wayfinder:prototype]
 status: open
-assignee:
+assignee: main-session/ses_f41e510deffeMfC1qkcd4Q5YVY
 blocked-by: []
 created: 2026-09-20
 ---
