@@ -1,6 +1,7 @@
 local git = require("neogit.lib.git")
 local config = require("neogit.config")
 local util = require("neogit.lib.util")
+local GitResult = require("neogit.lib.git.result")
 
 local FuzzyFinderBuffer = require("neogit.buffers.fuzzy_finder")
 
@@ -474,6 +475,60 @@ local function update_branch_information(state)
       end
     end
   end
+
+  -- Unpulled/unmerged relative to upstream and pushRemote.
+  -- Formerly the pull/push modules' update tasks; merged here so that
+  -- M.status() (the `git status -b` spawn) runs once per refresh instead of
+  -- once per consumer.
+  state.upstream.unpulled.items = {}
+  state.pushRemote.unpulled.items = {}
+  state.upstream.unmerged.items = {}
+  state.pushRemote.unmerged.items = {}
+
+  if not status.detached then
+    if status.upstream then
+      state.upstream.unpulled.items =
+        util.filter_map(git.log.list({ "..@{upstream}" }, nil, {}, true), git.log.present_commit)
+      state.upstream.unmerged.items =
+        util.filter_map(git.log.list({ "@{upstream}.." }, nil, {}, true), git.log.present_commit)
+    end
+
+    local pushRemote = M.pushRemote_ref()
+    if pushRemote then
+      state.pushRemote.unpulled.items =
+        util.filter_map(git.log.list({ string.format("..%s", pushRemote) }, nil, {}, true), git.log.present_commit)
+      state.pushRemote.unmerged.items =
+        util.filter_map(git.log.list({ pushRemote .. ".." }, nil, {}, true), git.log.present_commit)
+    end
+  end
+end
+
+---Rename a branch.
+---@param from string
+---@param to string
+---@return GitResult
+function M.rename(from, to)
+  return GitResult.from_process(git.cli.branch.move.args(from, to).call { await = true })
+end
+
+---Detach HEAD (`git checkout --detach`).
+function M.detach()
+  git.cli.checkout.detach.call()
+end
+
+---Edit the current branch's description in an editor (client.wrap).
+---@param opts? { autocmd?: string, msg?: { success: string, fail: string } }
+---@return GitResult
+function M.edit_description(opts)
+  opts = opts or {}
+
+  local client = require("neogit.client")
+  local code = client.wrap(git.cli.branch.edit_description, {
+    autocmd = opts.autocmd,
+    msg = opts.msg,
+  })
+
+  return GitResult.new(code)
 end
 
 M.register = function(meta)

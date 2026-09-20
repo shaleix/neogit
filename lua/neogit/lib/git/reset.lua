@@ -18,9 +18,12 @@ function M.soft(target)
 end
 
 ---@param target string
+---@param opts? { backup?: boolean } Set `backup = false` to skip the pre-reset snapshot
 ---@return boolean
-function M.hard(target)
-  git.index.create_backup()
+function M.hard(target, opts)
+  if not (opts and opts.backup == false) then
+    git.index.create_backup()
+  end
 
   local result = git.cli.reset.hard.args(target).call()
   return result:success()
@@ -62,6 +65,24 @@ function M.file(target, files)
   end
 
   return result:success()
+end
+
+---Take "our" version of conflicted files from the index (`git checkout --ours -- <files>`).
+---@param files string[]
+function M.checkout_ours(files)
+  git.cli.checkout.ours.files(unpack(files)).call { await = true }
+end
+
+---Take "their" version of conflicted files from the index (`git checkout --theirs -- <files>`).
+---@param files string[]
+function M.checkout_theirs(files)
+  git.cli.checkout.theirs.files(unpack(files)).call { await = true }
+end
+
+---Re-create the conflicted state of files from the merge base (`git checkout --merge -- <files>`).
+---@param files string[]
+function M.checkout_merge(files)
+  git.cli.checkout.merge.files(unpack(files)).call { await = true }
 end
 
 return M

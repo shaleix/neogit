@@ -54,7 +54,7 @@ function M._do_delete(ref)
   if not ref.remote then
     git.branch.delete(ref.unambiguous_name)
   else
-    git.cli.push.remote(ref.remote).delete.to(ref.name).call()
+    git.push.delete_remote_ref(ref.remote, ref.name)
   end
 end
 

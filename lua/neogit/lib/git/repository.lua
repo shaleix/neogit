@@ -9,8 +9,6 @@ local modules = {
   "status",
   "branch",
   "stash",
-  "pull",
-  "push",
   "log",
   "rebase",
   "sequencer",

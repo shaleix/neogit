@@ -19,4 +19,9 @@ function M.fetch(remote, branch)
   return git.cli.fetch.args(remote, branch).call { ignore_error = true }
 end
 
+---Fetch all submodules recursively (`git fetch --recurse-submodules -v --jobs=4`).
+function M.submodules()
+  git.cli.fetch.recurse_submodules.verbose.jobs(4).call()
+end
+
 return M

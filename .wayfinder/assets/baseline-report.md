@@ -199,3 +199,25 @@ warm lib-only 133ms 的 9 个 spawn 若换成 libgit2 内存对象:
 ---
 
 > **勘误(2026-09-20,main session 复核)**:§5.2.2 所称 "stash 无 libgit2 绑定(fugit2 未声明)" **有误**——fugit2 cdef 已声明 `git_stash_save/apply/pop/drop/foreach`(libgit2.lua:672–686,封装在 git2.lua:4152–4201),stash 读(list 经 `git_stash_foreach`)与写均可走 libgit2;**describe 确实无绑定**,保留 CLI 的结论不变。本条已由 `混合后端架构边界拍板` 票采信。
+
+---
+
+## 六、P0 后重测基线(2026-09-20,`libgit2-p0` 分支,spec §4 Phase 0 出口)
+
+方法与 §一 完全一致(同压力仓库重新生成、同机、同 nvim/git/libgit2、neogit-refresh.lua 驱动,3 次独立 nvim 进程):
+
+| 指标 | 基线(5 次中位) | P0 后(3 次) | 变化 |
+|---|---|---|---|
+| cold_full_ms | ~515 | 359.5 / 371.6 / 373.5 | ~**-28%** |
+| cold spawn(runner 记录) | 20 | 16 | -4 |
+| warm_full_ms | ~187 | 80.1 / 86.8 / 93.8 | ~**-53%** |
+| warm spawn | 9 | **6** | **-3(9→6 精确达成)** |
+| lib_only_ms | ~133 | 62.3 / 70.0 / 70.2 | ~**-47%** |
+
+warm 6 spawn 构成:`status -b` ×1(原 ×3)、`status -z` ×1、`stash list`、`rev-parse HEAD`、`describe`、`log -1 --format=%s` ×1(原 ×2)。
+
+注意事项:
+- 去冗余之外,削减并行 spawn 也降低了 2 核争抢,故 wall-time 改善大于"3 × 3.5ms 固定开销"的朴素估计;两轮测量不同时段,wall-time 幅度供参考,**spawn 计数是硬指标**。
+- warm ~87ms(中位)已提前触及 P3 的「warm ≤90ms」验收线——但该线的完整含义是"在 libgit2 后端下达成";P2/P3 的收益将体现在 spawn 6→2 与 log/refs 的延迟下限上。
+- 小 fixture 交叉验证:master 10 spawn → P0 7(Δ-3 一致;多出的一条为该 fixture 特有的 `rev-parse --verify` 范围解析,两轮均有)。
+- 测试:plenary 0 失败可归因于 P0(2 个 `git cli root detection` 失败为本机 mktemp 模板环境问题,master 同样失败;`lib.git.instance` 在 master 失败而 P0 通过);rspec 与 lint 工具本机缺失,留 CI 验证。

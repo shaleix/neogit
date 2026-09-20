@@ -52,16 +52,13 @@ local M = {
 ---@param filter? string[] Filter diffs to filepaths in table
 ---@return CommitViewBuffer
 function M.new(commit_id, filter)
-  local cmd = git.cli.show.format("fuller").args(commit_id)
-  if config.values.commit_date_format ~= nil then
-    cmd = cmd.args("--date=format:" .. config.values.commit_date_format)
-  end
-  local commit_info = git.log.parse(cmd.call({ trim = false }).stdout)[1]
+  local commit_info = git.log.parse(
+    git.log.show_raw(commit_id, { date_format = config.values.commit_date_format })
+  )[1]
 
   commit_info.commit_arg = commit_id
 
-  local commit_overview =
-    parser.parse_commit_overview(git.cli.show.stat.oneline.args(commit_id).call({ hidden = true }).stdout)
+  local commit_overview = parser.parse_commit_overview(git.log.show_stat_raw(commit_id))
 
   local instance = {
     item_filter = filter,
@@ -137,9 +134,8 @@ function M:update(commit_id, filter)
   assert(commit_id, "commit id cannot be nil")
 
   local commit_info =
-    git.log.parse(git.cli.show.format("fuller").args(commit_id).call({ trim = false }).stdout)[1]
-  local commit_overview =
-    parser.parse_commit_overview(git.cli.show.stat.oneline.args(commit_id).call({ hidden = true }).stdout)
+    git.log.parse(git.log.show_raw(commit_id, { date_format = config.values.commit_date_format }))[1]
+  local commit_overview = parser.parse_commit_overview(git.log.show_stat_raw(commit_id))
 
   commit_info.commit_arg = commit_id
 

@@ -1,5 +1,5 @@
 local git = require("neogit.lib.git")
-local util = require("neogit.lib.util")
+local GitResult = require("neogit.lib.git.result")
 
 ---@class NeogitGitPush
 local M = {}
@@ -11,6 +11,18 @@ local M = {}
 ---@return ProcessResult
 function M.push_interactive(remote, branch, args)
   return git.cli.push.args(remote or "", branch or "").arg_list(args).call { pty = true }
+end
+
+---Delete a remote ref by pushing a delete refspec (`git push <remote> :<refspec>`).
+---@param remote string Remote name, e.g. "origin"
+---@param refspec string Ref to delete, e.g. "feature" or ":refs/tags/v1.0" (leading ":" added when absent)
+---@return GitResult
+function M.delete_remote_ref(remote, refspec)
+  if not refspec:match("^:") then
+    refspec = ":" .. refspec
+  end
+
+  return GitResult.from_process(git.cli.push.remote(remote).args(refspec).call())
 end
 
 ---@param branch string|nil
@@ -29,32 +41,6 @@ function M.auto_setup_remote(branch)
     and (push_default == "current" or push_default == "simple" or push_default == "upstream")
     and not branch_remote
   ) == true
-end
-
-local function update_unmerged(state)
-  local status = git.branch.status()
-
-  state.upstream.unmerged.items = {}
-  state.pushRemote.unmerged.items = {}
-
-  if status.detached then
-    return
-  end
-
-  if status.upstream then
-    state.upstream.unmerged.items =
-      util.filter_map(git.log.list({ "@{upstream}.." }, nil, {}, true), git.log.present_commit)
-  end
-
-  local pushRemote = require("neogit.lib.git").branch.pushRemote_ref()
-  if pushRemote then
-    state.pushRemote.unmerged.items =
-      util.filter_map(git.log.list({ pushRemote .. ".." }, nil, {}, true), git.log.present_commit)
-  end
-end
-
-function M.register(meta)
-  meta.update_unmerged = update_unmerged
 end
 
 return M

@@ -450,6 +450,26 @@ function M.message(commit)
   return git.cli.log.max_count(1).format("%s").args(commit).call({ hidden = true }).stdout[1]
 end
 
+---Raw `git show --format=fuller` output for a commit or tag, for use with M.parse.
+---@param oid string Commit or tag id
+---@param opts? { date_format?: string }
+---@return string[]
+function M.show_raw(oid, opts)
+  local cmd = git.cli.show.format("fuller").args(oid)
+  if opts and opts.date_format then
+    cmd = cmd.args("--date=format:" .. opts.date_format)
+  end
+
+  return cmd.call({ trim = false }).stdout
+end
+
+---Raw `git show --stat --oneline` output for a commit or tag (commit overview).
+---@param oid string Commit or tag id
+---@return string[]
+function M.show_stat_raw(oid)
+  return git.cli.show.stat.oneline.args(oid).call({ hidden = true }).stdout
+end
+
 function M.full_message(commit)
   return git.cli.log.max_count(1).format("%B").args(commit).call({ hidden = true, trim = false }).stdout
 end
