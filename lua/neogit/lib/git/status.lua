@@ -3,6 +3,7 @@ local git = require("neogit.lib.git")
 local util = require("neogit.lib.util")
 local Collection = require("neogit.lib.collection")
 local logger = require("neogit.logger")
+local backend = require("neogit.lib.git.backend")
 
 ---@class StatusItem
 ---@field mode string
@@ -216,10 +217,18 @@ local M = {}
 
 ---@param files string[]
 function M.stage(files)
+  if backend.capability("index_write") == "libgit2" then
+    return require("neogit.lib.git.libgit2.index").stage(files)
+  end
+
   git.cli.add.files(unpack(files)).call { await = true }
 end
 
 function M.stage_modified()
+  if backend.capability("index_write") == "libgit2" then
+    return require("neogit.lib.git.libgit2.index").stage_modified()
+  end
+
   git.cli.add.update.call { await = true }
 end
 
@@ -228,19 +237,35 @@ function M.stage_untracked()
     return item.escaped_path
   end)
 
+  if backend.capability("index_write") == "libgit2" then
+    return require("neogit.lib.git.libgit2.index").stage(paths)
+  end
+
   git.cli.add.files(unpack(paths)).call { await = true }
 end
 
 function M.stage_all()
+  if backend.capability("index_write") == "libgit2" then
+    return require("neogit.lib.git.libgit2.index").stage_all()
+  end
+
   git.cli.add.all.call { await = true }
 end
 
 ---@param files string[]
 function M.unstage(files)
+  if backend.capability("index_write") == "libgit2" then
+    return require("neogit.lib.git.libgit2.index").reset_files(files)
+  end
+
   git.cli.reset.files(unpack(files)).call { await = true }
 end
 
 function M.unstage_all()
+  if backend.capability("index_write") == "libgit2" then
+    return require("neogit.lib.git.libgit2.index").reset_all()
+  end
+
   git.cli.reset.call { await = true }
 end
 
@@ -251,6 +276,10 @@ end
 
 ---@return boolean
 function M.anything_staged()
+  if backend.capability("query_status") == "libgit2" then
+    return require("neogit.lib.git.libgit2.status").anything_staged()
+  end
+
   local output = git.cli.status.porcelain(2).call({ hidden = true }).stdout
   return vim.iter(output):any(function(line)
     return line:match("^%d [^%.]")
@@ -259,6 +288,10 @@ end
 
 ---@return boolean
 function M.anything_unstaged()
+  if backend.capability("query_status") == "libgit2" then
+    return require("neogit.lib.git.libgit2.status").anything_unstaged()
+  end
+
   local output = git.cli.status.porcelain(2).call({ hidden = true }).stdout
   return vim.iter(output):any(function(line)
     return line:match("^%d %..")
@@ -286,5 +319,11 @@ end
 M.register = function(meta)
   meta.update_status = update_status
 end
+
+-- Shared with the libgit2 twin (lib/git/libgit2/status.lua); not public API.
+M.internal = {
+  update_file = update_file,
+  item_collection = item_collection,
+}
 
 return M

@@ -1,6 +1,8 @@
 local git = require("neogit.lib.git")
 local Path = require("neogit.lib.path")
 local util = require("neogit.lib.util")
+local backend = require("neogit.lib.git.backend")
+local GitResult = require("neogit.lib.git.result")
 
 ---@param path string
 ---@return string
@@ -90,6 +92,12 @@ end
 function M.apply(patch, opts)
   opts = opts or { reverse = false, cached = false, index = false }
 
+  -- Reverse application has no libgit2 equivalent: CLI only.
+  if not opts.reverse and backend.capability("index_write") == "libgit2" then
+    local ok = require("neogit.lib.git.libgit2.index").apply_patch(patch, opts)
+    return GitResult.new(ok and 0 or 1)
+  end
+
   local cmd = git.cli.apply
 
   if opts.reverse then
@@ -108,14 +116,26 @@ function M.apply(patch, opts)
 end
 
 function M.add(files)
+  if backend.capability("index_write") == "libgit2" then
+    return require("neogit.lib.git.libgit2.index").stage(files)
+  end
+
   return git.cli.add.files(unpack(files)).call { await = true }
 end
 
 function M.checkout(files)
+  if backend.capability("index_write") == "libgit2" then
+    return require("neogit.lib.git.libgit2.index").checkout_files(files)
+  end
+
   return git.cli.checkout.files(unpack(files)).call { await = true }
 end
 
 function M.reset(files)
+  if backend.capability("index_write") == "libgit2" then
+    return require("neogit.lib.git.libgit2.index").reset_files(files)
+  end
+
   return git.cli.reset.files(unpack(files)).call { await = true }
 end
 

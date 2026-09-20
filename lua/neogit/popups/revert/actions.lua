@@ -2,7 +2,6 @@ local M = {}
 
 local config = require("neogit.config")
 local git = require("neogit.lib.git")
-local client = require("neogit.client")
 local notification = require("neogit.lib.notification")
 local input = require("neogit.lib.input")
 local util = require("neogit.lib.util")
@@ -35,21 +34,23 @@ function M.commits(popup)
     return
   end
 
-  local commit_cmd = git.cli.commit.no_verify
-  if vim.tbl_contains(args, "--edit") then
-    commit_cmd = commit_cmd.edit
-  else
-    commit_cmd = commit_cmd.no_edit
-  end
-
-  client.wrap(commit_cmd, {
+  local commit_opts = {
+    no_verify = true,
     autocmd = "NeogitRevertComplete",
-    interactive = true,
     msg = {
       success = "Reverted",
     },
     show_diff = config.values.commit_editor.show_staged_diff,
-  })
+  }
+  if vim.tbl_contains(args, "--edit") then
+    commit_opts.edit = true
+  else
+    commit_opts.no_edit = true
+  end
+
+  -- Only the --edit choice applies to the finalizing commit; the revert
+  -- popup's other arguments belong to `git revert` (already run above).
+  git.commit.create({}, commit_opts)
 end
 
 function M.changes(popup)

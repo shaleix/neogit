@@ -77,7 +77,7 @@ local function spin_off_branch(checkout)
 
   if checkout then
     hook.run("PreBranchCheckout", { branch_name = name })
-    git.cli.checkout.branch(name).call()
+    git.branch.checkout(name)
     event.send("BranchCheckout", { branch_name = name })
   end
 
@@ -87,7 +87,7 @@ local function spin_off_branch(checkout)
       assert(current_branch_name, "No current branch")
       git.log.update_ref(current_branch_name, upstream)
     else
-      git.cli.reset.hard.args(upstream).call()
+      git.reset.hard(upstream, { backup = false })
       event.send("Reset", { commit = name, mode = "hard" })
     end
   end
@@ -252,7 +252,7 @@ function M.rename_branch()
     return
   end
 
-  local result = git.cli.branch.move.args(selected_branch, new_name).call { await = true }
+  local result = git.branch.rename(selected_branch, new_name)
   if result:success() then
     notification.info(string.format("Renamed '%s' to '%s'", selected_branch, new_name))
     event.send("BranchRename", { branch_name = selected_branch, new_name = new_name })
@@ -298,8 +298,8 @@ function M.reset_branch(popup)
   end
 
   -- Reset the current branch to the desired state & update reflog
-  local result = git.cli.reset.hard.args(to).call()
-  if result:success() then
+  local success = git.reset.hard(to, { backup = false })
+  if success then
     local current = git.branch.current_full_name()
     assert(current, "no current branch")
     git.log.update_ref(current, to)
@@ -328,7 +328,7 @@ function M.delete_branch(popup)
     and branch_name
     and input.get_permission(("Delete remote branch '%s/%s'?"):format(remote, branch_name))
   then
-    success = git.cli.push.remote(remote).delete.to(branch_name).call():success()
+    success = git.push.delete_remote_ref(remote, branch_name):success()
   elseif not is_remote and branch_name == git.branch.current() then
     local choices = {
       "&detach HEAD and delete",
@@ -346,17 +346,17 @@ function M.delete_branch(popup)
     )
 
     if choice == "d" then
-      git.cli.checkout.detach.call()
+      git.branch.detach()
     elseif choice == "c" then
       assert(upstream, "there should be an upstream by this point")
-      git.cli.checkout.branch(upstream).call()
+      git.branch.checkout(upstream)
     else
       return
     end
 
     success = git.branch.delete(branch_name)
     if not success then -- Reset HEAD if unsuccessful
-      git.cli.checkout.branch(branch_name).call()
+      git.branch.checkout(branch_name)
     end
   elseif not is_remote and branch_name then
     success = git.branch.delete(branch_name)

@@ -1,7 +1,6 @@
 local M = {}
 
 local git = require("neogit.lib.git")
-local client = require("neogit.client")
 local utils = require("neogit.lib.util")
 local FuzzyFinderBuffer = require("neogit.buffers.fuzzy_finder")
 local input = require("neogit.lib.input")
@@ -28,15 +27,15 @@ function M.create_tag(popup)
     end
   end
 
-  local code =
-    client.wrap(git.cli.tag.arg_list(utils.merge(popup:get_arguments(), { tag_input, selected })), {
+  local result =
+    git.tag.create(utils.merge(popup:get_arguments(), { tag_input, selected }), {
       autocmd = "NeogitTagComplete",
       msg = {
         success = "Added tag " .. tag_input .. " on " .. selected,
         fail = "Failed to add tag " .. tag_input .. " on " .. selected,
       },
     })
-  if code == 0 then
+  if result:success() then
     event.send("TagCreate", { name = tag_input, ref = selected })
   end
 end
@@ -110,14 +109,14 @@ function M.create_release(popup)
     tag_args = utils.merge(tag_args, { "-m", message })
   end
 
-  local code = client.wrap(git.cli.tag.arg_list(tag_args), {
+  local result = git.tag.create(tag_args, {
     autocmd = "NeogitTagComplete",
     msg = {
       success = "Created release tag " .. tag_name,
       fail = "Failed to create release tag " .. tag_name,
     },
   })
-  if code == 0 then
+  if result:success() then
     event.send("TagCreate", { name = tag_name, ref = "HEAD" })
   end
 end
@@ -226,7 +225,9 @@ function M.prune(_)
       table.insert(prune_tags, ":" .. tag)
     end
 
-    git.cli.push.arg_list({ selected_remote, unpack(prune_tags) }).call()
+    for _, refspec in ipairs(prune_tags) do
+      git.push.delete_remote_ref(selected_remote, refspec)
+    end
     notification.info("Pruned remote tags: \n" .. table.concat(r_tags, "\n"))
   end
 end

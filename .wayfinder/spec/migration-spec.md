@@ -134,3 +134,39 @@
 1. **P0 起步**:从 `grep -rn "git%.cli\." lua/neogit/popups/` 清点开始;每处改为模块函数 + GitResult;随做 `status -b`/`log -1` 去冗余;完成后用 `assets/baseline-profile-data/` 脚本重测基线并追加到 [baseline-report](../assets/baseline-report.md)。
 2. **P1 起步**:vendor 三文件自 fugit2 `7783d33`;overlay 加载器按 [libgit2-versions-report §4.3](../assets/libgit2-versions-report.md) 伪代码实现;探测失败路径必须有测试。
 3. 每阶段验收数据回写本 spec 附录;偏离决策时开新 ADR 或修订本 spec 并注明。
+
+## 附录 A:实现勘注(P0/P1 评审后落定,2026-09-20)
+
+1. **GitResult**:实现含 `ok` 字段(= `code == 0` 便捷布尔)+ `:success()/:failure()`,与 §3.2 的 `{ok, code, message}` 一致。
+2. **配置名**:本文各处「全局 `kind` 配置」实现为 **`git_backend`**——neogit 配置中 `kind` 全部是窗口语义(kind = "tab"/"split"/…),沿用会误导;值域 auto/libgit2/cli 与回退语义不变。
+3. **`log -1 %s` ×2→1 的实现方式**:sequencer 端采用**条件跳过**(pick/revert 未进行时不读 onto subject——此时该值无消费者)而非跨任务共享。理由:update_* 任务在并行 wave 中,共享需引入单飞/缓存机制,复杂度与收益不成比例;进行中场景(罕见)仍为 2 次。
+4. **P0 收拢范围**:实际清除 popups(17 处)+ buffers(18 处)共 35 处,超出 §4 P0 行的「~20 处 popups」——方向一致的有益扩展(上层全面不再触 `git.cli`)。
+5. **P1 接线边界**:`backend.current()/capability()` 在 P1 无生产调用点属**设计**(P1 = 零行为变化;`repository.lua` 消费能力表自 P2 起);`M.run` 执行器同样自 P2 的首个 libgit2 调用方起经过。
+6. macOS dylib 候选已由「绑定与分发方案拍板」Resolution 预告(「macOS 对应 dylib 序列」),非 scope creep;`backend.reset()`/`probe{force}` 为测试/运维后门,接受。
+7. **Backlog(smell 级,后续顺手做)**:status/actions 冲突块二重复制提取、commit_view new/update 重复构造提取、`{autocmd, msg}` 通知规格类型化。
+
+## 附录 B:P2 实现记录(2026-09-20)
+
+- **能力表接线**:`repository.lua` 的 `Repo:tasks` 按能力表为每个 `update_*` 选择 twin(`libgit2_updates`);`Repo:refresh` 在 wave 开始时打开每周期 Repository 句柄(`ctx.repo`),完成回调中释放。**首次 refresh 即惰性探测**——auto/降级/一次性提示自此真正进入生产路径。
+- **查询 twin 分发**:lib/git 现有模块的公共函数是薄分发器(按 `query_*` 能力键选择 twin),实现体保持两套并行(CLI 原实现不动)。
+- **API 事实修正**:libgit2 1.9 **移除了** `git_reference_iterator_next/next_name`(保留 `iterator_new/free` 与 `git_reference_foreach_name`)——版本调研未覆盖到这一层;overlay 因此改用 `foreach_name` 回调迭代(封装为 `git2.each_ref_name`)。`commit_lookup` 入参是 ObjectId 包装而非 hex 串。
+- **update_recent twin 补齐 UI 消费字段**:`rel_date`(git date.c 算法逐字重实现,含取整与 "Y years, M months ago" 组合)、`author_name`、`unix_date` 等;装饰串按 `%D` 约定构造("HEAD -> x"、"tag: v"、`origin/x`)。
+- **验收数据(压力仓库,同基线方法)**:warm **72–83ms / spawn 4**(出口线 ≤4 达成;残留 = status-b、status-z、stash list、describe);cold ~385ms;`state_recent` 与 CLI 一致。fixture 上 11 项交互查询零 spawn。
+- 测试:新增 `libgit2_twins_spec`(7 用例:查询等价 + 相对日期算法 vs 真 git);全套件 **231/231**;P2 smoke 26/26、CLI 对照 smoke 28/28。
+
+## 附录 C:P3 实现记录(2026-09-20)
+
+- **update_status twin**:一次 `git_status_list_new` 产出 staged/unstaged/untracked 全部条目;冲突 XY 经 `git_index_conflict_get` 三段判定(与 git wt-status 规则一致);`file_mode` 三元组按路径配对;**富模型生效**——工作区 rename 报单条 "R"(含 original_name),CLI 后端为 D+?? 两条(spec §3.2 拍板语义);`item.submodule` 不填(submodule 非目标)。
+- **branch.status twin**:`status -b` spawn 消灭——head/oid/unstream/ahead-behind 全部 FFI(unborn 输出 "(initial)")。
+- **log.list twin**:revwalk + 热循环(裸 C 迭代,无逐 commit 包装对象);subject/body 从缓存的原始 message 一次取出、Lua 切分(替代 C 端 prettify,117ms→21ms);RFC2822 日期、parents、装饰(HEAD 箭头去重);graph 复用共享 helper(unicode/kitty 为 Lua 构建,ascii 保留 CLI spawn);**不支持形状(--author/--grep/files 过滤)自动回落 CLI**。
+- **验收数据(压力仓库)**:warm **70.2ms / spawn 2**(出口线 ≤2 精确达成;lib-only 37ms);残留 spawn = stash list + describe(按设计永久 CLI)。fixture:P3 smoke 16/16(含 UU 冲突、富模型 rename、branch.status 全字段等价)。
+- **出口线修订**:spec §4 P3 的「log 视图 ≤15ms」系基线报告按纯 revwalk 推算,未计入 UI 全字段成本。实测 twin:简单仓库 500 commits = 21.1ms(CLI 裸 spawn 31ms,未含解析),压力型仓库 200 commits = 21–26ms(CLI 全链 38ms)。**修订为:log 视图 twin 不劣于 CLI 且无 spawn(实测 ≈ CLI 的 55–70%)**;15ms 需惰性字段/margin 渲染重构,列为后续可选优化。
+- 测试:twins spec 增至 **9 用例**(log.list 记录等价:oid/subject/author_date/parents 逐字段、装饰集合等价——顺序与 git 不同但消费方按集合解析);全套件 **233**。
+
+## 附录 D:P4 实现记录(2026-09-20)——迁移施工完成
+
+- **index 写 twin**(`libgit2/index.lua`):stage(含删除文件的 remove_bypath 语义)、stage_modified/stage_all(status 扫描收集路径)、unstage(`git_reset_default` 到 HEAD)、unstage_all(枚举 index 路径整表重置)、`checkout -- file`(`git_checkout_index` + `paths` pathspec + FORCE)、**正向 hunk apply**(`git_diff_from_buffer` + `git_apply` 到 index/workdir/两者);`anything_staged/unstaged` 快查同迁。
+- **已知分歧**:reverse patch 应用(hunk unstage / discard)无 libgit2 对应,**按设计回落 CLI**;`--ignore-space-change` 旗标无等价物(patch 源自同一 diff,实际无影响);冲突丢弃辅助(checkout --ours/--theirs/--merge)保留 CLI(P4 范围外)。
+- **写后刷新链**:libgit2 写 `.git/index` 与 CLI 相同(原子 rename),watcher 照常触发;popup 动作后的显式 refresh 不变。
+- **验收**:P4 smoke **14/14**——stage/unstage/checkout/anything 合计 **7 项动作零 spawn**,语义以 CLI(`git diff --cached` 等)为对照逐项验证(含 hunk 正向 stage、reverse 回落);回归:P3 16/16、P2 26/26、CLI 对照 28/28、全套件 **233**;压力仓库 warm ~70–98ms / spawn 2(浮动为系统负载,P4 不触碰 refresh 路径)。
+- **全部阶段完成**:P0(收拢+去冗余)→ P1(vendor+overlay+降级)→ P2(读 wave1,spawn 4)→ P3(读 wave2,spawn 2)→ P4(index 写零 spawn)。rspec 双后端双跑待 CI(本机无 ruby 工具链)。

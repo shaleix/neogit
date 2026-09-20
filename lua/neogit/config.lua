@@ -354,6 +354,8 @@ end
 ---@field filewatcher? NeogitFilewatcherConfig Values for filewatcher
 ---@field graph_style? NeogitGraphStyle Style for graph
 ---@field git_executable? string Path to git executable (defaults to "git")
+---@field git_backend? "auto"|"libgit2"|"cli" Which backend executes git operations: auto-detect with CLI fallback, hard-require libgit2, or always CLI
+---@field libgit2_path? string Explicit path/soname for the libgit2 shared library (e.g. "/usr/local/lib/libgit2.so.1.9"), overriding the soname candidate sequence
 ---@field commit_date_format? string Commit date format
 ---@field log_date_format? string Log date format
 ---@field log_pager? [string] Log pager
@@ -406,6 +408,10 @@ end
 ---@field word_diff_highlight? boolean Apply word-diff highlighting to diff hunks
 ---@field builders? { [string]: fun(builder: PopupBuilder) }
 ---@field hooks? { [NeogitHook]: fun(data: table?) }
+
+---Allowed values for the git_backend config option (single source;
+---also consumed by lib/git/backend.lua).
+M.GIT_BACKENDS = { "auto", "libgit2", "cli" }
 
 ---Returns the default Neogit configuration
 ---@return NeogitConfig
@@ -460,6 +466,8 @@ function M.get_default_values()
     },
     highlight = {},
     git_executable = "git",
+    git_backend = "auto",
+    libgit2_path = nil,
     disable_insert_on_commit = "auto",
     use_per_project_settings = true,
     remember_settings = true,
@@ -1234,6 +1242,11 @@ function M.validate_config()
     validate_type(config.disable_context_highlighting, "disable_context_highlighting", "boolean")
     validate_type(config.disable_signs, "disable_signs", "boolean")
     validate_type(config.git_executable, "git_executable", "string")
+    validate_type(config.git_backend, "git_backend", { "string", "nil" })
+    if config.git_backend and not vim.tbl_contains(M.GIT_BACKENDS, config.git_backend) then
+      err(config.git_backend, "git_backend must be one of " .. table.concat(M.GIT_BACKENDS, ", "))
+    end
+    validate_type(config.libgit2_path, "libgit2_path", { "string", "nil" })
     validate_type(config.telescope_sorter, "telescope_sorter", "function")
     validate_type(config.use_per_project_settings, "use_per_project_settings", "boolean")
     validate_type(config.remember_settings, "remember_settings", "boolean")

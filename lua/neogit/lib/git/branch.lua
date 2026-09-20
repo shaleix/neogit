@@ -1,6 +1,8 @@
 local git = require("neogit.lib.git")
 local config = require("neogit.config")
 local util = require("neogit.lib.util")
+local GitResult = require("neogit.lib.git.result")
+local backend = require("neogit.lib.git.backend")
 
 local FuzzyFinderBuffer = require("neogit.buffers.fuzzy_finder")
 
@@ -96,8 +98,13 @@ function M.track(name, args)
 end
 
 ---@param include_current? boolean
+---@param include_current? boolean
 ---@return string[]
 function M.get_local_branches(include_current)
+  if backend.capability("query_branch") == "libgit2" then
+    return require("neogit.lib.git.libgit2.branch").get_local_branches(include_current)
+  end
+
   local branches = git.cli.branch.sort(config.values.sort_branches).call({ hidden = true }).stdout
   return parse_branches(branches, include_current)
 end
@@ -105,6 +112,10 @@ end
 ---@param include_current? boolean
 ---@return string[]
 function M.get_remote_branches(include_current)
+  if backend.capability("query_branch") == "libgit2" then
+    return require("neogit.lib.git.libgit2.branch").get_remote_branches(include_current)
+  end
+
   local branches = git.cli.branch.remotes.sort(config.values.sort_branches).call({ hidden = true }).stdout
   return parse_branches(branches, include_current)
 end
@@ -140,6 +151,10 @@ end
 ---@param branch string
 ---@return boolean
 function M.exists(branch)
+  if backend.capability("query_branch") == "libgit2" then
+    return require("neogit.lib.git.libgit2.branch").exists(branch)
+  end
+
   local result = git.cli["rev-parse"].verify.quiet
     .args(string.format("refs/heads/%s", branch))
     .call { hidden = true, ignore_error = true }
@@ -188,6 +203,10 @@ end
 ---Returns current branch name, or nil if detached HEAD
 ---@return string|nil
 function M.current()
+  if backend.capability("query_branch") == "libgit2" then
+    return require("neogit.lib.git.libgit2.branch").current()
+  end
+
   local head = git.repo.state.head.branch
   if head and head ~= "(detached)" then
     return head
@@ -205,6 +224,10 @@ end
 function M.current_full_name()
   local current = M.current()
   if current then
+    if backend.capability("query_branch") == "libgit2" then
+      return require("neogit.lib.git.libgit2.branch").current_full_name()
+    end
+
     return git.cli["rev-parse"].symbolic_full_name.args(current).call({ hidden = true }).stdout[1]
   end
 end
@@ -401,6 +424,10 @@ end
 
 ---@return BranchStatus
 function M.status()
+  if backend.capability("query_branch_status") == "libgit2" then
+    return require("neogit.lib.git.libgit2.branch").status()
+  end
+
   local result = git.cli.status.porcelain(2).branch.call { hidden = true }
   local status = {}
   for _, line in ipairs(result.stdout) do
@@ -474,6 +501,60 @@ local function update_branch_information(state)
       end
     end
   end
+
+  -- Unpulled/unmerged relative to upstream and pushRemote.
+  -- Formerly the pull/push modules' update tasks; merged here so that
+  -- M.status() (the `git status -b` spawn) runs once per refresh instead of
+  -- once per consumer.
+  state.upstream.unpulled.items = {}
+  state.pushRemote.unpulled.items = {}
+  state.upstream.unmerged.items = {}
+  state.pushRemote.unmerged.items = {}
+
+  if not status.detached then
+    if status.upstream then
+      state.upstream.unpulled.items =
+        util.filter_map(git.log.list({ "..@{upstream}" }, nil, {}, true), git.log.present_commit)
+      state.upstream.unmerged.items =
+        util.filter_map(git.log.list({ "@{upstream}.." }, nil, {}, true), git.log.present_commit)
+    end
+
+    local pushRemote = M.pushRemote_ref()
+    if pushRemote then
+      state.pushRemote.unpulled.items =
+        util.filter_map(git.log.list({ string.format("..%s", pushRemote) }, nil, {}, true), git.log.present_commit)
+      state.pushRemote.unmerged.items =
+        util.filter_map(git.log.list({ pushRemote .. ".." }, nil, {}, true), git.log.present_commit)
+    end
+  end
+end
+
+---Rename a branch.
+---@param from string
+---@param to string
+---@return GitResult
+function M.rename(from, to)
+  return GitResult.from_process(git.cli.branch.move.args(from, to).call { await = true })
+end
+
+---Detach HEAD (`git checkout --detach`).
+function M.detach()
+  git.cli.checkout.detach.call()
+end
+
+---Edit the current branch's description in an editor (client.wrap).
+---@param opts? { autocmd?: string, msg?: { success: string, fail: string } }
+---@return GitResult
+function M.edit_description(opts)
+  opts = opts or {}
+
+  local client = require("neogit.client")
+  local code = client.wrap(git.cli.branch.edit_description, {
+    autocmd = opts.autocmd,
+    msg = opts.msg,
+  })
+
+  return GitResult.new(code)
 end
 
 M.register = function(meta)

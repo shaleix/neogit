@@ -46,11 +46,15 @@ function M.update_sequencer_status(state)
 
   local HEAD_oid = git.rev_parse.oid("HEAD")
   if HEAD_oid then
+    -- The subject is only consumed when a pick/revert is in progress; skip the
+    -- `git log -1 --format=%s` spawn otherwise (branch.update_branch_information
+    -- already reads the same subject for state.head.commit_message).
+    local in_progress = state.sequencer.cherry_pick or state.sequencer.revert
     table.insert(state.sequencer.items, {
       action = "onto",
       oid = HEAD_oid,
       abbreviated_commit = HEAD_oid:sub(1, git.log.abbreviated_size()),
-      subject = git.log.message(HEAD_oid),
+      subject = in_progress and git.log.message(HEAD_oid) or nil,
     })
   end
 
