@@ -43,7 +43,7 @@ local function is_macos()
 end
 
 local function is_gnu_mktemp()
-  vim.fn.system { "bash", "-c", "mktemp --version | grep GNU" }
+  vim.fn.system { "bash", "-c", "mktemp --version | grep -Eiq 'GNU|uutils'" }
   return vim.v.shell_error == 0
 end
 
