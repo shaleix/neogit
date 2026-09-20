@@ -13,7 +13,12 @@ local config = require("neogit.config")
 
 local M = {}
 
-local KINDS = { auto = true, libgit2 = true, cli = true }
+---@type table<string, boolean> Allowed git_backend values (single source: config.GIT_BACKENDS).
+local KINDS = {}
+
+for _, kind in ipairs(config.GIT_BACKENDS) do
+  KINDS[kind] = true
+end
 
 local resolved = nil
 local notified = false
@@ -80,10 +85,10 @@ end
 
 local capabilities = {}
 
----Register a module's libgit2 readiness ("libgit2" once its implementation
----is wired; absent means not migrated yet).
+---Declare an update_* module's libgit2 implementation wired and ready
+---("libgit2" once migrated; absent means not migrated yet).
 ---@param module string update_* module name, e.g. "update_status"
-function M.enable(module)
+function M.mark_migrated(module)
   capabilities[module] = "libgit2"
 end
 

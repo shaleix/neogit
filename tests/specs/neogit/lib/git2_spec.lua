@@ -51,8 +51,8 @@ describe("lib.git2 (libgit2 binding overlay)", function()
         assert.equal(7, lg2.GIT_CONFIG_LEVEL.APP)
       end
 
-      assert.equal(probe.minor < 9, git2.limits.blame_boundary)
-      assert.equal(probe.minor >= 8, git2.limits.config_entry_level)
+      assert.equal(probe.minor < 9, git2.feature_flags.blame_boundary)
+      assert.equal(probe.minor >= 8, git2.feature_flags.config_entry_level)
     end)
 
     it("respects libgit2_path config when set to a bogus value", function()
@@ -79,6 +79,7 @@ describe("lib.git2 (libgit2 binding overlay)", function()
 
       local result = git2.git_result(err, "open: ")
       assert.is_true(result:failure())
+      assert.is_false(result.ok)
       assert.truthy(#result.message > 0)
     end)
 
@@ -138,7 +139,7 @@ describe("lib.git.backend (selection policy)", function()
 
   it("capability table defaults to cli and flips per module only when available", function()
     assert.equal("cli", backend.capability("update_status"))
-    backend.enable("update_status")
+    backend.mark_migrated("update_status")
     assert.equal("cli", backend.capability("update_unpulled"))
 
     if git2.probe().available then
