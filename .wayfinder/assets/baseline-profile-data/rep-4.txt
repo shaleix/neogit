@@ -1,0 +1,52 @@
+nvim_version	0.12.5
+cold_full_ms	515.637
+cold_event_fired	true
+cold_spawn_count	20
+cold_proc	122.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false submodule
+cold_proc	12.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false rev-parse --show-superproject-working-tree
+cold_proc	84.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false rev-parse HEAD
+cold_proc	93.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false status --porcelain=2 -b
+cold_proc	79.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false log --format=sanitized_subject_line%x1D%f%x1Fencoding%x1D%e%x1Fcommit_notes%x1D%N%x1Flog_date%x1D%cd%x1Fauthor_name%x1D%aN%x1Fabbreviated_commit%x1D%h%x1Fsubject%x1D%s%x1Fparent%x1D%P%x1Fref_name%x1D%D%x1Funix_date%x1D%ct%x1Frel_date%x1D%cr%x1Fbody%x1D%b%x1Fcommitter_email%x1D%cE%x1Fauthor_email%x1D%aE%x1Ftree%x1D%T%x1Fauthor_date%x1D%aD%x1Foid%x1D%H%x1Fcommitter_name%x1D%cN%x1Fabbreviated_parent%x1D%p%x1Fabbreviated_tree%x1D%t%x1Fcommitter_date%x1D%cD%x1E --no-patch --max-count=10 --topo-order
+cold_proc	115.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false status --porcelain=2 -b
+cold_proc	84.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false describe --long --tags HEAD
+cold_proc	90.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false stash list
+cold_proc	106.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false status --porcelain=2 -b
+cold_proc	55.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false log --format=sanitized_subject_line%x1D%f%x1Fencoding%x1D%e%x1Fcommit_notes%x1D%N%x1Flog_date%x1D%cd%x1Fauthor_name%x1D%aN%x1Fabbreviated_commit%x1D%h%x1Fsubject%x1D%s%x1Fparent%x1D%P%x1Fref_name%x1D%D%x1Funix_date%x1D%ct%x1Frel_date%x1D%cr%x1Fbody%x1D%b%x1Fcommitter_email%x1D%cE%x1Fauthor_email%x1D%aE%x1Ftree%x1D%T%x1Fauthor_date%x1D%aD%x1Foid%x1D%H%x1Fcommitter_name%x1D%cN%x1Fabbreviated_parent%x1D%p%x1Fabbreviated_tree%x1D%t%x1Fcommitter_date%x1D%cD%x1E --no-patch HEAD --max-count=1
+cold_proc	51.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false rev-parse --short 8efa772321203b0498a7de363d5ad9e4de02c006
+cold_proc	41.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false log --format=%x1E%H%x00 --graph --color --max-count=10 --topo-order
+cold_proc	45.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false branch --show-current
+cold_proc	115.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false status -z --porcelain=2
+cold_proc	31.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false branch --show-current
+cold_proc	28.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false log --max-count=1 --format=%s 8efa772321203b0498a7de363d5ad9e4de02c006
+cold_proc	25.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false log --max-count=1 --format=%s 8efa772321203b0498a7de363d5ad9e4de02c006
+cold_proc	14.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false remote
+cold_proc	19.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false config --list --null --local
+cold_proc	9.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false branch --show-current
+warm_full_ms	178.762
+warm_event_fired	true
+warm_spawn_count	9
+warm_proc	77.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false rev-parse HEAD
+warm_proc	124.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false status --porcelain=2 -b
+warm_proc	122.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false status --porcelain=2 -b
+warm_proc	100.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false status --porcelain=2 -b
+warm_proc	90.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false describe --long --tags HEAD
+warm_proc	99.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false stash list
+warm_proc	85.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false status -z --porcelain=2
+warm_proc	83.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false log --max-count=1 --format=%s 8efa772321203b0498a7de363d5ad9e4de02c006
+warm_proc	31.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false log --max-count=1 --format=%s 8efa772321203b0498a7de363d5ad9e4de02c006
+lib_only_ms	143.000
+lib_done	true
+lib_spawn_count	9
+lib_proc	99.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false rev-parse HEAD
+lib_proc	100.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false status --porcelain=2 -b
+lib_proc	106.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false status --porcelain=2 -b
+lib_proc	73.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false describe --long --tags HEAD
+lib_proc	73.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false stash list
+lib_proc	99.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false status --porcelain=2 -b
+lib_proc	35.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false log --max-count=1 --format=%s 8efa772321203b0498a7de363d5ad9e4de02c006
+lib_proc	61.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false status -z --porcelain=2
+lib_proc	27.0000	/tmp/opencode/git-probe --no-pager --literal-pathspecs --no-optional-locks -c core.preloadindex=true -c color.ui=always -c diff.noprefix=false log --max-count=1 --format=%s 8efa772321203b0498a7de363d5ad9e4de02c006
+state_unstaged	50
+state_staged	20
+state_untracked	10
+state_recent	10

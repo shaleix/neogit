@@ -1,0 +1,4 @@
+stdout_entries	1
+stdout1_len	9421
+stdout1_has_nul	false
+stdout1_prefix	"1 .M N... 100644 100644 100644 418cf628562a82376c0b39f61377c4b1de5ddc11 418cf628"

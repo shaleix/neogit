@@ -1,0 +1,17 @@
+libgit2_version	loaded
+open_first_ms	70.044	err=0
+open_repo_ms	n=10	min=0.105	med=0.191	mean=0.628	max=4.684
+status_items	80
+status_full_ms	n=10	min=8.102	med=28.929	mean=30.178	max=78.565
+revwalk_count	200
+revwalk_all_ms	n=10	min=1.148	med=4.375	mean=5.132	max=11.243
+diff_deltas	80
+diff_head_to_workdir_ms	n=10	min=259.381	med=563.724	mean=526.075	max=765.102
+diff_head_to_index_deltas	20
+diff_head_to_index_ms	n=10	min=1.848	med=3.094	mean=3.050	max=5.325
+diff_index_to_workdir_ms	n=10	min=8.766	med=29.228	mean=28.187	max=70.016
+diff_raw_tree_to_workdir_err	0
+diff_raw_tree_to_workdir_deltas	70
+diff_raw_tree_to_workdir_ms	n=10	min=211.001	med=258.806	mean=290.428	max=480.658
+branches_count	1
+branches_ms	n=10	min=0.029	med=0.048	mean=0.097	max=0.544

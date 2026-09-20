@@ -1,0 +1,17 @@
+spawn:/usr/bin/true	50	1.547	2.123	2.687	6.036
+spawn:git --version	50	2.728	6.083	7.360	20.465
+spawn:git-probe --version(C)	50	3.413	5.089	6.188	16.671
+status --porcelain=2 -z (bare)	10	14.877	18.552	20.346	29.903
+status --porcelain=2 -z (neogit argv)	10	15.390	17.566	20.755	31.342
+status --porcelain=2 -b (neogit argv)	10	13.224	19.800	20.843	32.854
+status --porcelain=v2 -z (plain, no lock)	10	15.287	26.215	27.648	54.854
+log -500 (bare oneline)	10	5.901	8.069	9.312	17.233
+log -500 (neogit argv+format)	10	7.651	10.270	11.281	18.093
+diff HEAD (bare)	10	17.211	21.859	23.255	29.493
+diff HEAD (neogit argv)	10	16.605	19.279	23.330	32.059
+diff --stat HEAD (neogit argv)	10	16.174	21.548	22.447	34.212
+rev-parse HEAD	10	2.763	2.955	3.976	7.934
+describe --long --tags HEAD	10	2.961	4.440	4.686	7.725
+stash list	10	2.756	3.094	3.836	6.649
+for-each-ref (refs.lua fmt)	10	3.896	9.111	9.758	16.915
+for-each-ref (refs.lua fmt)	10	3.721	5.148	6.538	14.603
