@@ -57,6 +57,35 @@ local function conflict_mode(index, path)
     .. conflict_letter(ancestor[0] ~= nil, theirs[0] ~= nil)
 end
 
+local SUBMODULE_MODE = 57344 -- 0o160000 (gitlink)
+
+-- git_submodule_status bits (git_submodule.h; stable since 0.x)
+local SM_INDEX_MODIFIED = 64 -- 1 << 6: index commit differs from HEAD
+local SM_WD_INDEX_MODIFIED = 2048 -- 1 << 11: wd commit differs from index
+local SM_WD_WD_MODIFIED = 4096 -- 1 << 12: modified tracked content inside
+local SM_WD_UNTRACKED = 8192 -- 1 << 13: untracked files inside
+
+local function submodule_flags(repo, path)
+  local lg2 = git2.binding.libgit2()
+  local ffi = require("ffi")
+
+  local out = ffi.new("unsigned int[1]")
+  local ok = pcall(function()
+    lg2.C.git_submodule_status(out, repo.repo, path, 0)
+  end)
+
+  if not ok then
+    return nil
+  end
+
+  local st = tonumber(out[0]) or 0
+  return {
+    commit_changed = bit.band(st, SM_INDEX_MODIFIED) ~= 0 or bit.band(st, SM_WD_INDEX_MODIFIED) ~= 0,
+    has_tracked_changes = bit.band(st, SM_WD_WD_MODIFIED) ~= 0,
+    has_untracked_changes = bit.band(st, SM_WD_UNTRACKED) ~= 0,
+  }
+end
+
 ---update_status twin. Signature matches the update_* contract plus ctx.
 ---@param state NeogitRepoState
 ---@param filter table
@@ -101,6 +130,8 @@ function M.update_status(state, filter, ctx)  local status = require("neogit.lib
       delta_names[tonumber(v)] = k
     end
 
+    -- HEAD modes by path (for file_mode pairing on unstaged items).
+    local head_modes = {}
     local index = nil
     local function ensure_index()
       if index == nil then
@@ -110,6 +141,15 @@ function M.update_status(state, filter, ctx)  local status = require("neogit.lib
     end
 
     local count = tonumber(lg2.C.git_status_list_entrycount(list[0])) or 0
+    for i = 0, count - 1 do
+      local entry = lg2.C.git_status_byindex(list[0], i)
+
+      if entry.head_to_index ~= nil then
+        head_modes[ffi.string(entry.head_to_index.new_file.path)] =
+          ("%o"):format(tonumber(entry.head_to_index.old_file.mode) or 0)
+      end
+    end
+
     for i = 0, count - 1 do
       local entry = lg2.C.git_status_byindex(list[0], i)
       local flags = tonumber(entry.status)
@@ -155,6 +195,21 @@ function M.update_status(state, filter, ctx)  local status = require("neogit.lib
       if i2w ~= nil then
         local name = ffi.string(i2w.new_file.path)
 
+        -- file_mode triple like porcelain mH/mI/mW (for the mode-change display)
+        local wt_file_mode = {
+          head = head_modes[name] or mode_of(i2w.old_file),
+          index = mode_of(i2w.old_file),
+          worktree = mode_of(i2w.new_file),
+        }
+
+        -- submodule rows: porcelain's S<cmu> flags
+        local submodule = nil
+        local old_mode = tonumber(i2w.old_file.mode) or 0
+        local new_mode = tonumber(i2w.new_file.mode) or 0
+        if old_mode == SUBMODULE_MODE or new_mode == SUBMODULE_MODE then
+          submodule = submodule_flags(repo, name)
+        end
+
         if bit.band(flags, lg2.GIT_STATUS.WT_NEW) ~= 0 then
           table.insert(
             state.untracked.items,
@@ -171,7 +226,16 @@ function M.update_status(state, filter, ctx)  local status = require("neogit.lib
           local mode = idx and conflict_mode(idx, name) or "UU"
           table.insert(
             state.unstaged.items,
-            status.internal.update_file("unstaged", state.worktree_root, old_files.unstaged_files[name], mode, name)
+            status.internal.update_file(
+              "unstaged",
+              state.worktree_root,
+              old_files.unstaged_files[name],
+              mode,
+              name,
+              nil,
+              wt_file_mode,
+              submodule
+            )
           )
         else
           local orig = nil
@@ -195,8 +259,8 @@ function M.update_status(state, filter, ctx)  local status = require("neogit.lib
                 mode,
                 name,
                 orig,
-                nil,
-                nil
+                wt_file_mode,
+                submodule
               )
             )
           end
