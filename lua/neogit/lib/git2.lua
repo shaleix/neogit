@@ -95,6 +95,8 @@ local function ensure_extra_cdefs()
     int git_revparse_single(git_object **out, git_repository *repo, const char *spec);
 
     const git_index_entry *git_index_get_byindex(git_index *index, size_t n);
+
+    int git_submodule_status(unsigned int *status, git_repository *repo, const char *name, unsigned int ignore);
   ]]
 
   extra_cdefs_done = true

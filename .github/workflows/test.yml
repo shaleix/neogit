@@ -82,6 +82,8 @@ jobs:
           if [ -n "$NEW_FAILURES" ]; then
             echo "::error::Failures only under the libgit2 backend:"
             echo "$NEW_FAILURES"
+            echo "--- libgit2 backend failure details ---"
+            sed -n '/^Failures:$/,/^Failed examples:$/p' /tmp/rspec-lg2.log | head -c 20000
             exit 1
           fi
           echo "No backend-specific failures."
