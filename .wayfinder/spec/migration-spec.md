@@ -162,3 +162,11 @@
 - **验收数据(压力仓库)**:warm **70.2ms / spawn 2**(出口线 ≤2 精确达成;lib-only 37ms);残留 spawn = stash list + describe(按设计永久 CLI)。fixture:P3 smoke 16/16(含 UU 冲突、富模型 rename、branch.status 全字段等价)。
 - **出口线修订**:spec §4 P3 的「log 视图 ≤15ms」系基线报告按纯 revwalk 推算,未计入 UI 全字段成本。实测 twin:简单仓库 500 commits = 21.1ms(CLI 裸 spawn 31ms,未含解析),压力型仓库 200 commits = 21–26ms(CLI 全链 38ms)。**修订为:log 视图 twin 不劣于 CLI 且无 spawn(实测 ≈ CLI 的 55–70%)**;15ms 需惰性字段/margin 渲染重构,列为后续可选优化。
 - 测试:twins spec 增至 **9 用例**(log.list 记录等价:oid/subject/author_date/parents 逐字段、装饰集合等价——顺序与 git 不同但消费方按集合解析);全套件 **233**。
+
+## 附录 D:P4 实现记录(2026-09-20)——迁移施工完成
+
+- **index 写 twin**(`libgit2/index.lua`):stage(含删除文件的 remove_bypath 语义)、stage_modified/stage_all(status 扫描收集路径)、unstage(`git_reset_default` 到 HEAD)、unstage_all(枚举 index 路径整表重置)、`checkout -- file`(`git_checkout_index` + `paths` pathspec + FORCE)、**正向 hunk apply**(`git_diff_from_buffer` + `git_apply` 到 index/workdir/两者);`anything_staged/unstaged` 快查同迁。
+- **已知分歧**:reverse patch 应用(hunk unstage / discard)无 libgit2 对应,**按设计回落 CLI**;`--ignore-space-change` 旗标无等价物(patch 源自同一 diff,实际无影响);冲突丢弃辅助(checkout --ours/--theirs/--merge)保留 CLI(P4 范围外)。
+- **写后刷新链**:libgit2 写 `.git/index` 与 CLI 相同(原子 rename),watcher 照常触发;popup 动作后的显式 refresh 不变。
+- **验收**:P4 smoke **14/14**——stage/unstage/checkout/anything 合计 **7 项动作零 spawn**,语义以 CLI(`git diff --cached` 等)为对照逐项验证(含 hunk 正向 stage、reverse 回落);回归:P3 16/16、P2 26/26、CLI 对照 28/28、全套件 **233**;压力仓库 warm ~70–98ms / spawn 2(浮动为系统负载,P4 不触碰 refresh 路径)。
+- **全部阶段完成**:P0(收拢+去冗余)→ P1(vendor+overlay+降级)→ P2(读 wave1,spawn 4)→ P3(读 wave2,spawn 2)→ P4(index 写零 spawn)。rspec 双后端双跑待 CI(本机无 ruby 工具链)。

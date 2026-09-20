@@ -61,8 +61,7 @@ end
 ---@param state NeogitRepoState
 ---@param filter table
 ---@param ctx { repo: table? }?
-function M.update_status(state, filter, ctx)
-  local status = require("neogit.lib.git.status")
+function M.update_status(state, filter, ctx)  local status = require("neogit.lib.git.status")
   local old_files = {
     staged_files = status.internal.item_collection(state, "staged", filter),
     unstaged_files = status.internal.item_collection(state, "unstaged", filter),
@@ -207,6 +206,65 @@ function M.update_status(state, filter, ctx)
 
     lg2.C.git_status_list_free(list[0])
   end)
+end
+
+-- Quick checks replacing the porcelain scans in anything_staged/unstaged.
+local function any_worktree_change(repo, staged)
+  local lg2 = git2.binding.libgit2()
+  local ffi = require("ffi")
+  local bit_ = require("bit")
+
+  local opts = ffi.new("git_status_options[1]", lg2.GIT_STATUS_OPTIONS_INIT)
+  opts[0].show = lg2.GIT_STATUS_SHOW.INDEX_AND_WORKDIR
+
+  local list = ffi.new("git_status_list*[1]")
+  if lg2.C.git_status_list_new(list, repo.repo, opts) ~= 0 then
+    return false
+  end
+
+  local mask
+  if staged then
+    mask = bit_.bor(
+      lg2.GIT_STATUS.INDEX_NEW,
+      lg2.GIT_STATUS.INDEX_MODIFIED,
+      lg2.GIT_STATUS.INDEX_DELETED,
+      lg2.GIT_STATUS.INDEX_RENAMED,
+      lg2.GIT_STATUS.INDEX_TYPECHANGE
+    )
+  else
+    mask = bit_.bor(
+      lg2.GIT_STATUS.WT_MODIFIED,
+      lg2.GIT_STATUS.WT_DELETED,
+      lg2.GIT_STATUS.WT_RENAMED,
+      lg2.GIT_STATUS.WT_TYPECHANGE
+    )
+  end
+
+  local found = false
+  local count = tonumber(lg2.C.git_status_list_entrycount(list[0])) or 0
+  for i = 0, count - 1 do
+    if bit_.band(tonumber(lg2.C.git_status_byindex(list[0], i).status), mask) ~= 0 then
+      found = true
+      break
+    end
+  end
+
+  lg2.C.git_status_list_free(list[0])
+  return found
+end
+
+---@return boolean
+function M.anything_staged()
+  return git2.with_repo(worktree_root(), function(repo)
+    return any_worktree_change(repo, true)
+  end) == true
+end
+
+---@return boolean
+function M.anything_unstaged()
+  return git2.with_repo(worktree_root(), function(repo)
+    return any_worktree_change(repo, false)
+  end) == true
 end
 
 return M
