@@ -195,5 +195,37 @@ describe("lib.git.libgit2 twins", function()
       local filtered = git.log.list({ "--max-count=5", "--author=nobody" }, nil, {}, true)
       assert.equal(0, #filtered)
     end)
+
+    it("applies neogit-style bare patches (no diff --git header)", function()
+      if not probe_ok then
+        return
+      end
+
+      -- modification shape: a.txt ("one\n") gains a line
+      vim.uv.fs_open(dir .. "/a.txt", "w", 420, function(_, fd)
+        vim.uv.fs_write(fd, "one\ntwo\n", nil, function()
+          vim.uv.fs_close(fd)
+        end)
+      end)
+      vim.wait(200, function()
+        return true
+      end)
+
+      local patch = table.concat({ "--- a/a.txt", "+++ b/a.txt", "@@ -1 +1,2 @@", " one", "+two", "" }, "\n")
+      local result = git.index.apply(patch, { cached = true })
+      assert.is_not_nil(result)
+      assert.equal(true, result.ok)
+
+      local cached = vim.trim(vim.system({ "git", "-C", dir, "diff", "--cached", "--name-only" }):wait().stdout or "")
+      assert.equal("a.txt", cached)
+
+      -- untracked/new-file shape
+      vim.system({ "git", "-C", dir, "reset", "-q" }):wait()
+      local new_patch = table.concat({ "--- /dev/null", "+++ b/new.txt", "@@ -0,0 +1 @@", "+hi", "" }, "\n")
+      assert.equal(true, git.index.apply(new_patch, { cached = true }).ok)
+
+      local cached2 = vim.trim(vim.system({ "git", "-C", dir, "diff", "--cached", "--name-only" }):wait().stdout or "")
+      assert.equal("new.txt", cached2)
+    end)
   end)
 end)

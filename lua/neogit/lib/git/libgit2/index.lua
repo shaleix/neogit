@@ -197,6 +197,57 @@ end
 -- forward patch application (hunk stage etc.); reverse falls back to CLI
 --------------------------------------------------------------------------------
 
+---neogit's generate_patch emits bare traditional diffs (---/+++/@@ only),
+---which `git apply` accepts but libgit2's git_diff_from_buffer does not;
+---synthesize the git-style header when missing, and clamp hunk start lines
+---of 0 to 1 (generate_patch prints "+0,N" for new files; git tolerates,
+---libgit2 rejects).
+local function normalize_patch(patch)
+  -- hunk "@@ -a,b +c,d @@" with c == 0 and a non-empty count -> c = 1
+  patch = patch:gsub("\n@@ (%-)(%d+)(,?%d*) (%+)(%d+)(,?%d*) @@", function(a, b, bc, p, c, cc)
+    if c == "0" and cc ~= "" and cc ~= "0" then
+      c = "1"
+    end
+    return "\n@@ " .. a .. b .. bc .. " " .. p .. c .. cc .. " @@"
+  end)
+
+  -- NB: "-" is a pattern quantifier; the literal header dashes must be escaped.
+  if patch:match("^diff %-%-git ") then
+    return patch
+  end
+
+  local old = patch:match("^%-%-%- ([^\n]+)") or patch:match("\n%-%-%- ([^\n]+)") or "/dev/null"
+  local new = patch:match("^%+%+%+ ([^\n]+)") or patch:match("\n%+%+%+ ([^\n]+)") or "/dev/null"
+  local path = new ~= "/dev/null" and (new:match("^b/(.+)$") or new)
+    or (old:match("^a/(.+)$") or old)
+
+  local header = { ("diff --git a/%s b/%s"):format(path, path) }
+  if old == "/dev/null" then
+    header[#header + 1] = "new file mode 100644"
+  end
+  if new == "/dev/null" then
+    header[#header + 1] = "deleted file mode 100644"
+  end
+
+  return table.concat(header, "\n") .. "\n" .. patch
+end
+
+---A "@@ -0,0 ..." hunk means the old side is empty (new file), but
+---generate_patch still prints "--- a/<path>"; libgit2 then parses the delta
+---as a MODIFY of a path that is not in the index and fails. Canonicalize
+---such patches to the /dev/null + "new file mode" shape.
+local function canonicalize_new_file(patch)
+  if not (patch:match("\n@@ %-0,0 ") or patch:match("^@@ %-0,0 ")) then
+    return patch
+  end
+
+  if not patch:match("\nnew file mode %d+\n") then
+    patch = patch:gsub("^(diff %-%-git [^\n]+)\n", "%1\nnew file mode 100644\n", 1)
+  end
+  patch = patch:gsub("\n%-%-%- a/[^\n]+\n", "\n--- /dev/null\n", 1)
+  return patch
+end
+
 ---@param patch string unified diff, as produced by neogit's hunk serializer
 ---@param opts? { cached?: boolean, index?: boolean }
 ---@return boolean applied
@@ -207,6 +258,9 @@ function M.apply_patch(patch, opts)
     local lg2 = git2.binding.libgit2()
     local git2mod = git2.binding.git2()
     local ffi = require("ffi")
+
+    patch = normalize_patch(patch)
+    patch = canonicalize_new_file(patch)
 
     local diff_out = ffi.new("git_diff*[1]")
     if lg2.C.git_diff_from_buffer(diff_out, patch, #patch) ~= 0 then
