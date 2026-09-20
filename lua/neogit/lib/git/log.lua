@@ -360,8 +360,27 @@ end
 ---@param files? table
 ---@param hidden? boolean Hide from git history
 ---@param graph_color? boolean Render ascii graph in color
----@return CommitLogEntry[]
-M.list = util.memoize(function(options, graph, files, hidden, graph_color)
+---Build graph rows for a set of commits per the configured graph_style.
+---Shared by the CLI M.list and the libgit2 twin.
+---@param options string[] git log options (mutated for ascii)
+---@param files string[]
+---@param commits CommitLogEntry[]
+---@param graph_color? boolean
+---@return table
+local function graph_rows(options, files, commits, graph_color)
+  if config.values.graph_style == "unicode" then
+    return require("neogit.lib.graph.unicode").build(commits)
+  elseif config.values.graph_style == "kitty" then
+    return require("neogit.lib.graph.kitty").build(commits, graph_color)
+  elseif config.values.graph_style == "ascii" then
+    util.remove_item_from_table(options, "--show-signature")
+    return M.graph(options, files, graph_color)
+  end
+
+  return {}
+end
+
+local list_cli = util.memoize(function(options, graph, files, hidden, graph_color)
   files = files or {}
 
   local signature = false
@@ -383,22 +402,33 @@ M.list = util.memoize(function(options, graph, files, hidden, graph_color)
     return {}
   end
 
-  local graph_output
+  local graph_output = {}
   if graph then
-    if config.values.graph_style == "unicode" then
-      graph_output = require("neogit.lib.graph.unicode").build(commits)
-    elseif config.values.graph_style == "kitty" then
-      graph_output = require("neogit.lib.graph.kitty").build(commits, graph_color)
-    elseif config.values.graph_style == "ascii" then
-      util.remove_item_from_table(options, "--show-signature")
-      graph_output = M.graph(options, files, graph_color)
-    end
-  else
-    graph_output = {}
+    graph_output = graph_rows(options, files, commits, graph_color)
   end
 
   return parse_log(commits, graph_output)
 end)
+
+---Dispatch to the libgit2 twin when the backend allows it and the query
+---shape is supported (max-count/order only); fall back to the CLI otherwise.
+---This is the public entry point (update_recent, log views, cherry views...).
+---@param options string[]?
+---@param graph? table
+---@param files string[]?
+---@param hidden? boolean
+---@param graph_color? boolean
+---@return CommitLogEntry[]
+function M.list(options, graph, files, hidden, graph_color)
+  options = options or {}
+  files = files or {}
+
+  if backend.capability("query_log_list") == "libgit2" and require("neogit.lib.git.libgit2.log").supports(options, files) then
+    return require("neogit.lib.git.libgit2.log").list(options, graph, files, graph_color)
+  end
+
+  return list_cli(options, graph, files, hidden, graph_color)
+end
 
 ---Determines if commit a is an ancestor of commit b
 ---@param ancestor string commit hash
@@ -596,6 +626,12 @@ M.abbreviated_size = util.memoize(function()
     return string.len(commits[1].abbreviated_commit)
   end
 end, { timeout = math.huge })
+
+-- Shared with the libgit2 twin; not public API.
+M.internal = {
+  parse_log = parse_log,
+  graph_rows = graph_rows,
+}
 
 function M.decorate(oid)
   local result = git.cli.log.format("%D").max_count(1).args(oid).call().stdout

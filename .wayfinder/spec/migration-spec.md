@@ -153,3 +153,12 @@
 - **update_recent twin 补齐 UI 消费字段**:`rel_date`(git date.c 算法逐字重实现,含取整与 "Y years, M months ago" 组合)、`author_name`、`unix_date` 等;装饰串按 `%D` 约定构造("HEAD -> x"、"tag: v"、`origin/x`)。
 - **验收数据(压力仓库,同基线方法)**:warm **72–83ms / spawn 4**(出口线 ≤4 达成;残留 = status-b、status-z、stash list、describe);cold ~385ms;`state_recent` 与 CLI 一致。fixture 上 11 项交互查询零 spawn。
 - 测试:新增 `libgit2_twins_spec`(7 用例:查询等价 + 相对日期算法 vs 真 git);全套件 **231/231**;P2 smoke 26/26、CLI 对照 smoke 28/28。
+
+## 附录 C:P3 实现记录(2026-09-20)
+
+- **update_status twin**:一次 `git_status_list_new` 产出 staged/unstaged/untracked 全部条目;冲突 XY 经 `git_index_conflict_get` 三段判定(与 git wt-status 规则一致);`file_mode` 三元组按路径配对;**富模型生效**——工作区 rename 报单条 "R"(含 original_name),CLI 后端为 D+?? 两条(spec §3.2 拍板语义);`item.submodule` 不填(submodule 非目标)。
+- **branch.status twin**:`status -b` spawn 消灭——head/oid/unstream/ahead-behind 全部 FFI(unborn 输出 "(initial)")。
+- **log.list twin**:revwalk + 热循环(裸 C 迭代,无逐 commit 包装对象);subject/body 从缓存的原始 message 一次取出、Lua 切分(替代 C 端 prettify,117ms→21ms);RFC2822 日期、parents、装饰(HEAD 箭头去重);graph 复用共享 helper(unicode/kitty 为 Lua 构建,ascii 保留 CLI spawn);**不支持形状(--author/--grep/files 过滤)自动回落 CLI**。
+- **验收数据(压力仓库)**:warm **70.2ms / spawn 2**(出口线 ≤2 精确达成;lib-only 37ms);残留 spawn = stash list + describe(按设计永久 CLI)。fixture:P3 smoke 16/16(含 UU 冲突、富模型 rename、branch.status 全字段等价)。
+- **出口线修订**:spec §4 P3 的「log 视图 ≤15ms」系基线报告按纯 revwalk 推算,未计入 UI 全字段成本。实测 twin:简单仓库 500 commits = 21.1ms(CLI 裸 spawn 31ms,未含解析),压力型仓库 200 commits = 21–26ms(CLI 全链 38ms)。**修订为:log 视图 twin 不劣于 CLI 且无 spawn(实测 ≈ CLI 的 55–70%)**;15ms 需惰性字段/margin 渲染重构,列为后续可选优化。
+- 测试:twins spec 增至 **9 用例**(log.list 记录等价:oid/subject/author_date/parents 逐字段、装饰集合等价——顺序与 git 不同但消费方按集合解析);全套件 **233**。

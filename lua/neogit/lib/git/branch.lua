@@ -424,6 +424,10 @@ end
 
 ---@return BranchStatus
 function M.status()
+  if backend.capability("query_branch_status") == "libgit2" then
+    return require("neogit.lib.git.libgit2.branch").status()
+  end
+
   local result = git.cli.status.porcelain(2).branch.call { hidden = true }
   local status = {}
   for _, line in ipairs(result.stdout) do

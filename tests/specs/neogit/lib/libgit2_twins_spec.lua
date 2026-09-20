@@ -152,5 +152,48 @@ describe("lib.git.libgit2 twins", function()
       ):wait().stdout)
       assert.equal(cli_locals, table.concat(git.refs.list_local_branches(), "\n"))
     end)
+
+    it("log.list twin matches the CLI records", function()
+      if not probe_ok then
+        return
+      end
+
+      local twin = git.log.list({ "--max-count=10" }, nil, {}, true)
+      assert.truthy(#twin >= 1)
+
+      local cli_raw = vim.system(
+        { "git", "-C", dir, "log", "--max-count=3", "--format=%H%x1F%s%x1F%aD%x1F%P%x1F%D" },
+        {}
+      ):wait().stdout
+      local lines = vim.split(vim.trim(cli_raw), "\n")
+
+      assert.equal(#lines, #twin, "commit count mismatch")
+      for i, line in ipairs(lines) do
+        local oid, subject, author_date, parent, ref_name = unpack(vim.split(line, "\31"))
+        local entry = twin[i]
+
+        assert.equal(oid, entry.oid, "oid mismatch at " .. i)
+        assert.equal(subject, entry.subject, "subject mismatch at " .. i)
+        assert.equal(author_date, entry.author_date, "author_date mismatch at " .. i)
+        assert.equal(parent, entry.parent, "parents mismatch at " .. i)
+
+        -- Decoration ORDER differs from git (foreach is refname-sorted); the
+        -- consumer (branch_info) parses the set, so compare order-insensitively.
+        local expected_parts = vim.split(ref_name or "", ", ")
+        table.sort(expected_parts)
+        local actual_parts = vim.split(entry.ref_name or "", ", ")
+        table.sort(actual_parts)
+        assert.equal(table.concat(expected_parts, "\31"), table.concat(actual_parts, "\31"), "decorations mismatch at " .. i)
+      end
+    end)
+
+    it("log.list falls back to the CLI for unsupported filters", function()
+      if not probe_ok then
+        return
+      end
+
+      local filtered = git.log.list({ "--max-count=5", "--author=nobody" }, nil, {}, true)
+      assert.equal(0, #filtered)
+    end)
   end)
 end)
