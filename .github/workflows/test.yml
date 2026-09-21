@@ -79,6 +79,14 @@ jobs:
           echo "CLI failures:    $(wc -l < /tmp/fails-cli.txt)"
           echo "libgit2 failures: $(wc -l < /tmp/fails-lg2.txt)"
 
+          # Always print both lists: the differential only catches
+          # libgit2-specific regressions, so shared-path regressions (which
+          # fail under BOTH backends) must be auditable from the log.
+          echo "--- CLI backend failure list ---"
+          cat /tmp/fails-cli.txt
+          echo "--- libgit2 backend failure list ---"
+          cat /tmp/fails-lg2.txt
+
           check() {
             NEW_FAILURES=$(comm -13 /tmp/fails-cli.txt /tmp/fails-lg2.txt)
             [ -z "$NEW_FAILURES" ]
