@@ -20,7 +20,7 @@ local M = {}
 
 -- The version probe is not declared by the vendored cdef; it is a
 -- never-breaking API that has existed since 0.x, safe to call on any 1.x/2.x.
-ffi.cdef [[ void git_libgit2_version(int *major, int *minor, int *rev); ]]
+ffi.cdef([[ void git_libgit2_version(int *major, int *minor, int *rev); ]])
 
 -- Additional public, ABI-stable APIs the vendored cdef omits are declared
 -- lazily in ensure_extra_cdefs() (below the vendor loader) because they
@@ -57,7 +57,10 @@ local function vendored_require(name)
       end
       return require(modname)
     end,
-  }, { __index = _G })
+  }, {
+    -- selene: allow(global_usage)
+    __index = _G,
+  })
 
   setfenv(chunk, env)
 
@@ -69,8 +72,12 @@ end
 ---Vendored binding modules (libgit2 cdef/enum layer and the OOP wrapper).
 ---@type table
 M.binding = {
-  libgit2 = function() return vendored_require("core.libgit2") end,
-  git2 = function() return vendored_require("core.git2") end,
+  libgit2 = function()
+    return vendored_require("core.libgit2")
+  end,
+  git2 = function()
+    return vendored_require("core.git2")
+  end,
 }
 
 -- Additional public, ABI-stable APIs the vendored cdef omits (opaque types +
@@ -85,7 +92,7 @@ local function ensure_extra_cdefs()
 
   vendored_require("core.libgit2") -- registers git_repository/git_reference/git_object
 
-  ffi.cdef [[
+  ffi.cdef([[
     typedef struct git_reference_iterator git_reference_iterator;
     void git_reference_iterator_free(git_reference_iterator *iter);
 
@@ -97,7 +104,7 @@ local function ensure_extra_cdefs()
     const git_index_entry *git_index_get_byindex(git_index *index, size_t n);
 
     int git_submodule_status(unsigned int *status, git_repository *repo, const char *name, unsigned int ignore);
-  ]]
+  ]])
 
   extra_cdefs_done = true
 end
@@ -192,12 +199,21 @@ function M.probe(opts)
 
     if ok then
       if major[0] ~= M.MAXIMUM_MAJOR then
-        rejection = ("libgit2 %d.%d.%d found at %q, but majors other than 1 are not supported (2.0 pending adaptation)")
-          :format(major[0], minor[0], rev[0], candidate)
+        rejection = ("libgit2 %d.%d.%d found at %q, but majors other than 1 are not supported (2.0 pending adaptation)"):format(
+          major[0],
+          minor[0],
+          rev[0],
+          candidate
+        )
         -- another soname may still carry a 1.x — keep trying
       elseif minor[0] < M.MINIMUM[2] then
-        rejection = ("libgit2 %d.%d.%d found at %q, but the minimum supported version is 1.%d")
-          :format(major[0], minor[0], rev[0], candidate, M.MINIMUM[2])
+        rejection = ("libgit2 %d.%d.%d found at %q, but the minimum supported version is 1.%d"):format(
+          major[0],
+          minor[0],
+          rev[0],
+          candidate,
+          M.MINIMUM[2]
+        )
         -- an older soname will not help; keep trying anyway for a newer one
       else
         apply_version_overrides(minor[0])
@@ -248,7 +264,10 @@ function M.git_result(err, context)
     message = last and last.message
   end
 
-  return GitResult.new(err or -1, ("%s%s"):format(context or "", message or ("libgit2 error " .. tostring(err))))
+  return GitResult.new(
+    err or -1,
+    ("%s%s"):format(context or "", message or ("libgit2 error " .. tostring(err)))
+  )
 end
 
 ---Open a repository handle. Callers own the handle's lifetime; see the
@@ -316,7 +335,7 @@ function M.commit_of(repo, spec)
   end
 
   local oid = M.binding.git2().ObjectId.from_string(hex)
-  local commit, err = repo:commit_lookup(oid)
+  local commit = repo:commit_lookup(oid)
   return commit
 end
 

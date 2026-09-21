@@ -1,5 +1,3 @@
-local util = require("neogit.lib.util")
-
 ---Backend-neutral result of a git operation.
 ---
 ---Both the CLI backend (wrapping ProcessResult) and the future libgit2

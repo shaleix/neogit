@@ -62,7 +62,7 @@ local function open_status(dir)
   return buf
 end
 
-neogit.setup({ filewatcher = { enabled = false }, disable_context_highlighting = true })
+neogit.setup { filewatcher = { enabled = false }, disable_context_highlighting = true }
 
 describe("section header icons and colors", function()
   it("renders the configured icon before each section title", function()

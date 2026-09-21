@@ -27,14 +27,13 @@ function M.create_tag(popup)
     end
   end
 
-  local result =
-    git.tag.create(utils.merge(popup:get_arguments(), { tag_input, selected }), {
-      autocmd = "NeogitTagComplete",
-      msg = {
-        success = "Added tag " .. tag_input .. " on " .. selected,
-        fail = "Failed to add tag " .. tag_input .. " on " .. selected,
-      },
-    })
+  local result = git.tag.create(utils.merge(popup:get_arguments(), { tag_input, selected }), {
+    autocmd = "NeogitTagComplete",
+    msg = {
+      success = "Added tag " .. tag_input .. " on " .. selected,
+      fail = "Failed to add tag " .. tag_input .. " on " .. selected,
+    },
+  })
   if result:success() then
     event.send("TagCreate", { name = tag_input, ref = selected })
   end

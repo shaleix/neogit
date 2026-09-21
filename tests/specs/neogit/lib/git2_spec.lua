@@ -67,7 +67,7 @@ describe("lib.git2 (libgit2 binding overlay)", function()
         assert.is_true(vim.tbl_contains(probe_bad.tried, "/nonexistent/libgit2.so.99"))
       end
       -- A bogus explicit path must not be fatal: the soname sequence follows it.
-      assert.equal(git2.probe { force = true }.available, probe.available)
+      assert.equal(git2.probe({ force = true }).available, probe.available)
     end)
   end)
 

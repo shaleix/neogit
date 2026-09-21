@@ -90,7 +90,8 @@ end
 ---@param state NeogitRepoState
 ---@param filter table
 ---@param ctx { repo: table? }?
-function M.update_status(state, filter, ctx)  local status = require("neogit.lib.git.status")
+function M.update_status(state, filter, ctx)
+  local status = require("neogit.lib.git.status")
   local old_files = {
     staged_files = status.internal.item_collection(state, "staged", filter),
     unstaged_files = status.internal.item_collection(state, "unstaged", filter),
@@ -145,8 +146,9 @@ function M.update_status(state, filter, ctx)  local status = require("neogit.lib
       local entry = lg2.C.git_status_byindex(list[0], i)
 
       if entry.head_to_index ~= nil then
-        head_modes[ffi.string(entry.head_to_index.new_file.path)] =
-          ("%o"):format(tonumber(entry.head_to_index.old_file.mode) or 0)
+        head_modes[ffi.string(entry.head_to_index.new_file.path)] = ("%o"):format(
+          tonumber(entry.head_to_index.old_file.mode) or 0
+        )
       end
     end
 

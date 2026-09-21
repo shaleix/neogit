@@ -47,8 +47,7 @@ end
 ---@param base string Commit to absorb into upwards from, e.g. "abc1234"
 ---@return GitResult
 function M.absorb(base)
-  local result =
-    git.cli.absorb.verbose.base(base .. "^").and_rebase.env({ GIT_SEQUENCE_EDITOR = ":" }).call()
+  local result = git.cli.absorb.verbose.base(base .. "^").and_rebase.env({ GIT_SEQUENCE_EDITOR = ":" }).call()
 
   return GitResult.from_process(result)
 end
