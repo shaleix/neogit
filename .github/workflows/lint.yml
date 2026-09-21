@@ -16,7 +16,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
-          tool: selene,typos-cli
+          tool: selene,typos-cli,stylua
       - name: Run linters
         run: |
           make lint
@@ -65,4 +65,4 @@ jobs:
           luaRocksVersion: "3.12.1"
       - run: |
          luarocks install llscheck
-         llscheck --exclude 'lua/neogit/lib/vendor' lua/
+         llscheck --checklevel Warning lua/
