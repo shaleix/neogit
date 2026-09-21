@@ -65,4 +65,4 @@ jobs:
           luaRocksVersion: "3.12.1"
       - run: |
          luarocks install llscheck
-         llscheck --checklevel Warning lua/
+         llscheck lua/
