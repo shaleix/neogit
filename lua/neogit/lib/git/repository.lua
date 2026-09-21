@@ -99,6 +99,10 @@ local modules = {
 ---@return NeogitRepoState
 local function empty_state()
   return {
+    -- True until the first refresh completes: the status UI renders skeleton
+    -- section headers while loading, so the buffer shows its block structure
+    -- immediately instead of appearing blank.
+    loading = true,
     worktree_root = "",
     worktree_git_dir = "",
     git_dir = "",
@@ -263,7 +267,7 @@ function Repo:git_path(...)
   return Path:new(self.git_dir):joinpath(...)
 end
 
-function Repo:tasks(filter, state, ctx)
+function Repo:tasks(filter, state, ctx, on_task_done)
   local backend = require("neogit.lib.git.backend")
   local use_libgit2 = backend.current() == "libgit2"
 
@@ -278,6 +282,10 @@ function Repo:tasks(filter, state, ctx)
       local start = vim.uv.now()
       impl(state, filter, ctx)
       logger.debug(("[REPO]: Refreshed %s in %d ms"):format(name, vim.uv.now() - start))
+
+      if on_task_done then
+        pcall(on_task_done, name)
+      end
     end)
   end
 
@@ -359,20 +367,35 @@ function Repo:refresh(opts)
     end
   end
 
-  self._refresh_task = a.util.run_all(self:tasks(filter, self:current_state(start), ctx), function()
-    if ctx then
-      ctx.repo = nil
-    end
+  -- Per-module progress: when opts.progress is provided, each completed
+  -- update_* task commits the (shared) state early and notifies, so observers
+  -- can render progressively instead of waiting for the slowest task. The
+  -- atomic single-swap behavior is preserved for callers without progress.
+  local progressive = opts.progress ~= nil
+  local tmp = self:current_state(start)
 
-    if self._refresh_task and self._refresh_task:cancelled() then
-      logger.debug("[REPO]: (" .. start .. ") Refresh cancelled before completion")
-      return
-    end
+  self._refresh_task = a.util.run_all(
+    self:tasks(filter, tmp, ctx, function(name)
+      if progressive then
+        self:set_state(start)
+      end
+      pcall(opts.progress, name)
+    end),
+    function()
+      if ctx then
+        ctx.repo = nil
+      end
 
-    logger.debug("[REPO]: (" .. start .. ") Refreshes complete in " .. timestamp() - start .. " ms")
-    self:set_state(start)
-    self:run_callbacks(start)
-  end)
+      if self._refresh_task and self._refresh_task:cancelled() then
+        logger.debug("[REPO]: (" .. start .. ") Refresh cancelled before completion")
+        return
+      end
+
+      logger.debug("[REPO]: (" .. start .. ") Refreshes complete in " .. timestamp() - start .. " ms")
+      self:set_state(start)
+      self.state.loading = nil
+      self:run_callbacks(start)
+    end)
 end
 
 ---@return NeogitTask

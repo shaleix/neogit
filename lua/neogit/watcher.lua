@@ -176,6 +176,14 @@ function Watcher:dispatch_refresh()
 
   git.repo:dispatch_refresh {
     source = "watcher",
+    -- Progressive: redraw as each module lands (coalesced per tick), with the
+    -- same captured per-buffer cursor/view/fold state as the final callback.
+    progress = vim.schedule_wrap(function()
+      for name, buffer in pairs(self.buffers) do
+        local state = states[name]
+        buffer:redraw(state and state.cursor, state and state.view, state and state.fold)
+      end
+    end),
     callback = function()
       for name, buffer in pairs(self.buffers) do
         logger.debug("[WATCHER] Dispatching redraw to " .. name)
