@@ -103,7 +103,7 @@ jobs:
             echo "::error::Failures only under the libgit2 backend:"
             comm -13 /tmp/fails-cli.txt /tmp/fails-lg2.txt
             echo "--- libgit2 backend failure details ---"
-            sed -n '/^Failures:$/,/^Failed examples:$/p' /tmp/rspec-lg2.log | head -c 20000
+            sed -n '/^Failures:$/,/^Failed examples:$/p' /tmp/rspec-lg2.log | head -c 200000
             exit 1
           fi
           echo "No backend-specific failures."
