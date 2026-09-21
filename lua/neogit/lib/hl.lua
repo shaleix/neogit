@@ -290,7 +290,7 @@ function M.setup(config)
     NeogitChangeAUstaged           = { link = "NeogitChangeUnmerged" }, -- typos: ignore
     NeogitChangeUAstaged           = { link = "NeogitChangeUnmerged" },
     NeogitChangeUntrackedstaged    = { fg = "None" },
-    NeogitChangeModified           = { fg = palette.bg_blue, bold = palette.bold, italic = palette.italic, ctermfg = 4 },
+    NeogitChangeModified           = { fg = palette.green, bold = palette.bold, italic = palette.italic, ctermfg = 2 },
     NeogitChangeAdded              = { fg = palette.bg_green, bold = palette.bold, italic = palette.italic, ctermfg = 2 },
     NeogitChangeDeleted            = { fg = palette.bg_red, bold = palette.bold, italic = palette.italic, ctermfg = 1 },
     NeogitChangeRenamed            = { fg = palette.bg_purple, bold = palette.bold, italic = palette.italic, ctermfg = 5 },
