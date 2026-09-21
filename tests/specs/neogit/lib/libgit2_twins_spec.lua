@@ -205,6 +205,35 @@ describe("lib.git.libgit2 twins", function()
       assert.equal(0, #filtered)
     end)
 
+    it("log.list twin never leaks newlines from multi-line bodies", function()
+      if not probe_ok then
+        return
+      end
+
+      -- multi-line body commit (the log-view freeze repro): CLI pipeline
+      -- strips body newlines; the twin must match, or nvim_buf_set_lines
+      -- receives embedded \n and the log view dies
+      vim
+        .system({
+          "git",
+          "-C",
+          dir,
+          "commit",
+          "-q",
+          "--allow-empty",
+          "-m",
+          "subject line",
+          "-m",
+          "line one\nline two\nline three",
+        })
+        :wait()
+
+      local entries = git.log.list({ "HEAD", "--max-count=1" }, {}, {}, true)
+      assert.equal(1, #entries)
+      assert.equal("subject line", entries[1].subject)
+      assert.is_nil((entries[1].body or ""):find("[\n\r]"), "body must not contain newlines")
+    end)
+
     it("log.list twin handles rev specs and ranges", function()
       if not probe_ok then
         return

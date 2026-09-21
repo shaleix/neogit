@@ -263,7 +263,10 @@ function M.supports(options, files)
 end
 
 ---git's %s/%b from the raw (cached) commit message: subject = folded first
----paragraph, body = remainder after the first blank line.
+---paragraph, body = remainder after the first blank line. NB: the CLI
+---record pipeline strips newlines from the body entirely (NUL/NL handling
+---joins the lines without a separator) - mirror that, or multi-line body
+---text reaches nvim_buf_set_lines and freezes the log view.
 local function subject_and_body(raw)
   local head, rest = raw:match("^(.-)\n\n(.*)$")
   if not head then
@@ -271,7 +274,7 @@ local function subject_and_body(raw)
   end
 
   local subject = (head:gsub("\n", " ")):gsub("%s+$", "")
-  local body = rest and (rest:gsub("^%s+", "")) or ""
+  local body = rest and (rest:gsub("^%s+", "")):gsub("[\n\r]", "") or ""
   return subject, body
 end
 
