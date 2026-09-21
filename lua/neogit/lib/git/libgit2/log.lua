@@ -88,8 +88,17 @@ end
 M.relative_date = relative_date
 local function decoration_map(repo)
   local map = {}
+  local names = {}
 
+  -- Collect first, resolve after: calling git_reference_lookup/peel inside
+  -- the foreach callback re-enters libgit2 while the iterator is alive,
+  -- which can deadlock or misbehave on some builds.
   git2.each_ref_name(repo, function(full)
+    names[#names + 1] = full
+    return true
+  end)
+
+  for _, full in ipairs(names) do
     local entry
     if full:match("^refs/heads/") or full:match("^refs/remotes/") then
       entry = full:gsub("^refs/[^/]*/", "")
@@ -98,8 +107,8 @@ local function decoration_map(repo)
     end
     if entry then
       local ok, commit = pcall(function()
-        local ref, err = repo:reference_lookup(full)
-        assert(ref, "reference_lookup failed: " .. tostring(err))
+        local ref = repo:reference_lookup(full)
+        assert(ref, "reference_lookup failed for " .. full)
         return ref:peel_commit()
       end)
       if ok and commit then
@@ -108,9 +117,7 @@ local function decoration_map(repo)
         map[hex][#map[hex] + 1] = entry
       end
     end
-
-    return true
-  end)
+  end
 
   -- HEAD marker: arrow when on a branch, plain "HEAD" when detached.
   local head_ref = repo:head()

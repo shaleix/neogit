@@ -27,8 +27,11 @@ function M.list(namespaces)
     end)
 
     local entries = {}
+    local matched_names = {}
 
-    -- 1.9 removed the iterator `next` calls; foreach_name is the portable API.
+    -- Collect first, resolve after: git_reference_lookup/peel inside the
+    -- foreach callback re-enters libgit2 while the iterator is alive,
+    -- which can deadlock or misbehave on some builds.
     git2.each_ref_name(repo, function(full)
       local matched = #prefixes == 0
       for _, p in ipairs(prefixes) do
@@ -38,22 +41,26 @@ function M.list(namespaces)
       end
 
       if matched then
-        local entry = { name = full, time = nil }
-        local ok, commit = pcall(function()
-          local ref, err = repo:reference_lookup(full)
-          assert(ref, "reference_lookup failed: " .. tostring(err))
-          return ref:peel_commit()
-        end)
-        if ok and commit then
-          local sig = lg2.C.git_commit_committer(commit.commit)
-          entry.time = tonumber(sig.when.time) or 0
-        end
-
-        entries[#entries + 1] = entry
+        matched_names[#matched_names + 1] = full
       end
 
       return true
     end)
+
+    for _, full in ipairs(matched_names) do
+      local entry = { name = full, time = nil }
+      local ok, commit = pcall(function()
+        local ref = repo:reference_lookup(full)
+        assert(ref, "reference_lookup failed for " .. full)
+        return ref:peel_commit()
+      end)
+      if ok and commit then
+        local sig = lg2.C.git_commit_committer(commit.commit)
+        entry.time = tonumber(sig.when.time) or 0
+      end
+
+      entries[#entries + 1] = entry
+    end
 
     sort_refs(entries, config.values.sort_branches)
 
