@@ -53,7 +53,7 @@ function M.global_get(key)
   local git2mod = git2.binding.git2()
 
   local ok, value = pcall(function()
-    local cfg, err = git2mod.Config.open_default()
+    local cfg = git2mod.Config.open_default()
     if not cfg then
       return nil
     end

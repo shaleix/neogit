@@ -15,8 +15,6 @@ end
 ---@return string? oid of the tagged commit
 function M.describe()
   return git2.with_repo(worktree_root(), function(repo)
-    local git2mod = git2.binding.git2()
-
     -- tag commit-oid -> lexically smallest tag name pointing at it
     local tag_at = {}
     git2.each_ref_name(repo, function(name)

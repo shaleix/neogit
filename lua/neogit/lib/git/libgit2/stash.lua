@@ -11,7 +11,6 @@ end
 ---@return string[] lines shaped like `stash@{N}: message` (CLI compatible)
 function M.list()
   return git2.with_repo(worktree_root(), function(repo)
-    local git2mod = git2.binding.git2()
     local ffi = require("ffi")
 
     local lines = {}
