@@ -603,6 +603,11 @@ function M.Status(state, config)
   -- stylua: ignore start
   local show_hint = not config.disable_hint
 
+  -- While the first refresh is in flight, render skeleton headers for the
+  -- core sections so the buffer shows its block structure immediately; the
+  -- headers fill with items progressively as each module's data lands.
+  local loading = state.loading == true
+
   local show_upstream = state.upstream.ref
     and not state.head.detached
 
@@ -629,13 +634,13 @@ function M.Status(state, config)
   local show_bisect = #state.bisect.items > 0
     and not config.sections.bisect.hidden
 
-  local show_untracked = #state.untracked.items > 0
+  local show_untracked = (#state.untracked.items > 0 or loading)
     and not config.sections.untracked.hidden
 
-  local show_unstaged = #state.unstaged.items > 0
+  local show_unstaged = (#state.unstaged.items > 0 or loading)
     and not config.sections.unstaged.hidden
 
-  local show_staged = #state.staged.items > 0
+  local show_staged = (#state.staged.items > 0 or loading)
     and not config.sections.staged.hidden
 
   local show_upstream_unpulled = #state.upstream.unpulled.items > 0
@@ -652,10 +657,10 @@ function M.Status(state, config)
     and state.pushRemote.ref ~= state.upstream.ref
     and not config.sections.unmerged_pushRemote.hidden
 
-  local show_stashes = #state.stashes.items > 0
+  local show_stashes = (#state.stashes.items > 0 or loading)
     and not config.sections.stashes.hidden
 
-  local show_recent = #state.recent.items > 0
+  local show_recent = (#state.recent.items > 0 or loading)
     and not config.sections.recent.hidden
 
   return {
@@ -754,7 +759,7 @@ function M.Status(state, config)
         },
         show_untracked and Section {
           title = SectionTitle { title = "Untracked files", highlight = "NeogitUntrackedfiles" },
-          count = true,
+          count = #state.untracked.items > 0,
           render = SectionItemFile("untracked", config),
           items = state.untracked.items,
           folded = config.sections.untracked.folded,
@@ -762,7 +767,7 @@ function M.Status(state, config)
         },
         show_unstaged and Section {
           title = SectionTitle { title = "Unstaged changes", highlight = "NeogitUnstagedchanges" },
-          count = true,
+          count = #state.unstaged.items > 0,
           render = SectionItemFile("unstaged", config),
           items = state.unstaged.items,
           folded = config.sections.unstaged.folded,
@@ -770,7 +775,7 @@ function M.Status(state, config)
         },
         show_staged and Section {
           title = SectionTitle { title = "Staged changes", highlight = "NeogitStagedchanges" },
-          count = true,
+          count = #state.staged.items > 0,
           render = SectionItemFile("staged", config),
           items = state.staged.items,
           folded = config.sections.staged.folded,
@@ -778,7 +783,7 @@ function M.Status(state, config)
         },
         show_stashes and Section {
           title = SectionTitle { title = "Stashes", highlight = "NeogitStashes" },
-          count = true,
+          count = #state.stashes.items > 0,
           render = SectionItemStash,
           items = state.stashes.items,
           folded = config.sections.stashes.folded,
@@ -822,7 +827,7 @@ function M.Status(state, config)
             ref = state.upstream.ref,
             highlight = "NeogitUnpulledchanges",
           },
-          count = true,
+          count = #state.recent.items > 0,
           render = SectionItemCommit,
           items = state.upstream.unpulled.items,
           folded = config.sections.unpulled_upstream.folded,
