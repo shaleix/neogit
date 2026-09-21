@@ -231,6 +231,69 @@ describe("lib.git.libgit2 twins", function()
       assert.equal(1, #right_empty)
     end)
 
+    it("stash list twin matches the CLI", function()
+      if not probe_ok then
+        return
+      end
+
+      -- no stashes yet
+      local empty = git.stash.list()
+      local cli_empty = vim.system({ "git", "-C", dir, "stash", "list" }):wait().stdout
+      assert.equal(vim.trim(cli_empty), table.concat(empty, "\n"))
+
+      -- create a stash
+      vim.uv.fs_open(dir .. "/a.txt", "a", 420, function(_, fd)
+        vim.uv.fs_write(fd, "stashed\n", nil, function()
+          vim.uv.fs_close(fd)
+        end)
+      end)
+      vim.wait(300, function()
+        return true
+      end)
+      vim.system({ "git", "-C", dir, "stash", "-q" }):wait()
+
+      local with_stash = git.stash.list()
+      local cli = vim.trim(vim.system({ "git", "-C", dir, "stash", "list" }):wait().stdout or "")
+      assert.equal(cli, table.concat(with_stash, "\n"))
+      assert.truthy(with_stash[1] and with_stash[1]:match("^stash@{%d+}: "))
+    end)
+
+    it("describe twin matches the CLI", function()
+      if not probe_ok then
+        return
+      end
+
+      -- a tag two commits back, one commit after it
+      vim.system({ "git", "-C", dir, "tag", "-a", "v0.1.0", "-m", "v1", "HEAD" }):wait()
+      vim.system({ "git", "-C", dir, "commit", "-q", "--allow-empty", "-m", "after tag" }):wait()
+
+      local cli =
+        vim.trim(vim.system({ "git", "-C", dir, "describe", "--long", "--tags", "HEAD" }):wait().stdout or "")
+      local tag, distance = cli:match("^(.-)%-([0-9]+)%-g[0-9a-f]+$")
+      assert.truthy(tag, "CLI describe shape unexpected: " .. cli)
+
+      local name, twin_distance = require("neogit.lib.git.libgit2.tag").describe()
+      assert.equal(tag, name)
+      assert.equal(tonumber(distance), twin_distance)
+    end)
+
+    it("config twins match the CLI", function()
+      if not probe_ok then
+        return
+      end
+
+      local libgit2_config = require("neogit.lib.git.libgit2.config")
+
+      -- local entries include what `git config --list --local` reports
+      vim.system({ "git", "-C", dir, "config", "neogit.speckey", "specvalue" }):wait()
+      local local_entries = libgit2_config.local_entries()
+      assert.equal("specvalue", local_entries["neogit.speckey"])
+
+      -- global lookup (nothing set globally in this test env, but the call
+      -- must not error and must behave like an unset key)
+      assert.is_nil(libgit2_config.global_get("neogit.no.such.key"))
+    end)
+
     it("applies neogit-style bare patches (no diff --git header)", function()
       if not probe_ok then
         return

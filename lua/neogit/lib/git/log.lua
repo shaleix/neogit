@@ -622,9 +622,14 @@ function M.log_message(skip)
 end
 
 M.abbreviated_size = util.memoize(function()
-  -- NB: bypasses the M.list dispatcher on purpose. abbreviated_size feeds the
-  -- libgit2 twin (for abbreviated_commit), so routing through the dispatcher
-  -- would recurse twin.list -> abbreviated_size -> M.list -> twin.list.
+  -- NB: the CLI branch bypasses the M.list dispatcher on purpose.
+  -- abbreviated_size feeds the libgit2 twin (for abbreviated_commit), so
+  -- routing through the dispatcher would recurse twin.list ->
+  -- abbreviated_size -> M.list -> twin.list.
+  if backend.capability("query_abbrev_size") == "libgit2" then
+    return require("neogit.lib.git.libgit2.log").abbrev_size()
+  end
+
   local commits = list_cli({ "HEAD", "--max-count=1" }, nil, {}, true)
   if vim.tbl_isempty(commits) then
     return 7
