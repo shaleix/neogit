@@ -14,9 +14,13 @@ M.abbreviate_commit = util.memoize(function(oid)
 
   if oid == "(initial)" then
     return "(initial)"
-  else
-    return git.cli["rev-parse"].short.args(oid).call({ hidden = true, ignore_error = true }).stdout[1]
   end
+
+  if backend.capability("query_abbreviate_commit") == "libgit2" then
+    return require("neogit.lib.git.libgit2.rev_parse").abbreviate(oid)
+  end
+
+  return git.cli["rev-parse"].short.args(oid).call({ hidden = true, ignore_error = true }).stdout[1]
 end, { timeout = math.huge })
 
 ---@param rev string

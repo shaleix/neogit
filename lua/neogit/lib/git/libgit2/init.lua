@@ -73,6 +73,8 @@ function M.register(repo)
   backend.mark_migrated("query_config_global")
   backend.mark_migrated("query_stash_list")
   backend.mark_migrated("query_describe")
+  backend.mark_migrated("query_abbrev_size")
+  backend.mark_migrated("query_abbreviate_commit")
 
   -- Index writes (stage/unstage/checkout-file/forward-apply).
   backend.mark_migrated("index_write")

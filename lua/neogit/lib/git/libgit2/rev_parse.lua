@@ -16,4 +16,12 @@ function M.oid(spec)
   end)
 end
 
+---Abbreviate a full oid to this repository's abbreviation length
+---(git's own auto-sizing, via git_object_short_id).
+---@param oid string
+---@return string
+function M.abbreviate(oid)
+  return oid:sub(1, require("neogit.lib.git.libgit2.log").abbrev_size())
+end
+
 return M

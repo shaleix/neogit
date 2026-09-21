@@ -289,7 +289,7 @@ function M.abbrev_size()
       return 7
     end
 
-    local len = out[0].size
+    local len = tonumber(out[0].size) or 0
     lg2.C.git_buf_dispose(out)
     return len > 0 and len or 7
   end) or 7
