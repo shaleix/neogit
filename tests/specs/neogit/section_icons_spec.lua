@@ -75,6 +75,34 @@ describe("section header icons and colors", function()
     assert.truthy(text:find(icons.recent .. " Recent Commits", 1, true), "recent icon missing")
   end)
 
+  it("shows modified and new files in green tones", function()
+    local function channels(name)
+      local def = vim.api.nvim_get_hl(0, { name = name, link = false })
+      assert.truthy(def.fg, name .. " must define its own fg")
+      local r = math.floor(def.fg / 65536) % 256
+      local g = math.floor(def.fg / 256) % 256
+      local b = def.fg % 256
+      return r, g, b
+    end
+
+    for _, name in ipairs {
+      "NeogitChangeModified",
+      "NeogitChangeNewFile",
+      -- the per-section variants link to the base groups and must inherit
+      "NeogitChangeMunstaged",
+      "NeogitChangeMstaged",
+      "NeogitChangeNuntracked",
+    } do
+      local r, g, b = channels(name)
+      assert.truthy(g > r and g > b, name .. " must be green-dominant")
+    end
+
+    -- same family, still distinguishable
+    local mod = vim.api.nvim_get_hl(0, { name = "NeogitChangeModified", link = false }).fg
+    local new = vim.api.nvim_get_hl(0, { name = "NeogitChangeNewFile", link = false }).fg
+    assert.is_not.equal(mod, new)
+  end)
+
   it("gives each section its own highlight color", function()
     local groups = { "NeogitUntrackedfiles", "NeogitUnstagedchanges", "NeogitStagedchanges" }
 
