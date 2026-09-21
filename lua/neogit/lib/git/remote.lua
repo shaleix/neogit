@@ -1,5 +1,6 @@
 local git = require("neogit.lib.git")
 local util = require("neogit.lib.util")
+local backend = require("neogit.lib.git.backend")
 
 ---@class NeogitGitRemote
 local M = {}
@@ -62,6 +63,10 @@ end
 
 ---@return string[]
 M.list = util.memoize(function()
+  if backend.capability("query_remote_list") == "libgit2" then
+    return require("neogit.lib.git.libgit2.remote").list()
+  end
+
   return git.cli.remote.call({ hidden = true }).stdout
 end)
 

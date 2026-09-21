@@ -503,6 +503,7 @@ function M.memoize(f, opts)
     assert(cwd, "no cwd")
 
     local key = vim.inspect { vim.fs.normalize(cwd), ... }
+    local timeout = opts.timeout or DEFAULT_TIMEOUT
 
     if cache[key] == nil then
       cache[key] = f(...)
@@ -511,10 +512,14 @@ function M.memoize(f, opts)
       timer[key]:close()
     end
 
-    timer[key] = set_timeout(opts.timeout or DEFAULT_TIMEOUT, function()
-      cache[key] = nil
-      timer[key] = nil
-    end)
+    -- math.huge means "never expire": libuv timers cannot represent it (the
+    -- cast fires immediately), which silently killed the cache on every call.
+    if timeout ~= math.huge then
+      timer[key] = set_timeout(timeout, function()
+        cache[key] = nil
+        timer[key] = nil
+      end)
+    end
 
     return cache[key]
   end

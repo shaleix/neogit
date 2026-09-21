@@ -1026,40 +1026,90 @@ local configurations = {
 --- repository.worktree_root is used by all other library functions, so it's most likely the one you want to use.
 --- worktree_root_of_cwd() returns the git repo of the cwd, which can change anytime
 --- after worktree_root_of_cwd() has been called.
+
+---All startup repository metadata from ONE `git rev-parse` process, cached per
+---directory (and aliased under the worktree root, so callers that first
+---resolve a directory to its toplevel — the neogit.open path — do not spawn
+---a second time). Cached for the process lifetime: repo metadata does not
+---move underneath a running session.
+---@param dir string
+---@return { worktree_root: string, worktree_git_dir: string, git_dir: string, inside: boolean }
+local repo_info_cache = {}
+
+local function repo_info(dir)
+  local resolved = vim.fs.normalize(dir)
+  local cached = repo_info_cache[resolved]
+  if cached then
+    return cached
+  end
+
+  local result = vim
+    .system({
+      get_git_executable(),
+      "-C",
+      dir,
+      "rev-parse",
+      "--show-toplevel",
+      "--absolute-git-dir",
+      "--git-common-dir",
+      "--is-inside-work-tree",
+    }, { text = true })
+    :wait()
+
+  if result.code ~= 0 then
+    local outside = { worktree_root = "", worktree_git_dir = "", git_dir = "", inside = false }
+    repo_info_cache[resolved] = outside
+    return outside
+  end
+
+  local lines = vim.split(vim.trim(result.stdout), "\n")
+  local toplevel = vim.trim(lines[1] or "")
+  local worktree_git_dir = vim.trim(lines[2] or "")
+  local common_dir = vim.trim(lines[3] or "")
+  local inside = vim.trim(lines[4] or "") == "true"
+
+  -- --git-common-dir can be relative (resolved against the -C directory)
+  local git_dir = common_dir
+  if not git_dir:match("^/") then
+    git_dir = vim.fs.normalize(resolved .. "/" .. common_dir)
+  end
+
+  local info = {
+    worktree_root = toplevel,
+    worktree_git_dir = worktree_git_dir,
+    git_dir = git_dir,
+    inside = inside,
+  }
+
+  repo_info_cache[resolved] = info
+  if toplevel ~= "" then
+    repo_info_cache[vim.fs.normalize(toplevel)] = info
+  end
+
+  return info
+end
 ---@param dir string
 ---@return string Absolute path of current worktree
 local function worktree_root(dir)
-  local cmd = { get_git_executable(), "-C", dir, "rev-parse", "--show-toplevel" }
-  local result = vim.system(cmd, { text = true }):wait()
-
-  return Path:new(vim.trim(result.stdout)):absolute()
+  return repo_info(dir).worktree_root
 end
 
 ---@param dir string
 ---@return string Absolute path of `.git/` directory
 local function git_dir(dir)
-  local cmd = { get_git_executable(), "-C", dir, "rev-parse", "--git-common-dir" }
-  local result = vim.system(cmd, { text = true }):wait()
-
-  return Path:new(vim.trim(result.stdout)):absolute()
+  return repo_info(dir).git_dir
 end
 
 ---@param dir string
 ---@return string Absolute path of `.git/` directory
 local function worktree_git_dir(dir)
-  local cmd = { get_git_executable(), "-C", dir, "rev-parse", "--git-dir" }
-  local result = vim.system(cmd, { text = true }):wait()
-
-  return Path:new(vim.trim(result.stdout)):absolute()
+  return repo_info(dir).worktree_git_dir
 end
 
 ---@param dir string
 ---@return boolean
 local function is_inside_worktree(dir)
-  local cmd = { get_git_executable(), "-C", dir, "rev-parse", "--is-inside-work-tree" }
-  local result = vim.system(cmd):wait()
-
-  return result.code == 0
+  return repo_info(dir).inside
 end
 
 local k_state = {}
@@ -1313,6 +1363,7 @@ local cli = setmetatable({
   worktree_git_dir = worktree_git_dir,
   git_dir = git_dir,
   is_inside_worktree = is_inside_worktree,
+  repo_info = repo_info,
 }, meta)
 
 return cli
