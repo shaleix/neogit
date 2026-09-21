@@ -50,9 +50,11 @@ jobs:
 
       - name: Install lua-language-server
         run: |
+          mkdir -p /usr/local/lua-language-server
           curl -sL "https://github.com/LuaLS/lua-language-server/releases/download/3.13.6/lua-language-server-3.13.6-linux-x64.tar.gz" \
-            | tar xz -C /usr/local
-          ln -s /usr/local/bin/lua-language-server /usr/local/bin/lua-language-server 2>/dev/null || true
+            | tar xz -C /usr/local/lua-language-server
+          ln -sf /usr/local/lua-language-server/bin/lua-language-server /usr/local/bin/lua-language-server
+          lua-language-server --version
 
       - uses: luarocks/gh-actions-lua@v10
         with:
