@@ -11,7 +11,7 @@ end
 ---@return string[]
 function M.list()
   return git2.with_repo(worktree_root(), function(repo)
-    local list, err = repo:remote_list()
+    local list = repo:remote_list()
     return list or {}
   end) or {}
 end

@@ -55,7 +55,7 @@ function M.current()
   end
 
   if kind == "libgit2" then
-    error(("neogit: git_backend = \"libgit2\", but %s"):format(probe.reason))
+    error(('neogit: git_backend = "libgit2", but %s'):format(probe.reason))
   end
 
   resolved = "cli"
@@ -63,9 +63,11 @@ function M.current()
     notified = true
     vim.schedule(function()
       vim.notify(
-        ("neogit: libgit2 backend unavailable (%s).\nFalling back to the git CLI backend. "
+        (
+          "neogit: libgit2 backend unavailable (%s).\nFalling back to the git CLI backend. "
           .. "Install libgit2 >= 1.7 (e.g. `apt install libgit2-1.9` / `brew install libgit2`) "
-          .. "or set `git_backend = \"cli\"` to silence this."):format(probe.reason),
+          .. 'or set `git_backend = "cli"` to silence this.'
+        ):format(probe.reason),
         vim.log.levels.INFO
       )
     end)

@@ -11,7 +11,7 @@ local function worktree_root()
 end
 
 local function current_branch(repo)
-  local ref, err = repo:head()
+  local ref = repo:head()
   if not ref then
     return nil
   end
@@ -26,10 +26,10 @@ function M.status()
   return git2.with_repo(worktree_root(), function(repo)
     local out = { ab = nil, detached = false, oid = nil, head = nil, upstream = nil }
 
-    local head_ref, err = repo:head()
+    local head_ref = repo:head()
     if not head_ref then
       -- unborn HEAD: report the branch name with the "(initial)" oid, like porcelain
-      local sym, serr = repo:reference_lookup("HEAD")
+      local sym = repo:reference_lookup("HEAD")
       if sym then
         local target = sym:symbolic_target()
         out.head = target and target:gsub("^refs/heads/", "") or "(detached)"
@@ -54,7 +54,7 @@ function M.status()
     end
 
     if not out.detached then
-      local upstream_ref, uerr = head_ref:branch_upstream()
+      local upstream_ref = head_ref:branch_upstream()
       if upstream_ref then
         out.upstream = (upstream_ref.name or ""):gsub("^refs/remotes/", "")
 
@@ -98,7 +98,7 @@ end
 ---@return boolean
 function M.exists(branch)
   return git2.with_repo(worktree_root(), function(repo)
-    local ref, err = repo:branch_lookup(branch, git2.binding.libgit2().GIT_BRANCH.LOCAL)
+    local ref = repo:branch_lookup(branch, git2.binding.libgit2().GIT_BRANCH.LOCAL)
     return ref ~= nil
   end) == true
 end
@@ -120,11 +120,10 @@ local function list_branches(repo, locals, remotes, include_current, sortby)
         local entry = { name = name, time = nil }
 
         local ok, commit = pcall(function()
-          local ref, err = repo:reference_lookup(b.name)
+          local ref = repo:reference_lookup(b.name)
           return ref and ref:peel_commit()
         end)
         if ok and commit then
-          local ffi = require("ffi")
           local lg2 = git2.binding.libgit2()
           local sig = lg2.C.git_commit_committer(commit.commit)
           entry.time = tonumber(sig.when.time) or 0

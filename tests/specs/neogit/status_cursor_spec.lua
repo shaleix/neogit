@@ -83,7 +83,7 @@ local function watcher_refresh(buf)
   vim.wait(50)
 end
 
-neogit.setup({ filewatcher = { enabled = false }, disable_context_highlighting = true })
+neogit.setup { filewatcher = { enabled = false }, disable_context_highlighting = true }
 
 describe("status buffer cursor anchoring", function()
   it("anchors the cursor on the second visible section after open", function()

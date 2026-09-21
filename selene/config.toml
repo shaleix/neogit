@@ -1,4 +1,9 @@
 std = "selene/globals"
 
+# Vendored third-party code (fugit2 libgit2 binding snapshot) is verbatim.
+exclude = [
+  "lua/neogit/lib/vendor/**",
+]
+
 [rules]
 shadowing = "allow"

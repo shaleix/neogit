@@ -52,9 +52,8 @@ local M = {
 ---@param filter? string[] Filter diffs to filepaths in table
 ---@return CommitViewBuffer
 function M.new(commit_id, filter)
-  local commit_info = git.log.parse(
-    git.log.show_raw(commit_id, { date_format = config.values.commit_date_format })
-  )[1]
+  local commit_info =
+    git.log.parse(git.log.show_raw(commit_id, { date_format = config.values.commit_date_format }))[1]
 
   commit_info.commit_arg = commit_id
 

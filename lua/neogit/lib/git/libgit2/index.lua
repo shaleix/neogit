@@ -28,9 +28,8 @@ local function c_strarray(files)
 end
 
 ---@param files string[]
-local function stage_paths(repo, index, files)
+local function stage_paths(_repo, index, files)
   local lg2 = git2.binding.libgit2()
-  local ffi = require("ffi")
 
   for _, path in ipairs(files) do
     if vim.fn.filereadable(worktree_root() .. "/" .. path) == 1 then
@@ -67,8 +66,7 @@ local function worktree_changed_paths(repo, include_untracked)
   for i = 0, count - 1 do
     local entry = lg2.C.git_status_byindex(list[0], i)
     local st = tonumber(entry.status)
-    local changed =
-      bit.band(st, lg2.GIT_STATUS.WT_MODIFIED) ~= 0
+    local changed = bit.band(st, lg2.GIT_STATUS.WT_MODIFIED) ~= 0
       or bit.band(st, lg2.GIT_STATUS.WT_DELETED) ~= 0
       or (include_untracked and bit.band(st, lg2.GIT_STATUS.WT_NEW) ~= 0)
 
@@ -88,7 +86,7 @@ end
 ---@param files string[]
 function M.stage(files)
   git2.with_repo(worktree_root(), function(repo)
-    local index, err = repo:index()
+    local index = repo:index()
     if not index then
       return
     end
@@ -218,8 +216,7 @@ local function normalize_patch(patch)
 
   local old = patch:match("^%-%-%- ([^\n]+)") or patch:match("\n%-%-%- ([^\n]+)") or "/dev/null"
   local new = patch:match("^%+%+%+ ([^\n]+)") or patch:match("\n%+%+%+ ([^\n]+)") or "/dev/null"
-  local path = new ~= "/dev/null" and (new:match("^b/(.+)$") or new)
-    or (old:match("^a/(.+)$") or old)
+  local path = new ~= "/dev/null" and (new:match("^b/(.+)$") or new) or (old:match("^a/(.+)$") or old)
 
   local header = { ("diff --git a/%s b/%s"):format(path, path) }
   if old == "/dev/null" then

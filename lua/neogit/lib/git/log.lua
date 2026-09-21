@@ -423,7 +423,10 @@ function M.list(options, graph, files, hidden, graph_color)
   options = options or {}
   files = files or {}
 
-  if backend.capability("query_log_list") == "libgit2" and require("neogit.lib.git.libgit2.log").supports(options, files) then
+  if
+    backend.capability("query_log_list") == "libgit2"
+    and require("neogit.lib.git.libgit2.log").supports(options, files)
+  then
     return require("neogit.lib.git.libgit2.log").list(options, graph, files, graph_color)
   end
 

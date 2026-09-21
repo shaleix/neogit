@@ -72,13 +72,15 @@ describe("lib.git.libgit2 twins", function()
       -- 3 hours ago, fixed (local time — git parses bare ISO dates as local).
       local fixed = os.time() - 3 * 3600
       local when = os.date("%Y-%m-%dT%H:%M:%S", fixed)
-      local r = vim.system({ "git", "-C", dir, "commit", "--allow-empty", "-qm", "dated" }, {
-        env = {
-          PATH = os.getenv("PATH"),
-          GIT_COMMITTER_DATE = when,
-          GIT_AUTHOR_DATE = when,
-        },
-      }):wait()
+      local r = vim
+        .system({ "git", "-C", dir, "commit", "--allow-empty", "-qm", "dated" }, {
+          env = {
+            PATH = os.getenv("PATH"),
+            GIT_COMMITTER_DATE = when,
+            GIT_AUTHOR_DATE = when,
+          },
+        })
+        :wait()
       assert.equal(0, r.code, r.stderr)
 
       local cli = vim.trim(vim.system({ "git", "-C", dir, "log", "-1", "--format=%cr" }):wait().stdout)
@@ -132,9 +134,11 @@ describe("lib.git.libgit2 twins", function()
         return
       end
 
-      local cli_locals = vim.trim(vim.system(
-        { "git", "-C", dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/" }
-      ):wait().stdout)
+      local cli_locals = vim.trim(
+        vim
+          .system({ "git", "-C", dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/" })
+          :wait().stdout
+      )
       local twin_locals = table.concat(git.branch.get_local_branches(true), "\n")
       assert.equal(cli_locals, twin_locals)
     end)
@@ -147,9 +151,11 @@ describe("lib.git.libgit2 twins", function()
       local cli_tags = vim.trim(vim.system({ "git", "-C", dir, "tag" }):wait().stdout)
       assert.equal(cli_tags, table.concat(git.refs.list_tags(), ","))
 
-      local cli_locals = vim.trim(vim.system(
-        { "git", "-C", dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/" }
-      ):wait().stdout)
+      local cli_locals = vim.trim(
+        vim
+          .system({ "git", "-C", dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/" })
+          :wait().stdout
+      )
       assert.equal(cli_locals, table.concat(git.refs.list_local_branches(), "\n"))
     end)
 
@@ -161,10 +167,9 @@ describe("lib.git.libgit2 twins", function()
       local twin = git.log.list({ "--max-count=10" }, nil, {}, true)
       assert.truthy(#twin >= 1)
 
-      local cli_raw = vim.system(
-        { "git", "-C", dir, "log", "--max-count=3", "--format=%H%x1F%s%x1F%aD%x1F%P%x1F%D" },
-        {}
-      ):wait().stdout
+      local cli_raw = vim
+        .system({ "git", "-C", dir, "log", "--max-count=3", "--format=%H%x1F%s%x1F%aD%x1F%P%x1F%D" }, {})
+        :wait().stdout
       local lines = vim.split(vim.trim(cli_raw), "\n")
 
       assert.equal(#lines, #twin, "commit count mismatch")
@@ -183,7 +188,11 @@ describe("lib.git.libgit2 twins", function()
         table.sort(expected_parts)
         local actual_parts = vim.split(entry.ref_name or "", ", ")
         table.sort(actual_parts)
-        assert.equal(table.concat(expected_parts, "\31"), table.concat(actual_parts, "\31"), "decorations mismatch at " .. i)
+        assert.equal(
+          table.concat(expected_parts, "\31"),
+          table.concat(actual_parts, "\31"),
+          "decorations mismatch at " .. i
+        )
       end
     end)
 
@@ -242,7 +251,8 @@ describe("lib.git.libgit2 twins", function()
       assert.is_not_nil(result)
       assert.equal(true, result.ok)
 
-      local cached = vim.trim(vim.system({ "git", "-C", dir, "diff", "--cached", "--name-only" }):wait().stdout or "")
+      local cached =
+        vim.trim(vim.system({ "git", "-C", dir, "diff", "--cached", "--name-only" }):wait().stdout or "")
       assert.equal("a.txt", cached)
 
       -- untracked/new-file shape
@@ -250,7 +260,8 @@ describe("lib.git.libgit2 twins", function()
       local new_patch = table.concat({ "--- /dev/null", "+++ b/new.txt", "@@ -0,0 +1 @@", "+hi", "" }, "\n")
       assert.equal(true, git.index.apply(new_patch, { cached = true }).ok)
 
-      local cached2 = vim.trim(vim.system({ "git", "-C", dir, "diff", "--cached", "--name-only" }):wait().stdout or "")
+      local cached2 =
+        vim.trim(vim.system({ "git", "-C", dir, "diff", "--cached", "--name-only" }):wait().stdout or "")
       assert.equal("new.txt", cached2)
     end)
   end)

@@ -18,7 +18,8 @@ jobs:
         with:
           tool: selene,typos-cli
       - name: Run linters
-        run: make lint
+        run: |
+          make lint
 
   code_style:
     name: Code Style
@@ -29,7 +30,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           version: latest
-          args: --check lua/ tests/
+          args: --check --glob '!lua/neogit/lib/vendor/**' --glob '**/*.lua' lua tests
 
   ruby_lint:
     name: Rubocop
@@ -46,8 +47,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: Homebrew/actions/setup-homebrew@master
-      - run: brew install lua-language-server
+
+      - name: Install lua-language-server
+        run: |
+          curl -sL "https://github.com/LuaLS/lua-language-server/releases/download/3.13.6/lua-language-server-3.13.6-linux-x64.tar.gz" \
+            | tar xz -C /usr/local
+          ln -s /usr/local/bin/lua-language-server /usr/local/bin/lua-language-server 2>/dev/null || true
+
       - uses: luarocks/gh-actions-lua@v10
         with:
           luaVersion: luajit
@@ -56,4 +62,4 @@ jobs:
           luaRocksVersion: "3.12.1"
       - run: |
          luarocks install llscheck
-         llscheck lua/
+         llscheck --exclude 'lua/neogit/lib/vendor' lua/

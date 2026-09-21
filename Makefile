@@ -7,10 +7,10 @@ specs:
 lint:
 	selene --config selene/config.toml lua
 	typos
-	stylua --check .
+	stylua --check --glob '!lua/neogit/lib/vendor/**' --glob '**/*.lua' lua tests
 
 format:
-	stylua .
+	stylua --glob '!lua/neogit/lib/vendor/**' --glob '**/*.lua' lua tests
 
 typecheck:
 	llscheck lua/

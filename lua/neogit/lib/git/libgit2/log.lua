@@ -73,7 +73,12 @@ local function relative_date(unix_time)
     local years = math.floor(totalmonths / 12)
     local months = totalmonths % 12
     if months > 0 then
-      return ("%d %s, %d %s ago"):format(years, years == 1 and "year" or "years", months, months == 1 and "month" or "months")
+      return ("%d %s, %d %s ago"):format(
+        years,
+        years == 1 and "year" or "years",
+        months,
+        months == 1 and "month" or "months"
+      )
     end
     return plural(years, "year")
   else
@@ -108,7 +113,7 @@ local function decoration_map(repo)
   end)
 
   -- HEAD marker: arrow when on a branch, plain "HEAD" when detached.
-  local head_ref, err = repo:head()
+  local head_ref = repo:head()
   if head_ref then
     local ok, commit = pcall(function()
       return head_ref:peel_commit()
@@ -202,8 +207,6 @@ function M.update_recent(repo_state, _filter, ctx)
     repo_state.recent.items = util.filter_map(records, git.log.present_commit)
   end)
 end
-
-
 
 --------------------------------------------------------------------------------
 -- log.list twin (records via revwalk; graph delegated to the shared helpers)
@@ -372,9 +375,12 @@ function M.list(options, graph, files, graph_color)
           oid = hex,
           abbreviated_commit = hex:sub(1, abbrev),
           parent = table.concat(parents, " "),
-          abbreviated_parent = table.concat(vim.tbl_map(function(p)
-            return p:sub(1, abbrev)
-          end, parents), " "),
+          abbreviated_parent = table.concat(
+            vim.tbl_map(function(p)
+              return p:sub(1, abbrev)
+            end, parents),
+            " "
+          ),
           author_name = ffi.string(a_sig.name),
           author_email = ffi.string(a_sig.email),
           committer_name = ffi.string(c_sig.name),

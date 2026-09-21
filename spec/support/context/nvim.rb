@@ -7,7 +7,7 @@ RSpec.shared_context "with nvim", :nvim do
   # CI drives the suite once per backend (migration spec §6): NEOGIT_GIT_BACKEND
   # is set to "cli" for the control run and "auto"/"libgit2" for the libgit2 run.
   let(:neogit_config) do
-    backend = ENV["NEOGIT_GIT_BACKEND"]
+    backend = ENV.fetch("NEOGIT_GIT_BACKEND", nil)
     backend ? "{ git_backend = '#{backend}' }" : "{}"
   end
 
