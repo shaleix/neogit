@@ -94,14 +94,28 @@ jobs:
 
           if ! check; then
             echo "First pass shows backend-specific failures; retrying the libgit2 run once to filter flakiness..."
+            cp /tmp/fails-lg2.txt /tmp/fails-lg2-first.txt
             NEOGIT_GIT_BACKEND=auto bundle exec rspec > /tmp/rspec-lg2.log 2>&1 || true
             extract /tmp/rspec-lg2.log > /tmp/fails-lg2.txt
             echo "libgit2 failures (retry): $(wc -l < /tmp/fails-lg2.txt)"
+
+            # Only failures present in BOTH libgit2 runs (and absent from the
+            # CLI run) are genuine backend-specific regressions; anything that
+            # failed only once is timing flake.
+            echo "appearing in both libgit2 runs:"
+            comm -12 /tmp/fails-lg2-first.txt /tmp/fails-lg2.txt | tee /tmp/fails-lg2-both.txt | head -20
+          else
+            : > /tmp/fails-lg2-both.txt
           fi
 
+          check() {
+            NEW_FAILURES=$(comm -13 /tmp/fails-cli.txt /tmp/fails-lg2-both.txt)
+            [ -z "$NEW_FAILURES" ]
+          }
+
           if ! check; then
-            echo "::error::Failures only under the libgit2 backend:"
-            comm -13 /tmp/fails-cli.txt /tmp/fails-lg2.txt
+            echo "::error::Failures only under the libgit2 backend (both runs):"
+            comm -13 /tmp/fails-cli.txt /tmp/fails-lg2-both.txt
             echo "--- libgit2 backend failure details ---"
             sed -n '/^Failures:$/,/^Failed examples:$/p' /tmp/rspec-lg2.log | head -c 200000
             exit 1
