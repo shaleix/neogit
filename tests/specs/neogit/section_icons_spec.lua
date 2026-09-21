@@ -33,6 +33,42 @@ local function workdir()
   return dir
 end
 
+-- Upstream divergence: one local-only commit and one remote-only commit, so
+-- both "Unmerged into" (outgoing) and "Unpulled from" (incoming) render.
+local function workdir_diverged()
+  local dir = workdir()
+  local function run(...)
+    local r = vim.system({ "git", "-C", dir, ... }):wait()
+    assert(r.code == 0, tostring(r.stderr))
+  end
+
+  local remote = dir .. "-origin.git"
+  run("init", "-q", "--bare", "-b", "main", remote)
+  run("remote", "add", "origin", remote)
+  run("push", "-q", "-u", "origin", "main")
+
+  -- remote-only commit (behind upstream), authored from a scratch clone so we
+  -- never push into dir's checked-out branch; cloned before the local-only
+  -- commit so the two histories genuinely diverge
+  local clone = dir .. "-clone"
+  local r = vim.system({ "git", "clone", "-q", dir, clone }):wait()
+  assert(r.code == 0, tostring(r.stderr))
+  local function run_clone(...)
+    local cr = vim.system({ "git", "-C", clone, ... }):wait()
+    assert(cr.code == 0, tostring(cr.stderr))
+  end
+  run_clone("config", "user.email", "t@t")
+  run_clone("config", "user.name", "t")
+  run_clone("commit", "-q", "--allow-empty", "-m", "remote-only")
+  run_clone("push", "-q", remote, "main")
+  run("fetch", "-q", "origin")
+
+  -- local-only commit (ahead of upstream)
+  run("commit", "-q", "--allow-empty", "-m", "local-only")
+
+  return dir
+end
+
 local function buffer_text(buf)
   return table.concat(vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false), "\n")
 end
@@ -73,6 +109,16 @@ describe("section header icons and colors", function()
     local icons = config.values.icons.sections
     assert.truthy(text:find(icons.untracked .. " Untracked files", 1, true), "untracked icon missing")
     assert.truthy(text:find(icons.recent .. " Recent Commits", 1, true), "recent icon missing")
+  end)
+
+  it("renders upload/download icons on remote sections", function()
+    local dir = workdir_diverged()
+    local buf = open_status(dir)
+    local text = buffer_text(buf)
+
+    local icons = config.values.icons.sections
+    assert.truthy(text:find(icons.unmerged .. " Unmerged into", 1, true), "unmerged (upload) icon missing")
+    assert.truthy(text:find(icons.unpulled .. " Unpulled from", 1, true), "unpulled (download) icon missing")
   end)
 
   it("shows modified and new files in green tones", function()

@@ -573,8 +573,10 @@ function M.get_default_values()
         untracked = "󰝒", -- nf-md-file_plus
         unstaged = "󰷈", -- nf-md-file_document_edit
         staged = "󰸞", -- nf-md-check_bold
+        unmerged = "󰕒", -- nf-md-upload (outgoing: Unmerged into / Unpushed to)
+        unpulled = "󰇚", -- nf-md-download (incoming: Unpulled from)
         stashes = "󰏗", -- nf-md-package_variant_closed
-        recent = "󰅐", -- nf-md-clock_outline
+        recent = "󰋚", -- nf-md-history
         merge = "󰘭", -- nf-md-source_merge
         rebase = "󰘬", -- nf-md-source_branch
         cherry_pick = "󰆏", -- nf-md-content_copy
