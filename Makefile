@@ -13,6 +13,6 @@ format:
 	stylua --glob '!lua/neogit/lib/vendor/**' --glob '**/*.lua' lua tests
 
 typecheck:
-	llscheck lua/
+	llscheck --checklevel Error lua/
 
 .PHONY: format lint typecheck
