@@ -196,6 +196,32 @@ describe("lib.git.libgit2 twins", function()
       assert.equal(0, #filtered)
     end)
 
+    it("log.list twin handles rev specs and ranges", function()
+      if not probe_ok then
+        return
+      end
+
+      -- single rev + max-count (the upstream-commit lookup shape)
+      local head = vim.trim(vim.system({ "git", "-C", dir, "rev-parse", "HEAD" }):wait().stdout)
+      local single = git.log.list({ head, "--max-count=1" }, nil, {}, true)
+      assert.equal(1, #single)
+      assert.equal(head, single[1].oid)
+
+      -- range: one extra commit on a branch -> "..branch" = 1 commit
+      vim.system({ "git", "-C", dir, "commit", "-q", "--allow-empty", "-m", "second" }):wait()
+      local ranged = git.log.list({ "HEAD~1..HEAD" }, nil, {}, true)
+      assert.equal(1, #ranged)
+      assert.equal("second", ranged[1].subject)
+
+      -- empty-left range ("..ref")
+      local left_empty = git.log.list({ "..HEAD" }, nil, {}, true)
+      assert.equal(0, #left_empty)
+
+      -- empty-right range ("ref..") from HEAD~1 hides nothing of HEAD's own history? HEAD~1.. = commits in HEAD not in HEAD~1 = 1
+      local right_empty = git.log.list({ "HEAD~1.." }, nil, {}, true)
+      assert.equal(1, #right_empty)
+    end)
+
     it("applies neogit-style bare patches (no diff --git header)", function()
       if not probe_ok then
         return

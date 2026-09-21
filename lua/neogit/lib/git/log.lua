@@ -619,7 +619,10 @@ function M.log_message(skip)
 end
 
 M.abbreviated_size = util.memoize(function()
-  local commits = M.list({ "HEAD", "--max-count=1" }, nil, {}, true)
+  -- NB: bypasses the M.list dispatcher on purpose. abbreviated_size feeds the
+  -- libgit2 twin (for abbreviated_commit), so routing through the dispatcher
+  -- would recurse twin.list -> abbreviated_size -> M.list -> twin.list.
+  local commits = list_cli({ "HEAD", "--max-count=1" }, nil, {}, true)
   if vim.tbl_isempty(commits) then
     return 7
   else

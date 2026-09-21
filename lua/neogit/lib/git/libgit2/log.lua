@@ -218,6 +218,8 @@ local function rfc2822(time, offset_minutes)
 end
 
 ---Which option shapes the twin can serve; anything else falls back to CLI.
+---A single rev spec ("HEAD", an oid, "@{upstream}") or one range
+---("A..B", "..B", "A..") is accepted alongside the known flags.
 ---@param options string[]
 ---@param files string[]
 ---@return boolean
@@ -226,16 +228,24 @@ function M.supports(options, files)
     return false
   end
 
+  local specs = 0
+
   for _, o in ipairs(options or {}) do
-    if
-      not o:match("^%-%-max%-count=%d+$")
-      and not o:match("^%-%-topo%-order$")
-      and not o:match("^%-%-date%-order$")
-      and not o:match("^%-%-reverse$")
-      and o ~= "--all"
-      and not o:match("^%x+$")
-    then
-      return false
+    local is_flag = o:match("^%-%-max%-count=%d+$")
+      or o:match("^%-%-topo%-order$")
+      or o:match("^%-%-date%-order$")
+      or o:match("^%-%-reverse$")
+      or o == "--all"
+
+    if not is_flag then
+      if o:sub(1, 1) == "-" then
+        return false
+      end
+
+      specs = specs + 1
+      if specs > 1 then
+        return false
+      end
     end
   end
 
@@ -264,6 +274,7 @@ function M.list(options, graph, files, graph_color)
   local log = require("neogit.lib.git.log")
 
   local count, order, reverse, all = nil, "topo", false, false
+  local revspec = nil
   for _, o in ipairs(options or {}) do
     local n = o:match("^%-%-max%-count=(%d+)$")
     if n then
@@ -276,6 +287,8 @@ function M.list(options, graph, files, graph_color)
       reverse = true
     elseif o == "--all" then
       all = true
+    elseif o:sub(1, 1) ~= "-" then
+      revspec = o
     end
   end
 
@@ -285,6 +298,7 @@ function M.list(options, graph, files, graph_color)
     git2.run(function()
       local lg2 = git2.binding.libgit2()
       local lg2C = lg2.C
+      local git2mod = git2.binding.git2()
 
       local walker = repo:walker()
       if order == "date" then
@@ -293,7 +307,31 @@ function M.list(options, graph, files, graph_color)
         walker:sort(true, false, false)
       end
 
-      if all then
+      local function oid_of(spec)
+        local hex = git2.oid_of(repo, spec)
+        return hex and git2mod.ObjectId.from_string(hex)
+      end
+
+      if revspec then
+        local left, right = revspec:match("^(.*)%.%.(.*)$")
+        if left or right then
+          -- "A..B": reachable from B, hiding A's history; empty sides mean HEAD
+          local push_oid = oid_of(right ~= "" and right or "HEAD")
+          local hide_oid = oid_of(left ~= "" and left or "HEAD")
+
+          if push_oid then
+            walker:push(push_oid)
+          end
+          if hide_oid then
+            walker:hide(hide_oid)
+          end
+        else
+          local push_oid = oid_of(revspec)
+          if push_oid then
+            walker:push(push_oid)
+          end
+        end
+      elseif all then
         walker:push_glob("*")
       else
         walker:push_head()

@@ -183,8 +183,13 @@ local instances = {}
 local lastDir = vim.uv.cwd()
 
 ---@param dir? string
+---@param opts? { autorefresh?: boolean } Set `autorefresh = false` when the
+---caller is about to drive the first refresh itself (e.g. the status-buffer
+---open path); suppresses the automatic dispatch_refresh on creation, which
+---would otherwise be cancelled — after already spawning work — a few
+---milliseconds later. Defaults to true, preserving the existing contract.
 ---@return NeogitRepo
-function Repo.instance(dir)
+function Repo.instance(dir, opts)
   if dir and dir ~= lastDir then
     lastDir = dir
   end
@@ -194,7 +199,10 @@ function Repo.instance(dir)
   if not instances[cwd] then
     logger.debug("[REPO]: Registered Repository for: " .. cwd)
     instances[cwd] = Repo.new(cwd)
-    instances[cwd]:dispatch_refresh()
+
+    if not (opts and opts.autorefresh == false) then
+      instances[cwd]:dispatch_refresh()
+    end
   end
 
   return instances[cwd]
@@ -206,12 +214,15 @@ end
 function Repo.new(dir)
   logger.debug("[REPO]: Initializing Repository")
 
+  -- One cached `git rev-parse` for all three paths (see cli.repo_info).
+  local info = git.cli.repo_info(dir)
+
   local instance = {
     lib = {},
     state = empty_state(),
-    worktree_root = git.cli.worktree_root(dir),
-    worktree_git_dir = git.cli.worktree_git_dir(dir),
-    git_dir = git.cli.git_dir(dir),
+    worktree_root = info.worktree_root,
+    worktree_git_dir = info.worktree_git_dir,
+    git_dir = info.git_dir,
     refresh_callbacks = {},
     _refresh_task = nil,
     tmp_state = util.weak_table("v"),

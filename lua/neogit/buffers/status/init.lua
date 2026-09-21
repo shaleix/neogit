@@ -28,17 +28,25 @@ local instances = {}
 
 ---@type table<string, SubmoduleInfo>
 local submodule_info_per_root = {}
+local NIL_SENTINEL = {} -- distinguishes "computed nil" from "not computed yet" in the lazy table
+
+local function unlazy(value)
+  if value == NIL_SENTINEL then
+    return nil
+  end
+  return value
+end
 
 ---@return string?
 function M:parent_repo()
   local info = submodule_info_per_root[self.root]
-  return info and info.parent_repo
+  return unlazy(info and info.parent_repo)
 end
 
 ---@return string[]
 function M:submodules()
   local info = submodule_info_per_root[self.root]
-  return info and info.submodules or {}
+  return unlazy(info and info.submodules) or {}
 end
 
 ---@param abs_path string
@@ -64,10 +72,25 @@ function M.register(instance, dir)
   logger.debug("[STATUS] Registering instance for: " .. dir)
 
   instances[dir] = instance
-  submodule_info_per_root[instance.root] = {
-    submodules = git.submodule.list(),
-    parent_repo = git.rev_parse.parent_repo(),
-  }
+
+  -- Submodule/parent-repo lookups each spawn a git process and are only
+  -- needed for navigation actions, so compute them lazily on first access
+  -- instead of blocking buffer creation. Results (including nils) are cached.
+  submodule_info_per_root[instance.root] = setmetatable({}, {
+    __index = function(t, key)
+      local value
+      if key == "submodules" then
+        value = git.submodule.list()
+      elseif key == "parent_repo" then
+        value = git.rev_parse.parent_repo()
+      else
+        return nil
+      end
+
+      rawset(t, key, value or NIL_SENTINEL)
+      return value
+    end,
+  })
 end
 
 ---@param dir? string
