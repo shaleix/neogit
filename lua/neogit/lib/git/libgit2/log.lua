@@ -268,6 +268,33 @@ local function subject_and_body(raw)
   return subject, body
 end
 
+---Length of this repository's abbreviated OIDs (git's own auto-sizing),
+---from HEAD's short id. Zero-spawn under the libgit2 backend.
+---@return number
+function M.abbrev_size()
+  return git2.with_repo(worktree_root(), function(repo)
+    local lg2 = git2.binding.libgit2()
+    local ffi = require("ffi")
+
+    local out = lg2.git_buf()
+    local commit = git2.commit_of(repo, "HEAD")
+    if not commit then
+      return 7
+    end
+
+    local ok = pcall(function()
+      lg2.C.git_object_short_id(out, ffi.cast("const git_object*", commit.commit))
+    end)
+    if not ok then
+      return 7
+    end
+
+    local len = out[0].size
+    lg2.C.git_buf_dispose(out)
+    return len > 0 and len or 7
+  end) or 7
+end
+
 ---@param options string[]
 ---@param graph? table
 ---@param files string[]

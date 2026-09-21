@@ -1,5 +1,6 @@
 local git = require("neogit.lib.git")
 local logger = require("neogit.logger")
+local backend = require("neogit.lib.git.backend")
 
 ---@class NeogitGitConfig
 local M = {}
@@ -93,7 +94,16 @@ end
 local function build_config()
   local result = {}
 
-  local out = vim.split(
+  local out
+  if backend.capability("query_config_build") == "libgit2" then
+    local entries = require("neogit.lib.git.libgit2.config").local_entries()
+    for key, value in pairs(entries) do
+      result[key] = ConfigEntry.new(key, value, "local")
+    end
+    return result
+  end
+
+  out = vim.split(
     table.concat(git.cli.config.list.null._local.call({ hidden = true, remove_ansi = false }).stdout, "\0"),
     "\n"
   )
@@ -131,6 +141,11 @@ end
 
 ---@return ConfigEntry
 function M.get_global(key)
+  if backend.capability("query_config_global") == "libgit2" then
+    local value = require("neogit.lib.git.libgit2.config").global_get(key)
+    return ConfigEntry.new(key, value, "global")
+  end
+
   local result = git.cli.config.get(key).call({ ignore_error = true }).stdout[1]
   return ConfigEntry.new(key, result, "global")
 end

@@ -104,6 +104,8 @@ local function ensure_extra_cdefs()
     const git_index_entry *git_index_get_byindex(git_index *index, size_t n);
 
     int git_submodule_status(unsigned int *status, git_repository *repo, const char *name, unsigned int ignore);
+
+    int git_object_short_id(git_buf *out, const git_object *obj);
   ]])
 
   extra_cdefs_done = true

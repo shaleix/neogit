@@ -3,6 +3,7 @@ local input = require("neogit.lib.input")
 local util = require("neogit.lib.util")
 local config = require("neogit.config")
 local event = require("neogit.lib.event")
+local backend = require("neogit.lib.git.backend")
 
 ---@class NeogitGitStash
 local M = {}
@@ -67,6 +68,10 @@ function M.drop(stash)
 end
 
 function M.list()
+  if backend.capability("query_stash_list") == "libgit2" then
+    return require("neogit.lib.git.libgit2.stash").list()
+  end
+
   return git.cli.stash.args("list").call({ hidden = true }).stdout
 end
 

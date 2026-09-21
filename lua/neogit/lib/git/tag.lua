@@ -1,6 +1,7 @@
 local git = require("neogit.lib.git")
 local client = require("neogit.client")
 local GitResult = require("neogit.lib.git.result")
+local backend = require("neogit.lib.git.backend")
 
 ---@class NeogitGitTag
 local M = {}
@@ -78,6 +79,14 @@ local tag_pattern = "(.-)%-([0-9]+)%-g%x+$"
 function M.register(meta)
   meta.update_tags = function(state)
     state.head.tag = { name = nil, distance = nil, oid = nil }
+
+    if backend.capability("query_describe") == "libgit2" then
+      local name, distance, oid = require("neogit.lib.git.libgit2.tag").describe()
+      if name and distance then
+        state.head.tag = { name = name, distance = distance, oid = oid }
+      end
+      return
+    end
 
     local tag = git.cli.describe.long.tags.args("HEAD").call({ hidden = true, ignore_error = true }).stdout
     if #tag == 1 then
