@@ -70,4 +70,4 @@ jobs:
           luaRocksVersion: "3.12.1"
       - run: |
          luarocks install llscheck
-         llscheck --exclude 'lua/neogit/lib/vendor' lua/
+         llscheck --checklevel Warning lua/
