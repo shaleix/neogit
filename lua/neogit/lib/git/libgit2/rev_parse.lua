@@ -16,12 +16,20 @@ function M.oid(spec)
   end)
 end
 
----Abbreviate a full oid to this repository's abbreviation length
----(git's own auto-sizing, via git_object_short_id).
----@param oid string
----@return string
-function M.abbreviate(oid)
-  return oid:sub(1, require("neogit.lib.git.libgit2.log").abbrev_size())
+---Abbreviate any revspec or oid to this repository's abbreviation length
+---(matching `git rev-parse --short <spec>`). The spec is resolved first:
+---callers pass reflog specs like "stash@{0}", not only full oids.
+---@param spec string revspec or oid
+---@return string?
+function M.abbreviate(spec)
+  return git2.with_repo(worktree_root(), function(repo)
+    local hex = git2.oid_of(repo, spec)
+    if not hex then
+      return nil
+    end
+
+    return hex:sub(1, require("neogit.lib.git.libgit2.log").abbrev_size())
+  end)
 end
 
 return M
