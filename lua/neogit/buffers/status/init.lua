@@ -366,34 +366,9 @@ function M:refresh(partial, reason)
     end)
   end
 
-  -- Progressive rendering: each module's data becomes visible as its update
-  -- task lands; coalesce notifications into at most one redraw per tick, and
-  -- yield to the completion redraw once the refresh task is done (a queued
-  -- progress redraw landing after it would re-apply the stale pre-refresh
-  -- cursor over the just-applied open anchor).
-  local progress_scheduled = false
-  local function on_progress()
-    if progress_scheduled then
-      return
-    end
-    progress_scheduled = true
-
-    vim.schedule(function()
-      progress_scheduled = false
-      local task = git.repo._refresh_task
-      if task and task:done() then
-        return
-      end
-      if self.buffer then
-        self:redraw(cursor, view)
-      end
-    end)
-  end
-
   git.repo:dispatch_refresh {
     source = "status",
     partial = partial,
-    progress = on_progress,
     callback = function()
       self:redraw(cursor, view)
       event.send("StatusRefreshed")
@@ -413,23 +388,21 @@ function M:redraw(cursor, view, fold_state)
   end
 
   logger.debug("[STATUS] Rendering UI")
+  self.buffer.ui:render(unpack(ui.Status(git.repo.state, self.config)))
 
-  -- Everything below moves the cursor (render restores it around buffer
-  -- replacement); keep the open anchor alive through all of it.
+  if fold_state then
+    logger.debug("[STATUS] Restoring explicit fold state")
+    self.buffer.ui:set_fold_state(fold_state)
+    self.fold_state = nil
+  elseif self.fold_state and self.buffer then
+    logger.debug("[STATUS] Restoring fold state")
+    self.buffer.ui:set_fold_state(self.fold_state)
+    self.fold_state = nil
+  end
+
+  -- Programmatic cursor movements must not cancel the pending anchor.
   self._programmatic = true
   local ok, err = pcall(function()
-    self.buffer.ui:render(unpack(ui.Status(git.repo.state, self.config)))
-
-    if fold_state then
-      logger.debug("[STATUS] Restoring explicit fold state")
-      self.buffer.ui:set_fold_state(fold_state)
-      self.fold_state = nil
-    elseif self.fold_state and self.buffer then
-      logger.debug("[STATUS] Restoring fold state")
-      self.buffer.ui:set_fold_state(self.fold_state)
-      self.fold_state = nil
-    end
-
     if self.cursor_state and self.view_state and self.buffer then
       logger.debug("[STATUS] Restoring cursor and view state")
       self.buffer:restore_view(self.view_state, self.cursor_state)
@@ -442,10 +415,9 @@ function M:redraw(cursor, view, fold_state)
   self._programmatic = false
   assert(ok, err)
 
-  -- Open anchor: lands once real state is rendered. While the first refresh
-  -- is still loading (skeleton sections), keep waiting - skeleton sections
-  -- may vanish once data lands. Cancelled by any user cursor movement.
-  if self._anchor_pending and git.repo.state.loading ~= true then
+  -- Open anchor: lands here once real state is rendered (at open time the
+  -- repo may not be refreshed yet). Cancelled by any user cursor movement.
+  if self._anchor_pending then
     self._anchor_pending = false
     local target = self.buffer.ui:section_at_index(2) or self.buffer.ui:first_section()
     if target then
