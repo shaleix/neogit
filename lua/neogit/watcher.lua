@@ -148,12 +148,39 @@ function Watcher:fs_event_callback()
 end
 
 function Watcher:dispatch_refresh()
+  -- Capture each buffer's semantic cursor location, view and fold state
+  -- BEFORE the data refresh mutates the model, so the redraw restores them
+  -- by meaning instead of drifting with raw line numbers (and does not lose
+  -- user fold choices to rebuilt sections).
+  local states = {}
+
+  for name, buffer in pairs(self.buffers) do
+    local ok, state = pcall(function()
+      local line, view
+      buffer.buffer:win_call(function()
+        line = vim.api.nvim_win_get_cursor(0)[1]
+        view = buffer.buffer:save_view()
+      end)
+
+      return {
+        cursor = buffer.buffer.ui:get_cursor_location(line),
+        view = view,
+        fold = buffer.buffer.ui:get_fold_state(),
+      }
+    end)
+
+    if ok then
+      states[name] = state
+    end
+  end
+
   git.repo:dispatch_refresh {
     source = "watcher",
     callback = function()
       for name, buffer in pairs(self.buffers) do
         logger.debug("[WATCHER] Dispatching redraw to " .. name)
-        buffer:redraw()
+        local state = states[name]
+        buffer:redraw(state and state.cursor, state and state.view, state and state.fold)
       end
     end,
   }

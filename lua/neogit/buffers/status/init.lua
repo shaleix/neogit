@@ -154,6 +154,12 @@ function M:open(kind)
     return self
   end
 
+  -- Toggle-reopen: fold state carries over, but the last cursor/view position
+  -- must not - the freshly opened buffer anchors on the second section.
+  self.cursor_state = nil
+  self.view_state = nil
+  self._programmatic = self._programmatic or false
+
   local mappings = config.get_reversed_status_maps()
 
   self.buffer = Buffer.create {
@@ -278,7 +284,14 @@ function M:open(kind)
     ---@param _win any
     after = function(buffer, _win)
       Watcher.instance(self.root):register(self)
-      buffer:move_cursor(buffer.ui:first_section().first)
+      -- Best-effort immediate anchor (when state is already rendered). The
+      -- authoritative anchor lands in redraw after the first refresh: at open
+      -- time the repo may not be refreshed yet.
+      local target = buffer.ui:section_at_index(2) or buffer.ui:first_section()
+      if target then
+        buffer:move_cursor(target.first)
+      end
+      self._anchor_pending = true
       vim.b.neogit_git_dir = git.repo.git_dir
     end,
     user_autocmds = {
@@ -290,6 +303,13 @@ function M:open(kind)
     },
     autocmds = {
       ["FocusGained"] = self:deferred_refresh("focused", 10),
+      -- user cursor movement cancels the pending open anchor; programmatic
+      -- moves set _programmatic so they do not
+      ["CursorMoved"] = function()
+        if not self._programmatic then
+          self._anchor_pending = false
+        end
+      end,
     },
   }
 
@@ -334,11 +354,16 @@ end
 function M:refresh(partial, reason)
   logger.debug("[STATUS] Beginning refresh from " .. (reason or "UNKNOWN"))
 
-  -- Needs to be captured _before_ refresh because the diffs are needed, but will be changed by refreshing.
+  -- Capture the semantic cursor location before the refresh mutates the
+  -- model. Any visible window qualifies (win-scoped reads, not just the
+  -- focused one), so background/watcher refreshes restore position by
+  -- meaning instead of drifting with raw line numbers.
   local cursor, view
-  if self.buffer and self.buffer:is_focused() then
-    cursor = self.buffer.ui:get_cursor_location()
-    view = self.buffer:save_view()
+  if self.buffer and self.buffer:is_visible() then
+    self.buffer:win_call(function()
+      cursor = self.buffer.ui:get_cursor_location(vim.api.nvim_win_get_cursor(0)[1])
+      view = self.buffer:save_view()
+    end)
   end
 
   git.repo:dispatch_refresh {
@@ -354,7 +379,9 @@ end
 
 ---@param cursor CursorLocation?
 ---@param view table?
-function M:redraw(cursor, view)
+---@param fold_state table? explicit fold state to restore (e.g. captured by
+---the watcher before dispatching a refresh)
+function M:redraw(cursor, view, fold_state)
   if not self.buffer then
     logger.debug("[STATUS] Buffer no longer exists - bail")
     return
@@ -363,19 +390,44 @@ function M:redraw(cursor, view)
   logger.debug("[STATUS] Rendering UI")
   self.buffer.ui:render(unpack(ui.Status(git.repo.state, self.config)))
 
-  if self.fold_state and self.buffer then
+  if fold_state then
+    logger.debug("[STATUS] Restoring explicit fold state")
+    self.buffer.ui:set_fold_state(fold_state)
+    self.fold_state = nil
+  elseif self.fold_state and self.buffer then
     logger.debug("[STATUS] Restoring fold state")
     self.buffer.ui:set_fold_state(self.fold_state)
     self.fold_state = nil
   end
 
-  if self.cursor_state and self.view_state and self.buffer then
-    logger.debug("[STATUS] Restoring cursor and view state")
-    self.buffer:restore_view(self.view_state, self.cursor_state)
-    self.view_state = nil
-    self.cursor_state = nil
-  elseif cursor and view and self.buffer then
-    self.buffer:restore_view(view, self.buffer.ui:resolve_cursor_location(cursor))
+  -- Programmatic cursor movements must not cancel the pending anchor.
+  self._programmatic = true
+  local ok, err = pcall(function()
+    if self.cursor_state and self.view_state and self.buffer then
+      logger.debug("[STATUS] Restoring cursor and view state")
+      self.buffer:restore_view(self.view_state, self.cursor_state)
+      self.view_state = nil
+      self.cursor_state = nil
+    elseif cursor and view and self.buffer then
+      self.buffer:restore_view(view, self.buffer.ui:resolve_cursor_location(cursor))
+    end
+  end)
+  self._programmatic = false
+  assert(ok, err)
+
+  -- Open anchor: lands here once real state is rendered (at open time the
+  -- repo may not be refreshed yet). Cancelled by any user cursor movement.
+  if self._anchor_pending then
+    self._anchor_pending = false
+    local target = self.buffer.ui:section_at_index(2) or self.buffer.ui:first_section()
+    if target then
+      logger.debug("[STATUS] Anchoring cursor on second section")
+      self._programmatic = true
+      pcall(function()
+        self.buffer:move_cursor(target.first)
+      end)
+      self._programmatic = false
+    end
   end
 end
 

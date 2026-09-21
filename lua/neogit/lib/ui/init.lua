@@ -395,6 +395,26 @@ function Ui:first_section()
   return self.item_index[1]
 end
 
+---N-th visible section (1-based), following the UI item order.
+---`item_index` holds the sections; empty ones carry no .first/.last (they
+---render nothing), so skip entries without a rendered title line.
+---@param index number
+---@return Section|nil
+function Ui:section_at_index(index)
+  local seen = 0
+
+  for _, item in ipairs(self.item_index) do
+    if item.first ~= nil then
+      seen = seen + 1
+      if seen == index then
+        return item
+      end
+    end
+  end
+
+  return nil
+end
+
 ---@return Component|nil
 function Ui:get_current_section(line)
   line = line or vim.api.nvim_win_get_cursor(0)[1]
