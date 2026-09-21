@@ -4,6 +4,9 @@ extend-ignore-re = [
   ".*(?:spellchecker|typos):\\s?ignore-next-line[^\\n]*\\n[^\\n]*",
 ]
 
+# Vendored third-party code is verbatim
+extend-exclude = ["lua/neogit/lib/vendor"]
+
 [default.extend-words]
 # `enew` is a valid nvim command
 enew = "enew"
