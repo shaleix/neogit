@@ -122,13 +122,21 @@ local Tag = Component.new(function(props)
   end
 end)
 
+local function section_icon(icon)
+  if not icon then
+    return ""
+  end
+
+  return icon .. " "
+end
+
 local SectionTitle = Component.new(function(props)
-  return { text.highlight(props.highlight or "NeogitSectionHeader")(props.title) }
+  return { text.highlight(props.highlight or "NeogitSectionHeader")(section_icon(props.icon) .. props.title) }
 end)
 
 local SectionTitleRemote = Component.new(function(props)
   return {
-    text.highlight(props.highlight or "NeogitSectionHeader")(props.title),
+    text.highlight(props.highlight or "NeogitSectionHeader")(section_icon(props.icon) .. props.title),
     text(" "),
     text.highlight("NeogitRemote")(props.ref),
   }
@@ -137,7 +145,7 @@ end)
 local SectionTitleRebase = Component.new(function(props)
   if props.onto then
     return {
-      text.highlight(props.highlight or "NeogitSectionHeader")(props.title),
+      text.highlight(props.highlight or "NeogitSectionHeader")(section_icon(props.icon) .. props.title),
       text(" "),
       text.highlight("NeogitBranch")(props.head),
       text.highlight("NeogitSectionHeader")(" onto "),
@@ -145,7 +153,7 @@ local SectionTitleRebase = Component.new(function(props)
     }
   else
     return {
-      text.highlight(props.highlight or "NeogitSectionHeader")(props.title),
+      text.highlight(props.highlight or "NeogitSectionHeader")(section_icon(props.icon) .. props.title),
       text(" "),
       text.highlight("NeogitBranch")(props.head),
     }
@@ -154,7 +162,7 @@ end)
 
 local SectionTitleMerge = Component.new(function(props)
   return {
-    text.highlight(props.highlight or "NeogitSectionHeader")(props.title),
+    text.highlight(props.highlight or "NeogitSectionHeader")(section_icon(props.icon) .. props.title),
     text(" "),
     text.highlight("NeogitBranch")(props.branch),
   }
@@ -602,6 +610,7 @@ end)
 function M.Status(state, config)
   -- stylua: ignore start
   local show_hint = not config.disable_hint
+  local section_icons = (config.icons and config.icons.sections) or {}
 
   local show_upstream = state.upstream.ref
     and not state.head.detached
@@ -700,7 +709,7 @@ function M.Status(state, config)
         }, { foldable = true, folded = config.status.HEAD_folded }),
         EmptyLine(),
         show_merge and SequencerSection {
-          title = SectionTitleMerge {
+          title = SectionTitleMerge { icon = section_icons.merge,
             title = "Merging",
             branch = state.merge.branch,
             highlight = "NeogitMerging",
@@ -711,7 +720,7 @@ function M.Status(state, config)
           name = "merge",
         },
         show_rebase and RebaseSection {
-          title = SectionTitleRebase {
+          title = SectionTitleRebase { icon = section_icons.rebase,
             title = "Rebasing",
             head = state.rebase.head,
             onto = state.rebase.onto.ref,
@@ -726,34 +735,34 @@ function M.Status(state, config)
           name = "rebase",
         },
         show_cherry_pick and SequencerSection {
-          title = SectionTitle { title = "Cherry Picking", highlight = "NeogitPicking" },
+          title = SectionTitle { title = "Cherry Picking", highlight = "NeogitPicking", icon = section_icons.cherry_pick },
           render = SectionItemSequencer,
           items = util.reverse(state.sequencer.items),
           folded = config.sections.sequencer.folded,
           name = "cherry_pick",
         },
         show_revert and SequencerSection {
-          title = SectionTitle { title = "Reverting", highlight = "NeogitReverting" },
+          title = SectionTitle { title = "Reverting", highlight = "NeogitReverting", icon = section_icons.revert },
           render = SectionItemSequencer,
           items = util.reverse(state.sequencer.items),
           folded = config.sections.sequencer.folded,
           name = "revert",
         },
         show_bisect and BisectDetailsSection {
-          title = SectionTitle { title = "Bisecting at", highlight = "NeogitBisecting" },
+          title = SectionTitle { title = "Bisecting at", highlight = "NeogitBisecting", icon = section_icons.bisect },
           commit = state.bisect.current,
           folded = config.sections.bisect.folded,
           name = "bisect_details",
         },
         show_bisect and SequencerSection {
-          title = SectionTitle { title = "Bisecting Log", highlight = "NeogitBisecting" },
+          title = SectionTitle { title = "Bisecting Log", highlight = "NeogitBisecting", icon = section_icons.bisect },
           render = SectionItemBisect,
           items = state.bisect.items,
           folded = config.sections.bisect.folded,
           name = "bisect",
         },
         show_untracked and Section {
-          title = SectionTitle { title = "Untracked files", highlight = "NeogitUntrackedfiles" },
+          title = SectionTitle { title = "Untracked files", highlight = "NeogitUntrackedfiles", icon = section_icons.untracked },
           count = true,
           render = SectionItemFile("untracked", config),
           items = state.untracked.items,
@@ -761,7 +770,7 @@ function M.Status(state, config)
           name = "untracked",
         },
         show_unstaged and Section {
-          title = SectionTitle { title = "Unstaged changes", highlight = "NeogitUnstagedchanges" },
+          title = SectionTitle { title = "Unstaged changes", highlight = "NeogitUnstagedchanges", icon = section_icons.unstaged },
           count = true,
           render = SectionItemFile("unstaged", config),
           items = state.unstaged.items,
@@ -769,7 +778,7 @@ function M.Status(state, config)
           name = "unstaged",
         },
         show_staged and Section {
-          title = SectionTitle { title = "Staged changes", highlight = "NeogitStagedchanges" },
+          title = SectionTitle { title = "Staged changes", highlight = "NeogitStagedchanges", icon = section_icons.staged },
           count = true,
           render = SectionItemFile("staged", config),
           items = state.staged.items,
@@ -777,7 +786,7 @@ function M.Status(state, config)
           name = "staged",
         },
         show_stashes and Section {
-          title = SectionTitle { title = "Stashes", highlight = "NeogitStashes" },
+          title = SectionTitle { title = "Stashes", highlight = "NeogitStashes", icon = section_icons.stashes },
           count = true,
           render = SectionItemStash,
           items = state.stashes.items,
@@ -809,7 +818,7 @@ function M.Status(state, config)
           name = "pushRemote_unmerged",
         },
         not show_upstream_unmerged and show_recent and Section {
-          title = SectionTitle { title = "Recent Commits", highlight = "NeogitRecentcommits" },
+          title = SectionTitle { title = "Recent Commits", highlight = "NeogitRecentcommits", icon = section_icons.recent },
           count = false,
           render = SectionItemCommit,
           items = state.recent.items,

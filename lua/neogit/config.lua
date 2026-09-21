@@ -396,6 +396,10 @@ end
 ---@field preview_buffer? NeogitConfigPopup Preview options
 ---@field popup? NeogitConfigPopup Set the default way of opening popups
 ---@field signs? NeogitConfigSigns Signs used for toggled regions
+---@field icons? NeogitConfigIcons Icons for the status buffer
+
+---@class NeogitConfigIcons
+---@field sections? table<string, string?> Nerd font icons shown before status section titles; nil disables that section's icon
 ---@field integrations? { diffview: boolean, codediff: boolean, telescope: boolean, fzf_lua: boolean, mini_pick: boolean, snacks: boolean } Which integrations to enable
 ---@field diff_viewer? "diffview"|"codediff"|nil Which diff viewer to use (nil = auto-detect)
 ---@field sections? NeogitConfigSections
@@ -561,6 +565,22 @@ function M.get_default_values()
       hunk = { "", "" },
       item = { ">", "v" },
       section = { ">", "v" },
+    },
+    -- Nerd font icons for status section headers; set an entry to nil to
+    -- disable that section's icon. All defaults are nf-md glyphs.
+    icons = {
+      sections = {
+        untracked = "󰝒", -- nf-md-file_plus
+        unstaged = "󰷈", -- nf-md-file_document_edit
+        staged = "󰸞", -- nf-md-check_bold
+        stashes = "󰏗", -- nf-md-package_variant_closed
+        recent = "󰅐", -- nf-md-clock_outline
+        merge = "󰘭", -- nf-md-source_merge
+        rebase = "󰘬", -- nf-md-source_branch
+        cherry_pick = "󰆏", -- nf-md-content_copy
+        revert = "󰕌", -- nf-md-undo
+        bisect = "󰍉", -- nf-md-magnify
+      },
     },
     integrations = {
       telescope = nil,
@@ -1242,6 +1262,10 @@ function M.validate_config()
     validate_type(config.disable_context_highlighting, "disable_context_highlighting", "boolean")
     validate_type(config.disable_signs, "disable_signs", "boolean")
     validate_type(config.git_executable, "git_executable", "string")
+    validate_type(config.icons, "icons", { "table", "nil" })
+    if config.icons then
+      validate_type(config.icons.sections, "icons.sections", { "table", "nil" })
+    end
     validate_type(config.git_backend, "git_backend", { "string", "nil" })
     if config.git_backend and not vim.tbl_contains(M.GIT_BACKENDS, config.git_backend) then
       err(config.git_backend, "git_backend must be one of " .. table.concat(M.GIT_BACKENDS, ", "))
