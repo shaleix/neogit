@@ -11,25 +11,30 @@ local function worktree_root()
 end
 
 ---Entries of the LOCAL config only (matches `git config --list --local`).
----@return table<string, string> key -> value
+---Returns nil when the libgit2 path cannot serve the query, so callers fall
+---back to the CLI rather than rendering a partial config.
+---@return table<string, string>? key -> value
 function M.local_entries()
   return git2.with_repo(worktree_root(), function(repo)
-    local git2mod = git2.binding.git2()
-
-    local merged, err = repo:config()
+    local merged = repo:config()
     if not merged then
-      return {}
+      return nil
     end
 
     -- GIT_CONFIG_LEVEL.LOCAL (5); overlay fixes the 1.8+ enum insertion
-    local local_cfg, lerr = merged:open_level(5)
+    local local_cfg = merged:open_level(5)
     if not local_cfg then
-      return {}
+      return nil
     end
 
-    local entries, eerr = local_cfg:entries()
-    if not entries then
-      return {}
+    local ok, entries = pcall(function()
+      return local_cfg:entries()
+    end)
+
+    -- nb: the vendored entries() uses ffi.string on entry.value, which errors
+    -- for valueless entries (bare section keys) - fall back to the CLI then
+    if not ok or not entries then
+      return nil
     end
 
     local out = {}
@@ -38,7 +43,7 @@ function M.local_entries()
     end
 
     return out
-  end) or {}
+  end)
 end
 
 ---One global/system/XDG lookup (matches `git config --get` outside the repo).

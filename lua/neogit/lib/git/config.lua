@@ -94,16 +94,18 @@ end
 local function build_config()
   local result = {}
 
-  local out
   if backend.capability("query_config_build") == "libgit2" then
     local entries = require("neogit.lib.git.libgit2.config").local_entries()
-    for key, value in pairs(entries) do
-      result[key] = ConfigEntry.new(key, value, "local")
+    if entries then
+      for key, value in pairs(entries) do
+        result[key] = ConfigEntry.new(key, value, "local")
+      end
+      return result
     end
-    return result
+    -- else: fall through to the CLI path
   end
 
-  out = vim.split(
+  local out = vim.split(
     table.concat(git.cli.config.list.null._local.call({ hidden = true, remove_ansi = false }).stdout, "\0"),
     "\n"
   )
