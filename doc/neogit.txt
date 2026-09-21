@@ -100,6 +100,29 @@ to Neovim users.
     disable_signs = false,
     -- Path to git executable. Defaults to "git". Can be used to specify a custom git binary or wrapper script.
     git_executable = "git",
+    -- Which backend executes git operations:
+    --   "auto"    probe for a usable system libgit2 and use it, falling back to the git CLI
+    --   "libgit2" require libgit2 (errors when unavailable)
+    --   "cli"     always use the git CLI
+    git_backend = "auto",
+    -- Explicit path/soname for the libgit2 shared library, overriding the built-in
+    -- soname candidate sequence (e.g. "/opt/homebrew/lib/libgit2.dylib").
+    libgit2_path = nil,
+    -- Icons shown before status section titles (nerd font); set an entry to nil to disable it.
+    icons = {
+        sections = {
+            untracked = "󰝒",
+            unstaged = "󰷈",
+            staged = "󰸞",
+            stashes = "󰏗",
+            recent = "󰅐",
+            merge = "󰘭",
+            rebase = "󰘬",
+            cherry_pick = "󰆏",
+            revert = "󰕌",
+            bisect = "󰍉",
+        },
+    },
     -- Offer to force push when branches diverge
     prompt_force_push = true,
     -- Request confirmation when amending already published commits
