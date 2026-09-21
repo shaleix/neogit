@@ -58,7 +58,7 @@ RSpec.describe "Status Buffer", :git, :nvim do
         nvim.keys("s")
         expect(nvim.screen[5..6]).to eq(
           [
-            "v Staged changes (1)                                                            ",
+            "v 󰸞 Staged changes (1)                                                          ",
             "> new file   example.txt                                                        "
           ]
         )
@@ -70,7 +70,7 @@ RSpec.describe "Status Buffer", :git, :nvim do
         nvim.keys("<tab>")
         expect(nvim.screen[8..12]).to eq(
           [
-            "v Staged changes (1)                                                            ",
+            "v 󰸞 Staged changes (1)                                                          ",
             "v new file   example.txt                                                        ",
             "  @@ -0,0 +1 @@                                                                 ",
             "  +2 foo                                                                        ",
