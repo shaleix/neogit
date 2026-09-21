@@ -289,9 +289,16 @@ describe("lib.git.libgit2 twins", function()
       local local_entries = libgit2_config.local_entries()
       assert.equal("specvalue", local_entries["neogit.speckey"])
 
-      -- global lookup (nothing set globally in this test env, but the call
-      -- must not error and must behave like an unset key)
-      assert.is_nil(libgit2_config.global_get("neogit.no.such.key"))
+      -- `git config --get` reads the MERGED config (local wins); the twin must
+      -- match that, not a global-only lookup
+      assert.equal("specvalue", libgit2_config.merged_get("neogit.speckey"))
+      assert.is_nil(libgit2_config.merged_get("neogit.no.such.key"))
+
+      -- the dispatcher path agrees with the CLI
+      local git = require("neogit.lib.git")
+      local cli_value =
+        vim.trim(vim.system({ "git", "-C", dir, "config", "neogit.speckey" }):wait().stdout or "")
+      assert.equal(cli_value, git.config.get_global("neogit.speckey"):read())
     end)
 
     it("applies neogit-style bare patches (no diff --git header)", function()

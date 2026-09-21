@@ -46,7 +46,28 @@ function M.local_entries()
   end)
 end
 
----One global/system/XDG lookup (matches `git config --get` outside the repo).
+---Merged lookup matching `git config --get <key>` (repository config =
+---local + global + system, local wins). This is the CLI semantics of
+---config.get_global, which does NOT pass --global.
+---@param key string
+---@return string? value
+function M.merged_get(key)
+  return git2.with_repo(worktree_root(), function(repo)
+    local cfg = repo:config()
+    if not cfg then
+      return nil
+    end
+
+    local ok, value = pcall(function()
+      return cfg:get_string(key)
+    end)
+
+    return ok and value or nil
+  end)
+end
+
+---Global/system/XDG-only lookup (used when no repository context is
+---available).
 ---@param key string
 ---@return string? value
 function M.global_get(key)

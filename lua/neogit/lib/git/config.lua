@@ -144,7 +144,13 @@ end
 ---@return ConfigEntry
 function M.get_global(key)
   if backend.capability("query_config_global") == "libgit2" then
-    local value = require("neogit.lib.git.libgit2.config").global_get(key)
+    local libgit2_config = require("neogit.lib.git.libgit2.config")
+    -- CLI semantics: `git config --get` reads the MERGED config (local wins),
+    -- so mirror that rather than a global-only lookup.
+    local value = libgit2_config.merged_get(key)
+    if value == nil then
+      value = libgit2_config.global_get(key)
+    end
     return ConfigEntry.new(key, value, "global")
   end
 
