@@ -117,7 +117,7 @@ to Neovim users.
             unmerged = "󰕒",
             unpulled = "󰇚",
             stashes = "󰏗",
-            recent = "󰋚",
+            recent = "󰜘",
             merge = "󰘭",
             rebase = "󰘬",
             cherry_pick = "󰆏",
