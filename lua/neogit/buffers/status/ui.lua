@@ -298,6 +298,23 @@ local SectionItemFile = function(section, config)
       )
     end
 
+    -- Nerd font file-type icon before the name (nil disables the feature).
+    -- Staged items paint letter + icon + name in the section green
+    -- (lazygit-style); other sections keep the icon subtle.
+    local staged_line = section == "staged"
+    local highlight = ("NeogitChange%s%s"):format(item.mode:gsub("%?", "Untracked"), section)
+    local file_icons = (config.icons and config.icons.file_icons) or {}
+    local file_icon
+    if item.submodule then
+      file_icon = file_icons.submodule
+    else
+      local ext = vim.fn.fnamemodify(item.name, ":e"):lower()
+      file_icon = file_icons[ext] or file_icons.default
+    end
+    local icon_text = file_icon
+      and text.highlight(staged_line and highlight or "NeogitSubtleText")(file_icon .. " ")
+      or text("")
+
     local unmerged_types = {
       ["DD"] = " (both deleted)",
       ["DU"] = " (deleted by us)",
@@ -308,7 +325,6 @@ local SectionItemFile = function(section, config)
     }
 
     local name = item.original_name and ("%s -> %s"):format(item.original_name, item.name) or item.name
-    local highlight = ("NeogitChange%s%s"):format(item.mode:gsub("%?", "Untracked"), section)
 
     local file_mode_change = text("")
     if
@@ -336,8 +352,10 @@ local SectionItemFile = function(section, config)
 
     return col.tag("Item")({
       row {
+        text("  "),
         text.highlight(highlight)(mode_text),
-        text(name),
+        icon_text,
+        staged_line and text.highlight(highlight)(name) or text(name),
         text.highlight("NeogitSubtleText")(unmerged_types[item.mode] or ""),
         file_mode_change,
         submodule,
@@ -358,6 +376,7 @@ end
 local SectionItemStash = Component.new(function(item)
   local name = ("stash@{%s}"):format(item.idx)
   return row({
+    text("  "),
     text.highlight("NeogitSubtleText")(name),
     text.highlight("NeogitSubtleText")(": "),
     text(item.message),
@@ -504,6 +523,7 @@ local SectionItemCommit = Component.new(function(item)
 
   return row(
     util.merge(
+      { text("  ") },
       { text.highlight("NeogitObjectId")(item.commit.abbreviated_commit) },
       { text(" ") },
       ref,
@@ -526,6 +546,7 @@ local SectionItemRebase = Component.new(function(item)
       or "NeogitGraphOrange"
 
     return row({
+      text("  "),
       text(item.stopped and "> " or "  "),
       text.highlight(action_hl)(util.pad_right(item.action, 6)),
       text(" "),
@@ -535,6 +556,7 @@ local SectionItemRebase = Component.new(function(item)
     }, { yankable = item.oid, oid = item.oid })
   else
     return row {
+      text("  "),
       text.highlight("NeogitGraphOrange")(item.action),
       text(" "),
       text(item.subject),
@@ -551,6 +573,7 @@ local SectionItemSequencer = Component.new(function(item)
   local action = show_action and util.pad_right(item.action, 6) or ""
 
   return row({
+    text("  "),
     text.highlight(action_hl)(action),
     text(show_action and " " or ""),
     text.highlight("NeogitObjectId")(item.abbreviated_commit),
@@ -570,6 +593,7 @@ local SectionItemBisect = Component.new(function(item)
   end
 
   return row({
+    text("  "),
     text(item.finished and "> " or "  "),
     text.highlight(highlight)(util.pad_right(item.action, 5)),
     text(" "),
