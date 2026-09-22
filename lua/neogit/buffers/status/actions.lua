@@ -203,7 +203,7 @@ M.v_discard = function(self)
                 table.insert(unstaged_files, item)
               end
             elseif section.name == "staged" then
-              if item.mode == "N" then
+              if item.mode == "N" or item.mode == "A" then
                 table.insert(new_files, item)
               else
                 table.insert(staged_files_modified, item)
@@ -902,7 +902,7 @@ M.n_discard = function(self)
         else
           message = ("Discard %q?"):format(selection.item.name)
           action = function()
-            if selection.item.mode == "N" then
+            if selection.item.mode == "N" or selection.item.mode == "A" then
               git.index.reset { selection.item.escaped_path }
               cleanup_items { selection.item }
             elseif selection.item.mode == "M" then
@@ -1332,7 +1332,7 @@ M.n_unstage = function(self)
     end
 
     if unstagable then
-      if selection.item and selection.item.mode == "N" then
+      if selection.item and (selection.item.mode == "N" or selection.item.mode == "A") then
         git.status.unstage { selection.item.name }
         self:dispatch_refresh({ update_diffs = { "*:" .. selection.item.name } }, "n_unstage")
       elseif unstagable.hunk then
