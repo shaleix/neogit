@@ -140,6 +140,45 @@ function M:_action(name)
   return action(self)
 end
 
+---status.diff_preview: debounce cursor movement, then render the diff of
+---the file item under the cursor in the preview window.
+function M:_preview_diff_under_cursor()
+  local preview_config = self.config.status.diff_preview
+  if not preview_config or not preview_config.enabled then
+    return
+  end
+
+  if self._preview_timer then
+    self._preview_timer:close()
+    self._preview_timer = nil
+  end
+
+  self._preview_timer = vim.defer_fn(function()
+    self._preview_timer = nil
+    if not self.buffer or not self.buffer:is_visible() then
+      return
+    end
+
+    self.buffer:win_call(function()
+      local item = self.buffer.ui:get_item_under_cursor()
+      local section = self.buffer.ui:get_current_section()
+      local section_name = section and section.options.section
+
+      if
+        item
+        and item.name
+        and item.mode
+        and vim.tbl_contains({ "untracked", "unstaged", "staged" }, section_name)
+      then
+        require("neogit.buffers.diff_preview").show(self.buffer, section_name, item)
+      else
+        -- cursor left the file items: hide the preview split
+        require("neogit.buffers.diff_preview").close()
+      end
+    end)
+  end, preview_config.debounce or 200)
+end
+
 ---@param kind nil|string
 ---| "'floating'"
 ---| "'split'"
@@ -174,6 +213,7 @@ function M:open(kind)
     active_item_highlight = true,
     on_detach = function()
       Watcher.instance(self.root):unregister(self)
+      require("neogit.buffers.diff_preview").close()
 
       if self.prev_autochdir then
         vim.o.autochdir = self.prev_autochdir
@@ -309,6 +349,7 @@ function M:open(kind)
         if not self._programmatic then
           self._anchor_pending = false
         end
+        self:_preview_diff_under_cursor()
       end,
     },
   }

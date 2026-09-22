@@ -334,6 +334,12 @@ end
 ---@field HEAD_folded? boolean Whether or not this section should be open or closed by default
 ---@field mode_text? { [string]: string } The text to display for each mode
 ---@field show_head_commit_hash? boolean Show the commit hash for HEADs in the status buffer
+---@field diff_preview? NeogitConfigDiffPreview Render file diffs in a separate window instead of inline
+
+---@class NeogitConfigDiffPreview
+---@field enabled? boolean Show diffs in a preview window instead of expanding inline in the status buffer
+---@field kind? "split"|"vsplit"|"tab" How to open the preview window (float is not supported)
+---@field debounce? integer ms to wait after cursor movement before updating the preview
 
 ---@class NeogitConfigMappings Consult the config file or documentation for values
 ---@field finder? { [string]: NeogitConfigMappingsFinder } A dictionary that uses finder commands to set multiple keybinds
@@ -533,6 +539,14 @@ function M.get_default_values()
         AA = "AA",
         UU = "UU",
         ["?"] = "?",
+      },
+      -- Show file diffs in a separate window instead of expanding hunks
+      -- inline in the status buffer. The preview follows the cursor: moving
+      -- onto a file item renders its diff in the split automatically.
+      diff_preview = {
+        enabled = false,
+        kind = "vsplit", -- "split" | "vsplit" | "tab" (float is not supported)
+        debounce = 200, -- ms to wait after cursor movement before updating
       },
     },
     -- AI Commit ("m" in the commit popup). Two ways to configure:
@@ -1361,6 +1375,23 @@ function M.validate_config()
       validate_type(config.status.mode_padding, "status.mode_padding", "number")
       validate_type(config.status.HEAD_padding, "status.HEAD_padding", "number")
       validate_type(config.status.mode_text, "status.mode_text", "table")
+      if validate_type(config.status.diff_preview, "status.diff_preview", "table") then
+        validate_type(config.status.diff_preview.enabled, "diff_preview.enabled", "boolean")
+        local kind = config.status.diff_preview.kind
+        if
+          validate_type(kind, "diff_preview.kind", "string")
+          and not vim.tbl_contains({ "split", "vsplit", "tab" }, kind)
+        then
+          err(
+            "diff_preview.kind",
+            string.format(
+              "Expected `diff_preview.kind` to be one of 'split', 'vsplit' or 'tab' (float is not supported), got '%s'",
+              kind
+            )
+          )
+        end
+        validate_type(config.status.diff_preview.debounce, "diff_preview.debounce", "number")
+      end
     end
     validate_signs()
     validate_trinary_auto(config.disable_insert_on_commit, "disable_insert_on_commit")

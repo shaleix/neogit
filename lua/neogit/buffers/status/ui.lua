@@ -350,6 +350,11 @@ local SectionItemFile = function(section, config)
       submodule = text.highlight("NeogitTagName")(submodule_text)
     end
 
+    -- With status.diff_preview enabled the diff renders in a separate
+    -- preview window that follows the cursor (see status/init.lua); the
+    -- item is not foldable and hunks never render inline.
+    local preview_mode = config.status.diff_preview and config.status.diff_preview.enabled
+
     return col.tag("Item")({
       row {
         text("  "),
@@ -361,9 +366,9 @@ local SectionItemFile = function(section, config)
         submodule,
       },
     }, {
-      foldable = true,
+      foldable = not preview_mode,
       folded = true,
-      on_open = load_diff(item),
+      on_open = (not preview_mode) and load_diff(item) or nil,
       context = true,
       id = ("%s--%s"):format(section, item.name),
       yankable = item.name,

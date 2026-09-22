@@ -293,6 +293,14 @@ to Neovim users.
         UU = "UU",
         ["?"] = "?",
         },
+        -- Show file diffs in a separate window instead of expanding hunks
+        -- inline in the status buffer. The preview follows the cursor:
+        -- moving onto a file item renders its diff automatically.
+        diff_preview = {
+            enabled = false,
+            kind = "vsplit", -- "split" | "vsplit" | "tab" (float is not supported)
+            debounce = 200, -- ms to wait after cursor movement before updating
+        },
     },
     ai_commit = {
         -- Full-control override: produces the message and calls `done`.
