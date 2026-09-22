@@ -340,6 +340,7 @@ end
 ---@field enabled? boolean Show diffs in a preview window instead of expanding inline in the status buffer
 ---@field kind? "split"|"vsplit"|"tab" How to open the preview window (float is not supported)
 ---@field debounce? integer ms to wait after cursor movement before updating the preview
+---@field content? fun(item: table, section: string): table|nil Custom content source: return { filetype = "diff", lines = {...} } to take over the preview body (external renderers can hook in via the FileType event); return nil to use the built-in renderer
 
 ---@class NeogitConfigMappings Consult the config file or documentation for values
 ---@field finder? { [string]: NeogitConfigMappingsFinder } A dictionary that uses finder commands to set multiple keybinds
@@ -547,6 +548,7 @@ function M.get_default_values()
         enabled = false,
         kind = "vsplit", -- "split" | "vsplit" | "tab" (float is not supported)
         debounce = 200, -- ms to wait after cursor movement before updating
+        content = nil, -- fun(item, section): { filetype: string, lines: string[] } | nil
       },
     },
     -- AI Commit ("m" in the commit popup). Two ways to configure:
@@ -1391,6 +1393,7 @@ function M.validate_config()
           )
         end
         validate_type(config.status.diff_preview.debounce, "diff_preview.debounce", "number")
+        validate_type(config.status.diff_preview.content, "diff_preview.content", { "function", "nil" })
       end
     end
     validate_signs()

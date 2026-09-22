@@ -75,7 +75,10 @@ describe("status diff_preview", function()
     config.values.status.diff_preview = { enabled = "yes", debounce = "soon" }
     assert.truthy(vim.tbl_count(config.validate_config()) > 0, "types must be checked")
 
-    config.values.status.diff_preview = { enabled = true, kind = "split", debounce = 100 }
+    config.values.status.diff_preview = { enabled = true, kind = "split", debounce = 100, content = "not-a-fn" }
+    assert.truthy(vim.tbl_count(config.validate_config()) > 0, "content must be a function")
+
+    config.values.status.diff_preview = { enabled = true, kind = "split", debounce = 100, content = function() end }
     assert.equal(0, vim.tbl_count(config.validate_config()))
   end)
 
@@ -142,6 +145,77 @@ describe("status diff_preview", function()
     assert.truthy(vim.wait(5000, function()
       return not preview.is_open()
     end), "preview must hide when the cursor leaves the file items")
+  end)
+
+  it("renders custom content from diff_preview.content with its filetype", function()
+    config.values.status.diff_preview = {
+      enabled = true,
+      kind = "vsplit",
+      debounce = 50,
+      content = function(item, section)
+        assert.truthy(item.name, "content callback must receive the item")
+        return {
+          filetype = "diff",
+          lines = { "diff --git a/" .. item.name, "+++ custom line", "section: " .. section },
+        }
+      end,
+    }
+    local dir = workdir()
+    local buf = open_status(dir)
+
+    local lines = vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false)
+    for i, l in ipairs(lines) do
+      if l:find("tracked.txt", 1, true) then
+        buf.buffer:move_cursor(i)
+        break
+      end
+    end
+    vim.wait(60)
+    vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf.buffer.handle })
+
+    local preview = require("neogit.buffers.diff_preview")
+    assert.truthy(vim.wait(5000, function()
+      return preview.is_open()
+    end), "preview must open")
+
+    local handle = preview.buffer_handle()
+    assert.equal("diff", vim.bo[handle].filetype, "custom filetype must be applied")
+    local text = table.concat(vim.api.nvim_buf_get_lines(handle, 0, -1, false), "\n")
+    assert.truthy(text:find("+++ custom line", 1, true), "custom lines must render")
+    assert.truthy(text:find("section: unstaged", 1, true), "section must be passed through")
+  end)
+
+  it("falls back to the built-in renderer when content returns nil", function()
+    config.values.status.diff_preview = {
+      enabled = true,
+      kind = "vsplit",
+      debounce = 50,
+      content = function()
+        return nil
+      end,
+    }
+    local dir = workdir()
+    local buf = open_status(dir)
+
+    local lines = vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false)
+    for i, l in ipairs(lines) do
+      if l:find("tracked.txt", 1, true) then
+        buf.buffer:move_cursor(i)
+        break
+      end
+    end
+    vim.wait(60)
+    vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf.buffer.handle })
+
+    local preview = require("neogit.buffers.diff_preview")
+    assert.truthy(vim.wait(5000, function()
+      return preview.is_open()
+    end), "preview must open")
+
+    local handle = preview.buffer_handle()
+    assert.equal("NeogitDiffPreview", vim.bo[handle].filetype, "built-in filetype must be kept")
+    local text = table.concat(vim.api.nvim_buf_get_lines(handle, 0, -1, false), "\n")
+    assert.truthy(text:find("+two", 1, true), "built-in diff must render")
   end)
 
   it("does not expand hunks inline while enabled", function()
