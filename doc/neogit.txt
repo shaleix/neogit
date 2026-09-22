@@ -300,6 +300,12 @@ to Neovim users.
             enabled = false,
             kind = "vsplit", -- "split" | "vsplit" | "tab" (float is not supported)
             debounce = 200, -- ms to wait after cursor movement before updating
+            -- Custom content source: return { filetype = "diff", lines = {...} }
+            -- to take over the preview body completely (the buffer filetype is
+            -- set to the returned value, so external renderers can hook in via
+            -- the FileType event, e.g. diffs.nvim); return nil to use the
+            -- built-in renderer. Signature: fun(item, section)
+            content = nil,
         },
     },
     ai_commit = {

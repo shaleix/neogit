@@ -7,6 +7,7 @@ local Ui = require("neogit.lib.ui")
 local common = require("neogit.buffers.common")
 local git = require("neogit.lib.git")
 local config = require("neogit.config")
+local notification = require("neogit.lib.notification")
 local text = Ui.text
 local col = Ui.col
 local row = Ui.row
@@ -55,20 +56,39 @@ end
 ---Show (or update) the preview with the given file item. The diff is built
 ---lazily on first display and cached on the item afterwards. Focus stays in
 ---the status buffer.
+---
+---When `status.diff_preview.content` returns a `{ filetype, lines }` table,
+---it takes over the preview body completely: the lines are rendered as-is
+---and the buffer filetype is set to the returned value, so external
+---renderers can hook in via the FileType event (e.g. diffs.nvim with
+---filetype "diff").
 ---@param status_buffer Buffer the requesting status buffer (focus target)
 ---@param section string section name: "untracked"|"unstaged"|"staged"
 ---@param item table StatusItem
 function M.show(status_buffer, section, item)
   local self = current()
 
-  if not item.diff then
-    git.diff.build(section, item)
+  -- custom content hook: full takeover when it returns a table
+  self.custom = nil
+  local preview_config = config.values.status.diff_preview or {}
+  if type(preview_config.content) == "function" then
+    local ok, result = pcall(preview_config.content, item, section)
+    if ok and type(result) == "table" and type(result.lines) == "table" then
+      self.custom = result
+    elseif not ok then
+      notification.warn("diff_preview.content failed - using built-in renderer")
+    end
   end
 
+  if not self.custom then
+    if not item.diff then
+      git.diff.build(section, item)
+    end
+  end
   self.item = item
 
   if self.buffer and self.buffer:is_visible() then
-    self.buffer.ui:render(unpack(self:layout()))
+    self:refresh_content()
   else
     local status_window = vim.api.nvim_get_current_win()
     local status_maps = config.get_reversed_status_maps()
@@ -132,11 +152,14 @@ function M.show(status_buffer, section, item)
         },
       },
       render = function()
-        return self:layout()
+        return self.custom and { text("") } or self:layout()
       end,
       after = function(buffer)
         vim.cmd("normal! zR")
         vim.wo.colorcolumn = ""
+        -- NB: self.buffer is still nil here (the assignment happens after
+        -- Buffer.create returns), so pass the buffer explicitly.
+        self:refresh_content(buffer)
         -- keep the cursor working in the status buffer
         if vim.api.nvim_win_is_valid(status_window) then
           vim.api.nvim_set_current_win(status_window)
@@ -144,6 +167,30 @@ function M.show(status_buffer, section, item)
         buffer:lock()
       end,
     }
+  end
+end
+
+---Render the current state into the preview buffer: custom content
+---(`diff_preview.content`) as raw lines with its own filetype, or the
+---built-in UI layout. `buffer` is passed explicitly from the create `after`
+--- hook, where the instance field is not yet assigned.
+---@param buffer? Buffer explicit buffer (defaults to the instance's)
+function M:refresh_content(buffer)
+  buffer = buffer or self.buffer
+  if not buffer or not buffer.handle then
+    return
+  end
+
+  if self.custom then
+    buffer:unlock()
+    vim.bo[buffer.handle].filetype = self.custom.filetype or "diff"
+    vim.api.nvim_buf_set_lines(buffer.handle, 0, -1, false, self.custom.lines)
+    buffer:lock()
+  else
+    if vim.bo[buffer.handle].filetype ~= "NeogitDiffPreview" then
+      vim.bo[buffer.handle].filetype = "NeogitDiffPreview"
+    end
+    buffer.ui:render(unpack(self:layout()))
   end
 end
 
