@@ -99,7 +99,11 @@ local function update_status(state, filter)
   state.untracked.items = {}
   state.unstaged.items = {}
 
-  local result = git.cli.status.null_separated.porcelain(2).call { hidden = true, remove_ansi = false }
+  -- --untracked-files=all: expand untracked directories into individual file
+  -- entries, so the status buffer can list (and stage/discard) each file
+  -- instead of one collapsed "dir/" row.
+  local result =
+    git.cli.status.null_separated.porcelain(2).untracked_files("all").call { hidden = true, remove_ansi = false }
   result = vim.split(result.stdout[1] or "", "\n")
   result = util.collect(result, function(line, collection)
     if line == "" then
@@ -324,6 +328,7 @@ end
 M.internal = {
   update_file = update_file,
   item_collection = item_collection,
+  update_status = update_status,
 }
 
 return M
