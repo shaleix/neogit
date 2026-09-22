@@ -397,6 +397,16 @@ end
 ---@field popup? NeogitConfigPopup Set the default way of opening popups
 ---@field signs? NeogitConfigSigns Signs used for toggled regions
 ---@field icons? NeogitConfigIcons Icons for the status buffer
+---@field ai_commit? NeogitConfigAICommit AI Commit (message-generator commit) options
+
+---@class NeogitConfigAICommit
+---@field generator? fun(done: fun(message: string), ctx: { files: string[], diff: string }) Full-control override: produces a commit message and passes it to `done`; when set, the built-in client below is ignored
+---@field backend? "openai"|"ollama" Built-in client backend preset (url/token defaults)
+---@field url? string Base URL for the built-in OpenAI-compatible client (default: api.openai.com/v1, or localhost:11434/v1 for ollama)
+---@field model? string Model id for the built-in client (e.g. "deepseek-flash")
+---@field api_token_env? string Environment variable the built-in client reads the bearer token from
+---@field prompt? string|fun(ctx: { files: string[], diff: string }): string System prompt override for the built-in client (default: conventional-commit single-line subject)
+---@field timeout? number Seconds to wait for the generator before falling back to the editor
 
 ---@class NeogitConfigIcons
 ---@field sections? table<string, string?> Nerd font icons shown before status section titles; nil disables that section's icon
@@ -524,6 +534,22 @@ function M.get_default_values()
         UU = "UU",
         ["?"] = "?",
       },
+    },
+    -- AI Commit ("m" in the commit popup). Two ways to configure:
+    --   1. Declarative (recommended): set `model` (+ optionally `url`,
+    --      `api_token_env`, `prompt`) and neogit's built-in OpenAI-compatible
+    --      client does the rest - works with DeepSeek, Ollama, LM Studio,
+    --      vLLM, OpenRouter, ... anything speaking {url}/chat/completions.
+    --   2. Full control: set `generator` and produce the message however you
+    --      like; it takes precedence over the built-in client.
+    ai_commit = {
+      generator = nil,
+      backend = "openai",
+      url = nil,
+      model = nil,
+      api_token_env = "OPENAI_API_KEY",
+      prompt = nil,
+      timeout = 30,
     },
     commit_editor = {
       kind = "tab",
@@ -1338,6 +1364,16 @@ function M.validate_config()
     end
     validate_signs()
     validate_trinary_auto(config.disable_insert_on_commit, "disable_insert_on_commit")
+    -- AI Commit
+    if validate_type(config.ai_commit, "ai_commit", "table") then
+      validate_type(config.ai_commit.generator, "ai_commit.generator", { "function", "nil" })
+      validate_type(config.ai_commit.backend, "ai_commit.backend", { "string", "nil" })
+      validate_type(config.ai_commit.url, "ai_commit.url", { "string", "nil" })
+      validate_type(config.ai_commit.model, "ai_commit.model", { "string", "nil" })
+      validate_type(config.ai_commit.api_token_env, "ai_commit.api_token_env", { "string", "nil" })
+      validate_type(config.ai_commit.prompt, "ai_commit.prompt", { "string", "function", "nil" })
+      validate_type(config.ai_commit.timeout, "ai_commit.timeout", "number")
+    end
     -- Commit Editor
     if validate_type(config.commit_editor, "commit_editor", "table") then
       validate_type(config.commit_editor.show_staged_diff, "show_staged_diff", "boolean")

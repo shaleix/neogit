@@ -294,6 +294,22 @@ to Neovim users.
         ["?"] = "?",
         },
     },
+    ai_commit = {
+        -- Full-control override: produces the message and calls `done`.
+        -- When set, everything below is ignored.
+        -- Signature: fun(done: fun(message: string), ctx: { files: string[], diff: string })
+        generator = nil,
+        -- Built-in OpenAI-compatible client (DeepSeek, Ollama, LM Studio,
+        -- vLLM, OpenRouter, ...): set `model` to enable it.
+        backend = "openai", -- or "ollama" (url/token defaults)
+        url = nil,          -- default api.openai.com/v1 (ollama: localhost:11434/v1)
+        model = nil,        -- e.g. "deepseek-flash"; required for the built-in client
+        api_token_env = "OPENAI_API_KEY", -- env var holding the bearer token
+        prompt = nil,       -- string or fun(ctx): string; default asks for a
+        --                   conventional-commit single-line subject
+        -- Seconds to wait for the generator before falling back to the editor
+        timeout = 30,
+    },
     commit_editor = {
         kind = "tab",
         show_staged_diff = true,

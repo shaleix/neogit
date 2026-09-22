@@ -6,14 +6,17 @@ local GitResult = require("neogit.lib.git.result")
 local M = {}
 
 ---Create a commit. Editor-based flow is handled by client.wrap (GIT_EDITOR RPC).
+---When `opts.message` is set, commits non-interactively via `-m` instead.
 ---@param args string[] Positional/flag arguments (e.g. popup args, "--fixup=<commit>")
----@param opts? { edit?: boolean, no_edit?: boolean, all?: boolean, amend?: boolean, only?: boolean, no_verify?: boolean, autocmd?: string, msg?: { success: string, fail: string }, show_diff?: boolean }
+---@param opts? { edit?: boolean, no_edit?: boolean, message?: string, all?: boolean, amend?: boolean, only?: boolean, no_verify?: boolean, autocmd?: string, msg?: { success: string, fail: string }, show_diff?: boolean }
 ---@return GitResult
 function M.create(args, opts)
   opts = opts or {}
 
   local cmd = git.cli.commit
-  if opts.edit then
+  if opts.message then
+    cmd = cmd.message(opts.message)
+  elseif opts.edit then
     cmd = cmd.edit
   elseif opts.no_edit then
     cmd = cmd.no_edit
@@ -30,6 +33,26 @@ function M.create(args, opts)
   end
   if opts.no_verify then
     cmd = cmd.no_verify
+  end
+
+  if opts.message then
+    -- No editor round-trip: commit directly and report like client.wrap does.
+    local notification = require("neogit.lib.notification")
+    local result = cmd.arg_list(args or {}).call()
+    local code = result.code
+
+    if code == 0 then
+      if opts.autocmd then
+        vim.api.nvim_exec_autocmds("User", { pattern = opts.autocmd })
+      end
+      if opts.msg and opts.msg.success then
+        notification.info(opts.msg.success)
+      end
+    elseif opts.msg and opts.msg.fail then
+      notification.error(opts.msg.fail)
+    end
+
+    return GitResult.new(code)
   end
 
   local code = client.wrap(cmd.arg_list(args or {}), {
