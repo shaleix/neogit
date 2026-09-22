@@ -7,6 +7,27 @@ local notification = require("neogit.lib.notification")
 local config = require("neogit.config")
 local a = require("neogit.lib.async")
 
+-- Maximum bytes of staged diff fed to the AI Commit generator context.
+local AI_COMMIT_DIFF_LIMIT = 10000
+
+---Context handed to ai_commit.generator: the staged file names plus the
+---staged diff (truncated), so message generators have the raw material
+---without spawning git themselves.
+---@return { files: string[], diff: string }
+local function staged_context()
+  local files = vim.tbl_map(function(item)
+    return item.name
+  end, git.repo.state.staged.items)
+
+  local diff = ""
+  if #files > 0 then
+    local result = git.cli.diff.no_ext_diff.cached.call { hidden = true }
+    diff = table.concat(result.stdout, "\n"):sub(1, AI_COMMIT_DIFF_LIMIT)
+  end
+
+  return { files = files, diff = diff }
+end
+
 ---@param popup PopupData
 ---@return boolean
 local function allow_empty(popup)
@@ -110,6 +131,91 @@ function M.commit(popup)
   end
 
   do_commit(popup, {}, {})
+end
+
+---AI Commit: ask the configured generator for a message and commit without
+---opening the editor. Falls back to the regular editor flow when the
+---generator is missing, fails, returns an empty message, or times out.
+---@param popup PopupData
+function M.ai_commit(popup)
+  if not git.status.anything_staged() and not allow_empty(popup) then
+    notification.warn("No changes to commit.")
+    return
+  end
+
+  local settings = config.values.ai_commit or {}
+  local generator = settings.generator
+  if type(generator) ~= "function" then
+    -- No custom generator: fall back to the built-in OpenAI-compatible
+    -- client when the declarative backend is configured.
+    if settings.model and settings.model ~= "" then
+      generator = function(done, ctx)
+        require("neogit.lib.ai").generate(ctx, settings, done)
+      end
+    else
+      notification.warn(
+        "AI Commit: set ai_commit.model (built-in client) or ai_commit.generator in your neogit config"
+      )
+      return
+    end
+  end
+
+  local progress = notification.progress("AI Commit: generating message...")
+
+  local ctx = staged_context()
+  local timer = vim.uv.new_timer()
+  local settled = false
+
+  -- Single settlement point: message commits directly, anything else
+  -- (empty/nil, error, timeout) falls back to the editor-based flow.
+  local finish = vim.schedule_wrap(function(message)
+    if settled then
+      return
+    end
+    settled = true
+
+    if timer then
+      timer:close()
+    end
+
+    message = vim.trim(message or "")
+    if message ~= "" then
+      -- msg = {} silences the generic "Committed" notification: the
+      -- progress notification settles into the final message instead.
+      local result = do_commit(popup, {}, { message = message, msg = {} })
+      if result.code == 0 then
+        progress:done(("AI Commit: %s"):format(message), vim.log.levels.INFO)
+
+        -- The editor-based flow refreshes via NeogitEditorClosed; the -m
+        -- path skips the editor, so refresh the status buffer explicitly.
+        local status = require("neogit.buffers.status")
+        local instance = status.instance()
+        if instance then
+          instance:dispatch_refresh(nil, "ai_commit")
+        end
+      else
+        progress:done("AI Commit: commit failed", vim.log.levels.ERROR)
+      end
+    else
+      progress:done("AI Commit: empty message - opening editor instead", vim.log.levels.WARN)
+      do_commit(popup, {}, {})
+    end
+  end)
+
+  timer:start((settings.timeout or 30) * 1000, 0, function()
+    -- Settle with the precise reason first; finish("")'s own done() is a no-op.
+    progress:done("AI Commit: generator timed out - opening editor instead", vim.log.levels.WARN)
+    finish("")
+  end)
+
+  local ok, err = pcall(generator, finish, ctx)
+  if not ok then
+    progress:done(
+      ("AI Commit: generator failed (%s) - opening editor instead"):format(tostring(err):sub(1, 120)),
+      vim.log.levels.WARN
+    )
+    finish("")
+  end
 end
 
 function M.extend(popup)
@@ -216,5 +322,10 @@ function M.absorb(popup)
 
   git.commit.absorb(commit)
 end
+
+-- Test seam: context assembly for AI Commit generators; not public API.
+M.internal = {
+  staged_context = staged_context,
+}
 
 return M
