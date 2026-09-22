@@ -142,10 +142,6 @@ local function update_status(state, filter)
       local submodule = parse_submodule_status(submodule)
 
       if mode_staged ~= "." then
-        if hH:match("^0+$") then
-          mode_staged = "N"
-        end
-
         table.insert(
           state.staged.items,
           update_file(

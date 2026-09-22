@@ -25,7 +25,7 @@ local function conflict_letter(has_base, has_side)
 end
 
 local DELTA_TO_MODE = {
-  ADDED = "N", -- new in index; porcelain "A" with zero head oid renders as "N"
+  ADDED = "A", -- new in index; porcelain "A" (previously rewritten to "N")
   MODIFIED = "M",
   DELETED = "D",
   RENAMED = "R",
@@ -248,8 +248,8 @@ function M.update_status(state, filter, ctx)
           end
 
           local mode = DELTA_TO_MODE[dm] or "M"
-          if mode == "N" then
-            mode = "M" -- worktree additions arrive as untracked, never "N"
+          if mode == "N" or mode == "A" then
+            mode = "M" -- worktree additions arrive as untracked, never "N"/"A"
           end
 
           if mode ~= nil then
