@@ -27,6 +27,16 @@ local function workdir()
     return vim.fn.filereadable(dir .. "/untracked.txt") == 1
   end)
 
+  -- a typed file so the file-type icon is exercised
+  vim.uv.fs_open(dir .. "/script.lua", "w", 420, function(_, fd)
+    vim.uv.fs_write(fd, "return\n", nil, function()
+      vim.uv.fs_close(fd)
+    end)
+  end)
+  vim.wait(500, function()
+    return vim.fn.filereadable(dir .. "/script.lua") == 1
+  end)
+
   -- a commit so the Recent Commits section renders
   run("commit", "-q", "--allow-empty", "-m", "init")
 
@@ -121,6 +131,94 @@ describe("section header icons and colors", function()
     assert.truthy(text:find(icons.unpulled .. " Unpulled from", 1, true), "unpulled (download) icon missing")
   end)
 
+  it("renders the single-letter mode column with file-type icons", function()
+    local dir = workdir()
+    local buf = open_status(dir)
+    local text = buffer_text(buf)
+
+    -- mode column: pad_right(mode, max_length(values) + mode_padding)
+    local mode_text = config.values.status.mode_text
+    local width = math.max(unpack(vim.tbl_values(vim.tbl_map(function(v)
+      return #v
+    end, mode_text)))) + config.values.status.mode_padding
+
+    local file_icons = (config.values.icons and config.values.icons.file_icons) or {}
+    local q = mode_text["?"] .. string.rep(" ", width - #mode_text["?"])
+    assert.truthy(
+      text:find("  " .. q .. file_icons.txt .. " untracked.txt", 1, true),
+      "untracked mode letter + txt file icon missing"
+    )
+    assert.truthy(
+      text:find("  " .. q .. file_icons.lua .. " script.lua", 1, true),
+      "lua file-type icon missing"
+    )
+    assert.is_nil(text:find("modified", 1, true), "full-word mode text must be gone from defaults")
+  end)
+
+  it("paints staged items green end-to-end (letter, icon, name)", function()
+    local dir = workdir()
+    local r = vim.system({ "git", "-C", dir, "add", "script.lua" }):wait()
+    assert(r.code == 0, tostring(r.stderr))
+
+    local buf = open_status(dir)
+    local handle = buf.buffer.handle
+    local lines = vim.api.nvim_buf_get_lines(handle, 0, -1, false)
+
+    local staged_line
+    for i, l in ipairs(lines) do
+      if l:find("script.lua", 1, true) and l:match("^  A") then
+        staged_line = i - 1
+      end
+    end
+    assert.truthy(staged_line, "staged script.lua line not found")
+
+    local marks = vim.api.nvim_buf_get_extmarks(handle, -1, { staged_line, 0 }, { staged_line, -1 }, { details = true })
+    local staged_groups = 0
+    for _, m in ipairs(marks) do
+      local d = m[4] or {}
+      if d.hl_group == "NeogitChangeAstaged" then
+        staged_groups = staged_groups + 1
+      end
+    end
+    assert.truthy(staged_groups >= 3, "letter + icon + name must all carry the staged green group")
+  end)
+
+  it("colors mode letters by change state (lazygit-style)", function()
+    local function fg_of(name)
+      local def = vim.api.nvim_get_hl(0, { name = name, link = false })
+      assert.truthy(def.fg, name .. " must define its own fg")
+      return def.fg
+    end
+
+    local function channels(fg)
+      return math.floor(fg / 65536) % 256, math.floor(fg / 256) % 256, fg % 256
+    end
+
+    -- staged: uniform green, no bold
+    for _, name in ipairs { "NeogitChangeMstaged", "NeogitChangeDstaged", "NeogitChangeRstaged" } do
+      local r, g, b = channels(fg_of(name))
+      assert.truthy(g > r and g > b, name .. " must be green-dominant")
+      local def = vim.api.nvim_get_hl(0, { name = name, link = false })
+      assert.is_nil(def.bold, name .. " must not be bold")
+    end
+    assert.equal(fg_of("NeogitChangeMstaged"), fg_of("NeogitChangeDstaged"), "staged colors must be uniform")
+
+    -- unstaged + untracked: uniform red
+    for _, name in ipairs {
+      "NeogitChangeMunstaged",
+      "NeogitChangeDunstaged",
+      "NeogitChangeUntrackeduntracked",
+    } do
+      local r, g, b = channels(fg_of(name))
+      assert.truthy(r > g and r > b, name .. " must be red-dominant")
+    end
+    assert.equal(
+      fg_of("NeogitChangeMunstaged"),
+      fg_of("NeogitChangeUntrackeduntracked"),
+      "unstaged and untracked letters share the state red"
+    )
+  end)
+
   it("shows modified and new files in green tones", function()
     local function channels(name)
       local def = vim.api.nvim_get_hl(0, { name = name, link = false })
@@ -131,13 +229,11 @@ describe("section header icons and colors", function()
       return r, g, b
     end
 
+    -- the base groups stay green (compat reference for user overrides)
     for _, name in ipairs {
       "NeogitChangeModified",
       "NeogitChangeNewFile",
-      -- the per-section variants link to the base groups and must inherit
-      "NeogitChangeMunstaged",
       "NeogitChangeMstaged",
-      "NeogitChangeNuntracked",
     } do
       local r, g, b = channels(name)
       assert.truthy(g > r and g > b, name .. " must be green-dominant")

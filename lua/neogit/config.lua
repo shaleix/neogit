@@ -503,24 +503,26 @@ function M.get_default_values()
       recent_commit_count = 10,
       HEAD_padding = 10,
       HEAD_folded = false,
-      mode_padding = 3,
+      mode_padding = 1,
+      -- Single-letter mode column: each mode shows its porcelain code
+      -- letter; conflict codes stay two-letter. ["?"] marks untracked files.
       mode_text = {
-        M = "modified",
-        N = "new file",
-        A = "added",
-        D = "deleted",
-        C = "copied",
-        U = "updated",
-        R = "renamed",
-        T = "changed",
-        DD = "unmerged",
-        AU = "unmerged",
-        UD = "unmerged",
-        UA = "unmerged",
-        DU = "unmerged",
-        AA = "unmerged",
-        UU = "unmerged",
-        ["?"] = "",
+        M = "M",
+        N = "N",
+        A = "A",
+        D = "D",
+        C = "C",
+        U = "U",
+        R = "R",
+        T = "T",
+        DD = "DD",
+        AU = "AU",
+        UD = "UD",
+        UA = "UA",
+        DU = "DU",
+        AA = "AA",
+        UU = "UU",
+        ["?"] = "?",
       },
     },
     commit_editor = {
@@ -582,6 +584,38 @@ function M.get_default_values()
         cherry_pick = "󰆏", -- nf-md-content_copy
         revert = "󰕌", -- nf-md-undo
         bisect = "󰍉", -- nf-md-magnify
+      },
+      -- Nerd font file-type icons shown before file names in the status
+      -- buffer; keys are lowercase file extensions ("default" for unknown
+      -- types, "submodule" for submodules). Set the whole table to nil to
+      -- disable file icons.
+      file_icons = {
+        default = "󰈔", -- nf-md-file
+        submodule = "󰳏", -- nf-md-source_repository
+        lua = "󰢱", -- nf-md-language_lua
+        py = "󰌠", -- nf-md-language_python
+        js = "󰌞", -- nf-md-language_javascript
+        ts = "󰛦", -- nf-md-language_typescript
+        json = "󰘦", -- nf-md-code_json
+        md = "󰍔", -- nf-md-language_markdown
+        html = "󰌝", -- nf-md-language_html5
+        css = "󰌜", -- nf-md-language_css3
+        go = "󰟓", -- nf-md-language_go
+        rs = "󱘗", -- nf-md-language_rust
+        c = "󰙱", -- nf-md-language_c
+        h = "󰙲", -- nf-md-language_cpp
+        cpp = "󰙲", -- nf-md-language_cpp
+        cc = "󰙲", -- nf-md-language_cpp
+        hpp = "󰙲", -- nf-md-language_cpp
+        sh = "󱆃", -- nf-md-bash
+        bash = "󱆃", -- nf-md-bash
+        zsh = "󱆃", -- nf-md-bash
+        txt = "󰈙", -- nf-md-file_document
+        png = "󰈟", -- nf-md-file_image
+        jpg = "󰈟", -- nf-md-file_image
+        jpeg = "󰈟", -- nf-md-file_image
+        gif = "󰈟", -- nf-md-file_image
+        svg = "󰈟", -- nf-md-file_image
       },
     },
     integrations = {
@@ -1267,6 +1301,7 @@ function M.validate_config()
     validate_type(config.icons, "icons", { "table", "nil" })
     if config.icons then
       validate_type(config.icons.sections, "icons.sections", { "table", "nil" })
+      validate_type(config.icons.file_icons, "icons.file_icons", { "table", "nil" })
     end
     validate_type(config.git_backend, "git_backend", { "string", "nil" })
     if config.git_backend and not vim.tbl_contains(M.GIT_BACKENDS, config.git_backend) then
