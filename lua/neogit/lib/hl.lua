@@ -152,6 +152,7 @@ end
 function M.setup(config)
   local palette = make_palette(config)
 
+
   -- stylua: ignore
   hl_store = {
     NeogitGraphAuthor              = { fg = palette.orange, ctermfg = 3 },
@@ -277,8 +278,9 @@ function M.setup(config)
     NeogitChangeAUunstaged         = { fg = palette.red, ctermfg = 1 },
     NeogitChangeUAunstaged         = { fg = palette.red, ctermfg = 1 },
     NeogitChangeUntrackedunstaged  = { fg = palette.red, ctermfg = 1 },
-    -- Staged section: one uniform green ("ready to commit"), no bold - the
-    -- whole section reads as a block, unlike the per-type unstaged colors.
+    -- Staged section: one uniform "success" green ("ready to commit"), no
+    -- bold - the whole section reads as a block, unlike the per-type
+    -- unstaged colors.
     NeogitChangeMstaged            = { fg = palette.green, ctermfg = 2 },
     NeogitChangeAstaged            = { fg = palette.green, ctermfg = 2 },
     NeogitChangeNstaged            = { fg = palette.green, ctermfg = 2 },
@@ -305,6 +307,11 @@ function M.setup(config)
     NeogitChangeNewFile            = { fg = palette.bg_green, bold = palette.bold, italic = palette.italic, ctermfg = 2 },
     NeogitSectionHeader            = { fg = palette.bg_purple, bold = palette.bold, ctermfg = 5 },
     NeogitSectionHeaderCount       = {},
+    -- Bottom-center loading indicator (lib/loading.lua): full-width banner
+    NeogitSpinner                  = { fg = palette.white, bg = palette.bg1, ctermfg = 7, ctermbg = 8 },
+    NeogitSpinnerSuccess           = { fg = palette.bg0, bg = palette.bg_green, bold = palette.bold, ctermfg = 0, ctermbg = 2 },
+    NeogitSpinnerWarn              = { fg = palette.bg0, bg = palette.bg_yellow, bold = palette.bold, ctermfg = 0, ctermbg = 3 },
+    NeogitSpinnerError             = { fg = palette.bg0, bg = palette.bg_red, bold = palette.bold, ctermfg = 0, ctermbg = 1 },
     -- Section headers: each section carries its own icon color; users who
     -- preferred the old uniform look can re-link these to NeogitSectionHeader.
     NeogitUntrackedfiles           = { fg = palette.bg_cyan, bold = palette.bold, ctermfg = 6 },
