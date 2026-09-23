@@ -160,7 +160,8 @@ function M.ai_commit(popup)
     end
   end
 
-  local progress = notification.progress("AI Commit: generating message...")
+  local loading = require("neogit.lib.loading")
+  loading.show("AI Commit: generating message...")
 
   local ctx = staged_context()
   local timer = vim.uv.new_timer()
@@ -181,10 +182,10 @@ function M.ai_commit(popup)
     message = vim.trim(message or "")
     if message ~= "" then
       -- msg = {} silences the generic "Committed" notification: the
-      -- progress notification settles into the final message instead.
+      -- loading indicator settles into the final message instead.
       local result = do_commit(popup, {}, { message = message, msg = {} })
       if result.code == 0 then
-        progress:done(("AI Commit: %s"):format(message), vim.log.levels.INFO)
+        loading.done(("AI Commit: %s"):format(message), vim.log.levels.INFO)
 
         -- The editor-based flow refreshes via NeogitEditorClosed; the -m
         -- path skips the editor, so refresh the status buffer explicitly.
@@ -194,23 +195,23 @@ function M.ai_commit(popup)
           instance:dispatch_refresh(nil, "ai_commit")
         end
       else
-        progress:done("AI Commit: commit failed", vim.log.levels.ERROR)
+        loading.done("AI Commit: commit failed", vim.log.levels.ERROR)
       end
     else
-      progress:done("AI Commit: empty message - opening editor instead", vim.log.levels.WARN)
+      loading.done("AI Commit: empty message - opening editor instead", vim.log.levels.WARN)
       do_commit(popup, {}, {})
     end
   end)
 
   timer:start((settings.timeout or 30) * 1000, 0, function()
     -- Settle with the precise reason first; finish("")'s own done() is a no-op.
-    progress:done("AI Commit: generator timed out - opening editor instead", vim.log.levels.WARN)
+    loading.done("AI Commit: generator timed out - opening editor instead", vim.log.levels.WARN)
     finish("")
   end)
 
   local ok, err = pcall(generator, finish, ctx)
   if not ok then
-    progress:done(
+    loading.done(
       ("AI Commit: generator failed (%s) - opening editor instead"):format(tostring(err):sub(1, 120)),
       vim.log.levels.WARN
     )
