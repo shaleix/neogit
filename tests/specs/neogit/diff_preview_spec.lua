@@ -239,4 +239,119 @@ describe("status diff_preview", function()
     assert.is_nil(after:find("^@@", 1), "hunk headers must not render inline")
     assert.truthy(#before > 0 and #after > 0)
   end)
+
+  describe("preview width", function()
+    local preview = require("neogit.buffers.diff_preview")
+
+    local function open_and_measure(width_config)
+      config.values.status.diff_preview = {
+        enabled = true,
+        kind = "vsplit",
+        debounce = 50,
+        width = width_config,
+      }
+      local dir = workdir()
+      local buf = open_status(dir)
+
+      local lines = vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false)
+      for i, l in ipairs(lines) do
+        if l:find("tracked.txt", 1, true) then
+          buf.buffer:move_cursor(i)
+          break
+        end
+      end
+      vim.wait(60)
+      vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf.buffer.handle })
+      assert.truthy(vim.wait(5000, function()
+        return preview.is_open()
+      end), "preview must open")
+
+      local handle = preview.buffer_handle()
+      return vim.api.nvim_win_get_width(vim.fn.bufwinid(handle))
+    end
+
+    after_each(function()
+      preview.close()
+    end)
+
+    it("defaults to 50% on narrow editors and 60% on wide ones", function()
+      local resolve = preview.internal.preview_width
+      assert.equal(40, resolve(80, {}), "80 columns -> 40 (50%)")
+      assert.equal(60, resolve(120, {}), "120 columns -> 60 (50%, threshold not exceeded)")
+      assert.equal(72, resolve(121, {}), "121 columns -> 72 (60%)")
+      assert.equal(96, resolve(160, {}), "160 columns -> 96 (60%)")
+    end)
+
+    it("accepts a fixed number", function()
+      local w = open_and_measure(30)
+      assert.equal(30, w)
+    end)
+
+    it("accepts a callback receiving the editor width", function()
+      local seen
+      local w = open_and_measure(function(columns)
+        seen = columns
+        return 25
+      end)
+      assert.equal(25, w)
+      assert.equal(vim.o.columns, seen, "callback must receive the editor width")
+    end)
+
+    it("clamps absurd widths so the status buffer survives", function()
+      local w = open_and_measure(10000)
+      assert.truthy(w <= vim.o.columns - 10, ("clamped: %d"):format(w))
+    end)
+  end)
+
+  it("scrolls the preview split with C-d/C-u from the status buffer", function()
+    -- build a long diff so the preview actually scrolls
+    local dir = workdir()
+    do
+      local fd = assert(io.open(dir .. "/tracked.txt", "a"))
+      for i = 1, 200 do
+        fd:write(("line %d\n"):format(i))
+      end
+      fd:close()
+    end
+
+    config.values.status.diff_preview = { enabled = true, kind = "vsplit", debounce = 50 }
+    local buf = open_status(dir)
+
+    local lines = vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false)
+    for i, l in ipairs(lines) do
+      if l:find("tracked.txt", 1, true) then
+        buf.buffer:move_cursor(i)
+        break
+      end
+    end
+    vim.wait(60)
+    vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf.buffer.handle })
+
+    local preview = require("neogit.buffers.diff_preview")
+    assert.truthy(vim.wait(5000, function()
+      return preview.is_open()
+    end), "preview must open")
+
+    local win = vim.fn.bufwinid(preview.buffer_handle())
+    assert.truthy(win ~= -1, "preview window must exist")
+
+    local top = function()
+      return vim.api.nvim_win_call(win, function()
+        return vim.fn.line("w0")
+      end)
+    end
+
+    local before = top()
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-d>", true, false, true), "x", false)
+    vim.wait(100)
+    assert.truthy(top() > before, ("C-d must scroll the preview down (before=%d after=%d)"):format(before, top()))
+
+    local mid = top()
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-u>", true, false, true), "x", false)
+    vim.wait(100)
+    assert.truthy(top() < mid, "C-u must scroll the preview back up")
+
+    -- cursor stays in the status buffer throughout
+    assert.equal(buf.buffer.handle, vim.api.nvim_get_current_buf())
+  end)
 end)

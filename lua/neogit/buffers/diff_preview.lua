@@ -17,6 +17,34 @@ local M = {}
 local Diff = common.Diff
 local EmptyLine = common.EmptyLine
 
+-- Preview window width resolution (applies to vsplit kind):
+--   number  -> fixed columns
+--   fun(columns) -> computed columns
+--   nil (default) -> editor-relative auto sizing: wide editors (over
+--                    WIDTH_THRESHOLD columns) give the preview 60%, narrower
+--                    ones 50%. Always clamped so the status buffer survives.
+local WIDTH_THRESHOLD = 120
+
+---@param columns number editor width
+---@param conf table diff_preview config
+---@return number
+local function preview_width(columns, conf)
+  conf = conf or config.values.status.diff_preview or {}
+  local width
+
+  if type(conf.width) == "function" then
+    width = conf.width(columns)
+  elseif type(conf.width) == "number" then
+    width = conf.width
+  elseif columns > WIDTH_THRESHOLD then
+    width = math.floor(columns * 0.6)
+  else
+    width = math.floor(columns * 0.5)
+  end
+
+  return math.max(math.min(width or 0, columns - 10), 10)
+end
+
 ---@class DiffPreviewBuffer
 ---@field buffer Buffer|nil
 ---@field item table|nil StatusItem currently displayed
@@ -52,6 +80,34 @@ function M.buffer_handle()
   local self = current()
   return self.buffer and self.buffer.handle or nil
 end
+
+---Scroll the preview window with the given normal-mode keys (e.g. "<C-d>",
+---"<C-u>", including any count). Returns true when the scroll was
+---forwarded, false when no preview window is open (callers can fall back
+---to native scrolling).
+---@param keys string
+---@return boolean
+function M.scroll(keys)
+  local self = current()
+  if self.buffer and self.buffer:is_visible() and self.buffer.handle then
+    local win = vim.fn.bufwinid(self.buffer.handle)
+    if win ~= -1 then
+      local count = vim.v.count1 > 1 and vim.v.count1 or ""
+      local keycodes = vim.api.nvim_replace_termcodes(keys, true, false, true)
+      vim.api.nvim_win_call(win, function()
+        vim.cmd(("normal! %s%s"):format(count, keycodes))
+      end)
+      return true
+    end
+  end
+
+  return false
+end
+
+-- Test seam: pure width resolution; not public API.
+M.internal = {
+  preview_width = preview_width,
+}
 
 ---Show (or update) the preview with the given file item. The diff is built
 ---lazily on first display and cached on the item afterwards. Focus stays in
@@ -157,8 +213,20 @@ function M.show(status_buffer, section, item)
       after = function(buffer)
         vim.cmd("normal! zR")
         vim.wo.colorcolumn = ""
-        -- NB: self.buffer is still nil here (the assignment happens after
-        -- Buffer.create returns), so pass the buffer explicitly.
+
+        -- the preview needs no sign/fold columns: renderer folding goes
+        -- through statuscolumn, and auto-expanding signs show up as
+        -- mystery padding next to the split bar
+        if buffer.win_handle then
+          vim.wo[buffer.win_handle].signcolumn = "no"
+          vim.wo[buffer.win_handle].foldcolumn = "0"
+        end
+
+        -- custom width only applies to vertical splits
+        if config.values.status.diff_preview.kind == "vsplit" and buffer.win_handle then
+          vim.api.nvim_win_set_width(buffer.win_handle, preview_width(vim.o.columns))
+        end
+
         self:refresh_content(buffer)
         -- keep the cursor working in the status buffer
         if vim.api.nvim_win_is_valid(status_window) then

@@ -309,6 +309,18 @@ function M:open(kind)
         ["V"]                                   = function()
           vim.cmd("norm! V")
         end,
+        -- scroll the diff preview split when it is open; otherwise keep
+        -- native half-page scrolling on the status buffer
+        ["<C-d>"] = function()
+          if not require("neogit.buffers.diff_preview").scroll("<C-d>") then
+            vim.cmd(("normal! %d<C-d>"):format(vim.v.count1))
+          end
+        end,
+        ["<C-u>"] = function()
+          if not require("neogit.buffers.diff_preview").scroll("<C-u>") then
+            vim.cmd(("normal! %d<C-u>"):format(vim.v.count1))
+          end
+        end,
       },
     },
     --stylua: ignore end

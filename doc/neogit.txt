@@ -306,6 +306,10 @@ to Neovim users.
             -- the FileType event, e.g. diffs.nvim); return nil to use the
             -- built-in renderer. Signature: fun(item, section)
             content = nil,
+            -- Preview window width in columns (vsplit only): a number, a
+            -- fun(columns) callback, or nil for auto (60% when the editor is
+            -- over 120 columns, else 50%)
+            width = nil,
         },
     },
     ai_commit = {
