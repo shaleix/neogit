@@ -19,6 +19,29 @@ local DiffHunks = common.DiffHunks
 
 local M = {}
 
+-- Optional nvim-web-devicons integration: resolved once, nil when absent.
+local devicons_cache = nil
+local devicons_resolved = false
+
+---@return table|nil
+function M.devicons()
+  if not devicons_resolved then
+    devicons_resolved = true
+    local ok, devicons = pcall(require, "nvim-web-devicons")
+    if ok and type(devicons) == "table" and devicons.get_icon then
+      devicons_cache = devicons
+    end
+  end
+
+  return devicons_cache
+end
+
+-- Test seam: force re-resolution of the devicons integration.
+function M.reset_devicons_cache()
+  devicons_cache = nil
+  devicons_resolved = false
+end
+
 local HINT = Component.new(function(props)
   ---@return table<string, string[]>
   local function reversed_lookup(tbl)
@@ -168,15 +191,26 @@ local SectionTitleMerge = Component.new(function(props)
   }
 end)
 
+-- Forward declaration: defined after SectionItemFile (it renders leaves),
+-- but referenced by Section below.
+local FileTree
+
 local Section = Component.new(function(props)
   local count
   if props.count then
     count = { text(" ("), text.highlight("NeogitSectionHeaderCount")(#props.items), text(")") }
   end
 
+  local body
+  if props.file_tree then
+    body = FileTree(props.name, props.config)(props.items)
+  else
+    body = col(map(props.items, props.render))
+  end
+
   return col.tag("Section")({
     row(util.merge(props.title, count or {})),
-    col(map(props.items, props.render)),
+    body,
     EmptyLine(),
   }, {
     foldable = true,
@@ -218,7 +252,9 @@ local RebaseSection = Component.new(function(props)
   })
 end)
 
-local SectionItemFile = function(section, config)
+local SectionItemFile = function(section, config, depth)
+  depth = depth or 0
+  local indent = ("  "):rep(depth + 1)
   return Component.new(function(item)
     local load_diff = function(item)
       ---@param this Component
@@ -298,22 +334,41 @@ local SectionItemFile = function(section, config)
       )
     end
 
-    -- Nerd font file-type icon before the name (nil disables the feature).
-    -- Staged items paint letter + icon + name in the section green
-    -- (lazygit-style); other sections keep the icon subtle.
+    -- Nerd font file-type icon before the name. nvim-web-devicons is used
+    -- when available (colored, per-type icons); otherwise the builtin
+    -- extension table applies. Staged items paint letter + icon + name in
+    -- the section green (lazygit-style); other sections keep the icon
+    -- subtle (or devicons-colored).
     local staged_line = section == "staged"
     local highlight = ("NeogitChange%s%s"):format(item.mode:gsub("%?", "Untracked"), section)
     local file_icons = (config.icons and config.icons.file_icons) or {}
-    local file_icon
-    if item.submodule then
-      file_icon = file_icons.submodule
+    local icon_text
+    if not item.submodule then
+      local icon, icon_hl
+      local use_devicons = not (config.icons and config.icons.use_devicons == false)
+      if use_devicons then
+        local devicons = M.devicons()
+        if devicons then
+          local ext = item.name:match("%.([%w]+)$")
+          icon, icon_hl = devicons.get_icon(item.name, ext, { default = true })
+        end
+      end
+
+      if icon then
+        icon_text = text.highlight(staged_line and highlight or icon_hl)(icon .. " ")
+      else
+        local ext = vim.fn.fnamemodify(item.name, ":e"):lower()
+        local glyph = file_icons[ext] or file_icons.default
+        icon_text = glyph
+          and text.highlight(staged_line and highlight or "NeogitSubtleText")(glyph .. " ")
+          or text("")
+      end
     else
-      local ext = vim.fn.fnamemodify(item.name, ":e"):lower()
-      file_icon = file_icons[ext] or file_icons.default
+      local glyph = file_icons.submodule
+      icon_text = glyph
+        and text.highlight(staged_line and highlight or "NeogitSubtleText")(glyph .. " ")
+        or text("")
     end
-    local icon_text = file_icon
-      and text.highlight(staged_line and highlight or "NeogitSubtleText")(file_icon .. " ")
-      or text("")
 
     local unmerged_types = {
       ["DD"] = " (both deleted)",
@@ -325,6 +380,16 @@ local SectionItemFile = function(section, config)
     }
 
     local name = item.original_name and ("%s -> %s"):format(item.original_name, item.name) or item.name
+    -- In file-tree mode the directory hierarchy is expressed by nested
+    -- indented rows, so file rows show only the basename.
+    if depth > 0 and not item.original_name then
+      name = name:match("([^/]+)$") or name
+    elseif depth > 0 then
+      name = ("%s -> %s"):format(
+        item.original_name:match("([^/]+)$") or item.original_name,
+        item.name:match("([^/]+)$") or item.name
+      )
+    end
 
     local file_mode_change = text("")
     if
@@ -357,7 +422,7 @@ local SectionItemFile = function(section, config)
 
     return col.tag("Item")({
       row {
-        text("  "),
+        text(indent),
         text.highlight(highlight)(mode_text),
         icon_text,
         staged_line and text.highlight(highlight)(name) or text(name),
@@ -376,6 +441,97 @@ local SectionItemFile = function(section, config)
       item = item,
     })
   end)
+end
+
+-- File-tree rendering (diffview-style): directory rows are foldable and
+-- carry the subtree file count; file rows indent one level deeper and show
+-- only the basename - the directory hierarchy is expressed by nesting.
+local function build_file_tree(items)
+  local root = { path = "", dirs = {}, files = {} }
+  for _, item in ipairs(items) do
+    local parts = vim.split(item.name, "/")
+    local node = root
+    local prefix = ""
+    for i = 1, #parts - 1 do
+      prefix = prefix == "" and parts[i] or prefix .. "/" .. parts[i]
+      local dir = node.dirs[parts[i]]
+      if not dir then
+        dir = { name = parts[i], path = prefix, dirs = {}, files = {} }
+        node.dirs[parts[i]] = dir
+      end
+      node = dir
+    end
+    table.insert(node.files, item)
+  end
+
+  return root
+end
+
+local DirRow = Component.new(function(props)
+  return row({
+    text(props.indent),
+    text.highlight("NeogitSubtleText")(props.icon .. " " .. props.name),
+  })
+end)
+
+-- Collapse single-child directory chains: when a directory holds no files
+-- and exactly one subdirectory, merge the chain into one row
+-- ("src/lib/deep"), like diffview/lazygit do.
+---@param dir table
+---@return table dir the deepest directory to render
+---@return string display merged display name
+local function collapse_dir(dir)
+  local display = dir.name
+
+  while true do
+    local names = vim.tbl_keys(dir.dirs)
+    if #dir.files == 0 and #names == 1 then
+      dir = dir.dirs[names[1]]
+      display = display .. "/" .. dir.name
+    else
+      return dir, display
+    end
+  end
+end
+
+local function render_file_tree(section, config, node, depth)
+  local children = {}
+
+  local file_icons = (config.icons and config.icons.file_icons) or {}
+  local dir_icon = file_icons.directory or "󰉋"
+
+  local names = vim.tbl_keys(node.dirs)
+  table.sort(names)
+  for _, dirname in ipairs(names) do
+    local dir, display = collapse_dir(node.dirs[dirname])
+    table.insert(children, col.tag("Directory")({
+      DirRow {
+        name = display,
+        icon = dir_icon,
+        indent = ("  "):rep(depth + 1),
+      },
+      render_file_tree(section, config, dir, depth + 1),
+    }, {
+      foldable = true,
+      folded = false,
+      id = ("%s--tree:%s"):format(section, dir.path),
+    }))
+  end
+
+  for _, item in ipairs(node.files) do
+    table.insert(children, SectionItemFile(section, config, depth)(item))
+  end
+
+  return col(children)
+end
+
+---@param section string
+---@param config table
+---@return fun(items: table): table
+FileTree = function(section, config)
+  return function(items)
+    return render_file_tree(section, config, build_file_tree(items), 0)
+  end
 end
 
 local SectionItemStash = Component.new(function(item)
@@ -797,6 +953,8 @@ function M.Status(state, config)
           items = state.untracked.items,
           folded = config.sections.untracked.folded,
           name = "untracked",
+          file_tree = config.status.file_tree,
+          config = config,
         },
         show_unstaged and Section {
           title = SectionTitle { title = "Unstaged changes", highlight = "NeogitUnstagedchanges", icon = section_icons.unstaged },
@@ -805,6 +963,8 @@ function M.Status(state, config)
           items = state.unstaged.items,
           folded = config.sections.unstaged.folded,
           name = "unstaged",
+          file_tree = config.status.file_tree,
+          config = config,
         },
         show_staged and Section {
           title = SectionTitle { title = "Staged changes", highlight = "NeogitStagedchanges", icon = section_icons.staged },
@@ -813,6 +973,8 @@ function M.Status(state, config)
           items = state.staged.items,
           folded = config.sections.staged.folded,
           name = "staged",
+          file_tree = config.status.file_tree,
+          config = config,
         },
         show_upstream_unmerged and Section {
           title = SectionTitleRemote {

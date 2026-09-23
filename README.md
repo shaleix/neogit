@@ -293,6 +293,10 @@ neogit.setup {
       -- 120 columns, else 50%)
       width = nil,
     },
+    -- Render file sections as a directory tree (diffview-style): foldable
+    -- directory rows with a subtree file count, file rows indented and
+    -- showing only their basename. Flat list when false.
+    file_tree = false,
   },
   -- AI Commit ("m" in the commit popup): commits with a generated message
   -- without opening the editor. Two ways to configure:
@@ -367,8 +371,11 @@ neogit.setup {
   -- Nerd font icons. sections: shown before status section titles (set an
   -- entry to nil to disable that section's icon). file_icons: shown before
   -- file names in the status buffer; keys are lowercase file extensions
-  -- ("default" for unknown types, "submodule" for submodules); set the
-  -- whole table to nil to disable file icons.
+  -- ("default" for unknown types, "submodule" for submodules, "directory"
+  -- for file-tree rows); set the whole table to nil to disable file icons.
+  -- When nvim-web-devicons is installed it takes precedence (colored,
+  -- per-type icons) unless use_devicons is false.
+  use_devicons = true,
   icons = {
     sections = {
       untracked = "󰝒", -- nf-md-file_plus
@@ -387,6 +394,7 @@ neogit.setup {
     file_icons = {
       default = "󰈔", -- nf-md-file
       submodule = "󰳏", -- nf-md-source_repository
+      directory = "󰉋", -- nf-md-folder (file-tree directory rows)
       lua = "󰢱", -- nf-md-language_lua
       py = "󰌠", -- nf-md-language_python
       js = "󰌞", -- nf-md-language_javascript
