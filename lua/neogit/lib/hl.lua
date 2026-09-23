@@ -316,7 +316,7 @@ function M.setup(config)
     NeogitSectionHeader            = { fg = palette.bg_purple, bold = palette.bold, ctermfg = 5 },
     NeogitSectionHeaderCount       = {},
     -- Bottom-center loading indicator (lib/loading.lua): full-width banner
-    NeogitSpinner                  = { fg = palette.white, bg = palette.bg1, ctermfg = 7, ctermbg = 8 },
+    NeogitSpinner                  = { fg = palette.yellow, bg = palette.bg1, ctermfg = 3, ctermbg = 8 },
     NeogitSpinnerSuccess           = { fg = palette.bg0, bg = ok_bg, bold = palette.bold, ctermfg = 0, ctermbg = 2 },
     NeogitSpinnerWarn              = { fg = palette.bg0, bg = palette.bg_yellow, bold = palette.bold, ctermfg = 0, ctermbg = 3 },
     NeogitSpinnerError             = { fg = palette.bg0, bg = palette.bg_red, bold = palette.bold, ctermfg = 0, ctermbg = 1 },

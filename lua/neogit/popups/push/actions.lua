@@ -2,10 +2,12 @@ local a = require("neogit.lib.async")
 local git = require("neogit.lib.git")
 local logger = require("neogit.logger")
 local notification = require("neogit.lib.notification")
+local loading = require("neogit.lib.loading")
 local input = require("neogit.lib.input")
 local util = require("neogit.lib.util")
 local config = require("neogit.config")
 local event = require("neogit.lib.event")
+local GitResult = require("neogit.lib.git.result")
 
 local FuzzyFinderBuffer = require("neogit.buffers.fuzzy_finder")
 
@@ -34,12 +36,23 @@ local function push_to(args, remote, branch, opts)
   end
 
   logger.debug("Pushing to " .. name)
-  notification.info("Pushing to " .. name)
+  loading.show("Pushing to " .. name)
 
   local res = git.push.push_interactive(remote, branch, args)
 
+  -- Harden the result: pty call paths can return a bare table without the
+  -- success/failure methods, and later code concats stdout/stderr directly.
+  if res and type(res) == "table" then
+    if type(res.success) ~= "function" then
+      setmetatable(res, { __index = GitResult })
+    end
+    res.stdout = res.stdout or {}
+    res.stderr = res.stderr or {}
+  end
+
   -- Inform the user about missing permissions
   if res.code == 128 then
+    loading.done(("Push to %s failed (missing permissions)"):format(name), vim.log.levels.ERROR)
     notification.info(table.concat(res.stdout, "\n"))
     return
   end
@@ -59,12 +72,15 @@ local function push_to(args, remote, branch, opts)
   end
 
   if res and res:success() then
+    -- settle the banner before yielding: a.util.scheduler can suspend for
+    -- the rest of the turn in some async contexts
+    loading.done("Pushed to " .. name, vim.log.levels.INFO)
     a.util.scheduler()
     logger.debug("Pushed to " .. name)
-    notification.info("Pushed to " .. name, { dismiss = true })
     event.send("PushComplete")
   else
     logger.debug("Failed to push to " .. name)
+    loading.done("Failed to push to " .. name, vim.log.levels.ERROR)
     notification.error("Failed to push to " .. name, { dismiss = true })
   end
 end
