@@ -253,25 +253,66 @@ neogit.setup {
     recent_commit_count = 10,
     HEAD_padding = 10,
     HEAD_folded = false,
-    mode_padding = 3,
+    mode_padding = 1,
+    -- Single-letter mode column: each mode shows its porcelain code letter;
+    -- conflict codes stay two-letter. ["?"] marks untracked files.
     mode_text = {
-      M = "modified",
-      N = "new file",
-      A = "added",
-      D = "deleted",
-      C = "copied",
-      U = "updated",
-      R = "renamed",
-      T = "changed",
-      DD = "unmerged",
-      AU = "unmerged",
-      UD = "unmerged",
-      UA = "unmerged",
-      DU = "unmerged",
-      AA = "unmerged",
-      UU = "unmerged",
-      ["?"] = "",
+      M = "M",
+      N = "N",
+      A = "A",
+      D = "D",
+      C = "C",
+      U = "U",
+      R = "R",
+      T = "T",
+      DD = "DD",
+      AU = "AU",
+      UD = "UD",
+      UA = "UA",
+      DU = "DU",
+      AA = "AA",
+      UU = "UU",
+      ["?"] = "?",
     },
+    -- Show file diffs in a separate window instead of expanding hunks
+    -- inline in the status buffer. The preview follows the cursor: moving
+    -- onto a file item renders its diff automatically; leaving the file
+    -- items hides it. C-d/C-u scroll the preview from the status buffer.
+    diff_preview = {
+      enabled = false,
+      kind = "vsplit", -- "split" | "vsplit" | "tab" (float is not supported)
+      debounce = 200, -- ms to wait after cursor movement before updating
+      -- Custom content source: return { filetype = "diff", lines = {...} }
+      -- to take over the preview body completely (the buffer filetype is set
+      -- to the returned value, so external renderers can hook in via the
+      -- FileType event, e.g. diffs.nvim); return nil to use the built-in
+      -- renderer. Signature: fun(item, section)
+      content = nil,
+      -- Preview window width in columns (vsplit only): a number, a
+      -- fun(columns) callback, or nil for auto (60% when the editor is over
+      -- 120 columns, else 50%)
+      width = nil,
+    },
+  },
+  -- AI Commit ("m" in the commit popup): commits with a generated message
+  -- without opening the editor. Two ways to configure:
+  --   1. Declarative (recommended): set `model` (+ optionally `url`,
+  --      `api_token_env`, `prompt`) and neogit's built-in OpenAI-compatible
+  --      client does the rest - works with DeepSeek, Ollama, LM Studio,
+  --      vLLM, OpenRouter, ... anything speaking {url}/chat/completions.
+  --   2. Full control: set `generator` and produce the message however you
+  --      like; it takes precedence over the built-in client.
+  -- Any failure (missing config, error, empty message, timeout) falls back
+  -- to the regular editor-based commit.
+  ai_commit = {
+    generator = nil,
+    backend = "openai",
+    url = nil, -- default api.openai.com/v1 (ollama: localhost:11434/v1)
+    model = nil, -- e.g. "deepseek-flash"; required for the built-in client
+    api_token_env = "OPENAI_API_KEY", -- env var holding the bearer token
+    prompt = nil, -- string or fun(ctx): string; default asks for a
+    --           conventional-commit single-line subject
+    timeout = 30, -- seconds before falling back to the editor
   },
   commit_editor = {
     kind = "tab",
@@ -322,6 +363,49 @@ neogit.setup {
     hunk = { "", "" },
     item = { ">", "v" },
     section = { ">", "v" },
+  },
+  -- Nerd font icons. sections: shown before status section titles (set an
+  -- entry to nil to disable that section's icon). file_icons: shown before
+  -- file names in the status buffer; keys are lowercase file extensions
+  -- ("default" for unknown types, "submodule" for submodules); set the
+  -- whole table to nil to disable file icons.
+  icons = {
+    sections = {
+      untracked = "󰝒", -- nf-md-file_plus
+      unstaged = "󰷈", -- nf-md-file_document_edit
+      staged = "󰸞", -- nf-md-check_bold
+      unmerged = "󰕒", -- nf-md-upload (outgoing: Unmerged into / Unpushed to)
+      unpulled = "󰇚", -- nf-md-download (incoming: Unpulled from)
+      stashes = "󰏗", -- nf-md-package_variant_closed
+      recent = "󰜘", -- nf-md-source_commit
+      merge = "󰘭", -- nf-md-source_merge
+      rebase = "󰘬", -- nf-md-source_branch
+      cherry_pick = "󰆏", -- nf-md-content_copy
+      revert = "󰕌", -- nf-md-undo
+      bisect = "󰍉", -- nf-md-magnify
+    },
+    file_icons = {
+      default = "󰈔", -- nf-md-file
+      submodule = "󰳏", -- nf-md-source_repository
+      lua = "󰢱", -- nf-md-language_lua
+      py = "󰌠", -- nf-md-language_python
+      js = "󰌞", -- nf-md-language_javascript
+      ts = "󰛦", -- nf-md-language_typescript
+      json = "󰘦", -- nf-md-code_json
+      md = "󰍔", -- nf-md-language_markdown
+      html = "󰌝", -- nf-md-language_html5
+      css = "󰌜", -- nf-md-language_css3
+      go = "󰟓", -- nf-md-language_go
+      rs = "󱘗", -- nf-md-language_rust
+      c = "󰙱", -- nf-md-language_c
+      h = "󰙲", -- nf-md-language_cpp
+      cpp = "󰙲", -- nf-md-language_cpp
+      sh = "󱆃", -- nf-md-bash
+      txt = "󰈙", -- nf-md-file_document
+      png = "󰈟", -- nf-md-file_image
+      -- ... (jpg/jpeg/gif/svg map to the image icon too; see
+      -- lua/neogit/config.lua for the full default table)
+    },
   },
   -- Each Integration is auto-detected through plugin presence, however, it can be disabled by setting to `false`
   integrations = {
