@@ -152,13 +152,14 @@ end
 function M.setup(config)
   local palette = make_palette(config)
 
-  -- "Success" green pair: derived from DiagnosticOk rather than palette.green
-  -- (which comes from the theme's String highlight - yellow on monokai-style
-  -- colorschemes). Used by the staged section and the loading banner.
-  local ok_base = get_fg("DiagnosticOk") or "#a9dc76"
+  -- "Success" green pair: derived from healthSuccess (the theme's standard
+  -- green) rather than palette.green (the theme's String highlight, yellow
+  -- on monokai-style colorschemes) or DiagnosticOk (deliberately loud).
+  -- Used by the staged section and the loading banner.
+  local ok_base = get_fg("healthSuccess") or "#82b762"
   local bg_factor = vim.o.bg == "dark" and 1 or -1
-  local ok_green = Color.from_hex(ok_base):shade(bg_factor * -0.12):to_css()
-  local ok_bg = Color.from_hex(ok_base):shade(bg_factor * -0.18):to_css()
+  local ok_green = ok_base
+  local ok_bg = Color.from_hex(ok_base):shade(bg_factor * -0.35):to_css()
 
   -- stylua: ignore
   hl_store = {
