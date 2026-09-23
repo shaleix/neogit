@@ -341,6 +341,7 @@ end
 ---@field kind? "split"|"vsplit"|"tab" How to open the preview window (float is not supported)
 ---@field debounce? integer ms to wait after cursor movement before updating the preview
 ---@field content? fun(item: table, section: string): table|nil Custom content source: return { filetype = "diff", lines = {...} } to take over the preview body (external renderers can hook in via the FileType event); return nil to use the built-in renderer
+---@field width? number|fun(columns: number): number Preview window width in columns, or a function receiving the editor width (applies to vsplit; default: 60% over 120 columns, else 50%)
 
 ---@class NeogitConfigMappings Consult the config file or documentation for values
 ---@field finder? { [string]: NeogitConfigMappingsFinder } A dictionary that uses finder commands to set multiple keybinds
@@ -549,6 +550,8 @@ function M.get_default_values()
         kind = "vsplit", -- "split" | "vsplit" | "tab" (float is not supported)
         debounce = 200, -- ms to wait after cursor movement before updating
         content = nil, -- fun(item, section): { filetype: string, lines: string[] } | nil
+        width = nil, -- number | fun(columns: number): number | nil (vsplit only;
+        --   default: 60% when the editor is over 120 columns, else 50%)
       },
     },
     -- AI Commit ("m" in the commit popup). Two ways to configure:
@@ -1394,6 +1397,7 @@ function M.validate_config()
         end
         validate_type(config.status.diff_preview.debounce, "diff_preview.debounce", "number")
         validate_type(config.status.diff_preview.content, "diff_preview.content", { "function", "nil" })
+        validate_type(config.status.diff_preview.width, "diff_preview.width", { "number", "function", "nil" })
       end
     end
     validate_signs()
