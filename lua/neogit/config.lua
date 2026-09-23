@@ -547,6 +547,8 @@ function M.get_default_values()
       -- Show file diffs in a separate window instead of expanding hunks
       -- inline in the status buffer. The preview follows the cursor: moving
       -- onto a file item renders its diff in the split automatically.
+      -- Diffs load asynchronously (cancellable git process + loading
+      -- placeholder), so slow diffs never block cursor movement.
       diff_preview = {
         enabled = false,
         kind = "vsplit", -- "split" | "vsplit" | "tab" (float is not supported)

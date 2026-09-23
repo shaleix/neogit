@@ -278,6 +278,8 @@ neogit.setup {
     -- inline in the status buffer. The preview follows the cursor: moving
     -- onto a file item renders its diff automatically; leaving the file
     -- items hides it. C-d/C-u scroll the preview from the status buffer.
+    -- Diffs load asynchronously (a cancellable git process with a loading
+    -- placeholder), so a slow diff never blocks cursor movement.
     diff_preview = {
       enabled = false,
       kind = "vsplit", -- "split" | "vsplit" | "tab" (float is not supported)

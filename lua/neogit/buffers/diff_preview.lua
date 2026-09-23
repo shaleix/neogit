@@ -2,6 +2,11 @@
 -- (status.diff_preview): instead of expanding hunks inline, the diff of the
 -- file under the cursor renders in its own split. One preview buffer is
 -- reused per process; focus always returns to the status buffer.
+--
+-- Diff loading is asynchronous and cancellable: the preview window shows a
+-- placeholder right away, the git process runs in the background, and only
+-- the result for the item still under the cursor is rendered. Moving the
+-- cursor is never blocked by a slow diff.
 local Buffer = require("neogit.lib.buffer")
 local Ui = require("neogit.lib.ui")
 local common = require("neogit.buffers.common")
@@ -48,6 +53,10 @@ end
 ---@class DiffPreviewBuffer
 ---@field buffer Buffer|nil
 ---@field item table|nil StatusItem currently displayed
+---@field section string|nil section of the displayed item
+---@field task NeogitTask|nil async diff load in flight
+---@field error string|nil load failure message
+---@field shown table|nil what the window displays: { section, item, custom }
 local instance = nil
 
 local function current()
@@ -58,9 +67,19 @@ local function current()
   return instance
 end
 
+---Cancel the async diff load in flight (if any): kills its git process and
+---drops the pending render. Displayed content is left alone.
+function M:_cancel_load()
+  if self.task then
+    self.task:cancel()
+    self.task = nil
+  end
+end
+
 ---Close the preview window (no-op when not open).
 function M.close()
   local self = current()
+  self:_cancel_load()
   if self.buffer then
     self.buffer:close()
     self.buffer = nil
@@ -109,9 +128,14 @@ M.internal = {
   preview_width = preview_width,
 }
 
----Show (or update) the preview with the given file item. The diff is built
----lazily on first display and cached on the item afterwards. Focus stays in
----the status buffer.
+---Show (or update) the preview with the given item. Focus stays in the
+---status buffer.
+---
+---Built-in rendering never blocks the status buffer's cursor: the diff is
+---fetched by a cancellable background git process, the window immediately
+---shows a placeholder, and the real content renders when the diff arrives -
+---unless the cursor moved on in the meantime, in which case the stale
+---result is dropped. Diffs already cached on the item render instantly.
 ---
 ---When `status.diff_preview.content` returns a `{ filetype, lines }` table,
 ---it takes over the preview body completely: the lines are rendered as-is
@@ -136,12 +160,31 @@ function M.show(status_buffer, section, item)
     end
   end
 
-  if not self.custom then
-    if not item.diff then
-      git.diff.build(section, item)
-    end
+  -- Showing the item whose built-in diff is already rendered (or whose load
+  -- is in flight) is a no-op: cursor movement within one file item must not
+  -- re-render the, potentially large, diff. Failed loads don't count, so
+  -- moving back onto an item retries it. `rawget` checks the cache without
+  -- triggering the lazy (blocking) metatable that `git.diff.build` attaches
+  -- to status items.
+  if
+    not self.custom
+    and self.shown
+    and not self.shown.custom
+    and self.shown.section == section
+    and self.shown.item == item
+    and (self.task ~= nil or rawget(item, "diff") ~= nil)
+  then
+    return
   end
+
+  -- A new item: drop the load in flight for the old one (kills its git
+  -- process; its result would be discarded as stale anyway).
+  self:_cancel_load()
+
+  self.section = section
   self.item = item
+  self.shown = { section = section, item = item, custom = self.custom ~= nil }
+  self.error = nil
 
   if self.buffer and self.buffer:is_visible() then
     self:refresh_content()
@@ -183,6 +226,7 @@ function M.show(status_buffer, section, item)
         ["WinClosed"] = function()
           local preview = current()
           if preview.buffer then
+            preview:_cancel_load()
             preview.buffer = nil
             instance = nil
           end
@@ -227,7 +271,13 @@ function M.show(status_buffer, section, item)
           vim.api.nvim_win_set_width(buffer.win_handle, preview_width(vim.o.columns))
         end
 
-        self:refresh_content(buffer)
+        -- custom content is written synchronously from here; built-in
+        -- content was already rendered by `render` above (placeholder or
+        -- cached diff) and the async load replaces it when the diff arrives
+        if self.custom then
+          self:refresh_content(buffer)
+        end
+
         -- keep the cursor working in the status buffer
         if vim.api.nvim_win_is_valid(status_window) then
           vim.api.nvim_set_current_win(status_window)
@@ -235,6 +285,30 @@ function M.show(status_buffer, section, item)
         buffer:lock()
       end,
     }
+  end
+
+  -- Built-in content for a diff that has not been loaded yet: kick the
+  -- async fetch. The placeholder is already on screen, so the status
+  -- buffer stays responsive while git runs.
+  if not self.custom and not rawget(item, "diff") then
+    self.task = git.diff.load(section, item, function(diff, err)
+      -- stale: the cursor moved to another item (or the preview was reset)
+      -- before this diff arrived
+      if self.item ~= item or self.section ~= section then
+        return
+      end
+
+      self.task = nil
+      if diff then
+        self.error = nil
+      else
+        self.error = tostring(err or "diff failed")
+      end
+
+      if self.buffer and self.buffer.handle then
+        self:refresh_content()
+      end
+    end)
   end
 end
 
@@ -264,13 +338,39 @@ end
 
 function M:layout()
   local item = self.item
-  if not item or not item.diff then
+  if not item then
     return { text("(no diff)") }
+  end
+
+  -- `rawget` on purpose: indexing `item.diff` would trigger the lazy
+  -- metatable's blocking build (`util.block_on`); the async loader owns
+  -- diff construction for the preview.
+  local diff = rawget(item, "diff")
+
+  if not diff then
+    -- pending or failed async load: cheap placeholder, never the full diff
+    local status
+    if self.error then
+      status = "Failed to load diff: " .. self.error
+    else
+      status = "Loading diff..."
+    end
+
+    return {
+      col {
+        row {
+          text.highlight("NeogitFilePath")(item.name),
+          text.highlight("NeogitSubtleText")("  (" .. (item.mode or "?") .. ")"),
+        },
+        EmptyLine(),
+        text.highlight("NeogitSubtleText")(status),
+      },
+    }
   end
 
   -- insertions/deletions counted from the hunks, like the staged-diff view
   local insertions, deletions = 0, 0
-  for _, hunk in ipairs(item.diff.hunks or {}) do
+  for _, hunk in ipairs(diff.hunks or {}) do
     for _, line in ipairs(hunk.lines or {}) do
       if line:match("^%+") then
         insertions = insertions + 1
@@ -291,7 +391,7 @@ function M:layout()
         text.highlight("NeogitDiffDeletions")("-" .. deletions),
       },
       EmptyLine(),
-      Diff(item.diff),
+      Diff(diff),
     },
   }
 end
