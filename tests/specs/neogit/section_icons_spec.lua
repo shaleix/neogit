@@ -259,6 +259,46 @@ describe("section header icons and colors", function()
     assert.is_not.equal(colors.NeogitUnstagedchanges, colors.NeogitStagedchanges)
   end)
 
+  it("prefers nvim-web-devicons when available", function()
+    -- mock the plugin; reset the module-level resolution cache first
+    package.preload["nvim-web-devicons"] = function()
+      return {
+        get_icon = function(name, ext, opts)
+          if name == "script.lua" then
+            return "*", "DevIconLua"
+          end
+          return nil
+        end,
+      }
+    end
+
+    local ui = require("neogit.buffers.status.ui")
+    ui.reset_devicons_cache()
+
+    local dir = workdir()
+    local buf = open_status(dir)
+    local text = buffer_text(buf)
+
+    package.preload["nvim-web-devicons"] = nil
+    package.loaded["nvim-web-devicons"] = nil
+    ui.reset_devicons_cache()
+
+    assert.truthy(text:find("%* script%.lua", 1, false), "devicons-provided icon must render")
+  end)
+
+  it("falls back to the builtin table without devicons", function()
+    local ui = require("neogit.buffers.status.ui")
+    ui.reset_devicons_cache()
+
+    local dir = workdir()
+    local buf = open_status(dir)
+    local text = buffer_text(buf)
+
+    local file_icons = config.values.icons.file_icons
+    assert.truthy(text:find(file_icons.lua .. " script%.lua", 1, false), "builtin lua icon must render")
+    assert.truthy(text:find(file_icons.txt .. " untracked%.txt", 1, false), "builtin txt icon must render")
+  end)
+
   it("hides icons when configured as nil", function()
     local dir = workdir()
 

@@ -335,6 +335,7 @@ end
 ---@field mode_text? { [string]: string } The text to display for each mode
 ---@field show_head_commit_hash? boolean Show the commit hash for HEADs in the status buffer
 ---@field diff_preview? NeogitConfigDiffPreview Render file diffs in a separate window instead of inline
+---@field file_tree? boolean Render file sections as a directory tree (foldable dir rows, indented basename rows)
 
 ---@class NeogitConfigDiffPreview
 ---@field enabled? boolean Show diffs in a preview window instead of expanding inline in the status buffer
@@ -418,6 +419,7 @@ end
 
 ---@class NeogitConfigIcons
 ---@field sections? table<string, string?> Nerd font icons shown before status section titles; nil disables that section's icon
+---@field use_devicons? boolean Use nvim-web-devicons for file icons when installed (falls back to the builtin table otherwise)
 ---@field integrations? { diffview: boolean, codediff: boolean, telescope: boolean, fzf_lua: boolean, mini_pick: boolean, snacks: boolean } Which integrations to enable
 ---@field diff_viewer? "diffview"|"codediff"|nil Which diff viewer to use (nil = auto-detect)
 ---@field sections? NeogitConfigSections
@@ -553,6 +555,10 @@ function M.get_default_values()
         width = nil, -- number | fun(columns: number): number | nil (vsplit only;
         --   default: 60% when the editor is over 120 columns, else 50%)
       },
+      -- Render file sections as a directory tree (diffview-style): foldable
+      -- directory rows with a subtree file count, file rows indented and
+      -- showing only their basename. Flat list when false.
+      file_tree = false,
     },
     -- AI Commit ("m" in the commit popup). Two ways to configure:
     --   1. Declarative (recommended): set `model` (+ optionally `url`,
@@ -632,11 +638,15 @@ function M.get_default_values()
       },
       -- Nerd font file-type icons shown before file names in the status
       -- buffer; keys are lowercase file extensions ("default" for unknown
-      -- types, "submodule" for submodules). Set the whole table to nil to
-      -- disable file icons.
+      -- types, "submodule" for submodules, "directory" for file-tree rows).
+      -- When nvim-web-devicons is installed it takes precedence (colored,
+      -- per-type icons) unless use_devicons is false. Set the whole table
+      -- to nil to disable file icons.
+      use_devicons = true,
       file_icons = {
         default = "󰈔", -- nf-md-file
         submodule = "󰳏", -- nf-md-source_repository
+        directory = "󰉋", -- nf-md-folder (file-tree directory rows)
         lua = "󰢱", -- nf-md-language_lua
         py = "󰌠", -- nf-md-language_python
         js = "󰌞", -- nf-md-language_javascript
@@ -1347,6 +1357,7 @@ function M.validate_config()
     if config.icons then
       validate_type(config.icons.sections, "icons.sections", { "table", "nil" })
       validate_type(config.icons.file_icons, "icons.file_icons", { "table", "nil" })
+      validate_type(config.icons.use_devicons, "icons.use_devicons", { "boolean", "nil" })
     end
     validate_type(config.git_backend, "git_backend", { "string", "nil" })
     if config.git_backend and not vim.tbl_contains(M.GIT_BACKENDS, config.git_backend) then
@@ -1399,6 +1410,7 @@ function M.validate_config()
         validate_type(config.status.diff_preview.content, "diff_preview.content", { "function", "nil" })
         validate_type(config.status.diff_preview.width, "diff_preview.width", { "number", "function", "nil" })
       end
+      validate_type(config.status.file_tree, "status.file_tree", { "boolean", "nil" })
     end
     validate_signs()
     validate_trinary_auto(config.disable_insert_on_commit, "disable_insert_on_commit")

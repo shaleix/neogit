@@ -124,12 +124,16 @@ to Neovim users.
             revert = "󰕌",
             bisect = "󰍉",
         },
+        -- Use nvim-web-devicons for file icons when installed (colored,
+        -- per-type); falls back to the builtin table below
+        use_devicons = true,
         -- File-type icons shown before file names in the status buffer; keys are
         -- lowercase file extensions ("default" for unknown types, "submodule" for
         -- submodules). Set the whole table to nil to disable file icons.
         file_icons = {
             default = "󰈔",
             submodule = "󰳏",
+            directory = "󰉋",
             lua = "󰢱",
             py = "󰌠",
             js = "󰌞",
@@ -311,6 +315,11 @@ to Neovim users.
             -- over 120 columns, else 50%)
             width = nil,
         },
+        -- Render file sections as a directory tree (diffview-style):
+        -- foldable directory rows with a subtree file count, file rows
+        -- indented and showing only their basename. Flat list when false.
+        file_tree = false,
+    },
     },
     ai_commit = {
         -- Full-control override: produces the message and calls `done`.
