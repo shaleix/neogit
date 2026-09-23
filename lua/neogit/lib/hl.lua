@@ -152,6 +152,13 @@ end
 function M.setup(config)
   local palette = make_palette(config)
 
+  -- "Success" green pair: derived from DiagnosticOk rather than palette.green
+  -- (which comes from the theme's String highlight - yellow on monokai-style
+  -- colorschemes). Used by the staged section and the loading banner.
+  local ok_base = get_fg("DiagnosticOk") or "#a9dc76"
+  local bg_factor = vim.o.bg == "dark" and 1 or -1
+  local ok_green = Color.from_hex(ok_base):shade(bg_factor * -0.12):to_css()
+  local ok_bg = Color.from_hex(ok_base):shade(bg_factor * -0.18):to_css()
 
   -- stylua: ignore
   hl_store = {
@@ -281,21 +288,21 @@ function M.setup(config)
     -- Staged section: one uniform "success" green ("ready to commit"), no
     -- bold - the whole section reads as a block, unlike the per-type
     -- unstaged colors.
-    NeogitChangeMstaged            = { fg = palette.green, ctermfg = 2 },
-    NeogitChangeAstaged            = { fg = palette.green, ctermfg = 2 },
-    NeogitChangeNstaged            = { fg = palette.green, ctermfg = 2 },
-    NeogitChangeDstaged            = { fg = palette.green, ctermfg = 2 },
-    NeogitChangeCstaged            = { fg = palette.green, ctermfg = 2 },
-    NeogitChangeUstaged            = { fg = palette.green, ctermfg = 2 }, -- typos: ignore
-    NeogitChangeRstaged            = { fg = palette.green, ctermfg = 2 },
-    NeogitChangeTstaged            = { fg = palette.green, ctermfg = 2 },
-    NeogitChangeDDstaged           = { fg = palette.green, ctermfg = 2 },
-    NeogitChangeUUstaged           = { fg = palette.green, ctermfg = 2 }, -- typos: ignore
-    NeogitChangeAAstaged           = { fg = palette.green, ctermfg = 2 },
-    NeogitChangeDUstaged           = { fg = palette.green, ctermfg = 2 }, -- typos: ignore
-    NeogitChangeUDstaged           = { fg = palette.green, ctermfg = 2 },
-    NeogitChangeAUstaged           = { fg = palette.green, ctermfg = 2 }, -- typos: ignore
-    NeogitChangeUAstaged           = { fg = palette.green, ctermfg = 2 },
+    NeogitChangeMstaged            = { fg = ok_green, ctermfg = 2 },
+    NeogitChangeAstaged            = { fg = ok_green, ctermfg = 2 },
+    NeogitChangeNstaged            = { fg = ok_green, ctermfg = 2 },
+    NeogitChangeDstaged            = { fg = ok_green, ctermfg = 2 },
+    NeogitChangeCstaged            = { fg = ok_green, ctermfg = 2 },
+    NeogitChangeUstaged            = { fg = ok_green, ctermfg = 2 }, -- typos: ignore
+    NeogitChangeRstaged            = { fg = ok_green, ctermfg = 2 },
+    NeogitChangeTstaged            = { fg = ok_green, ctermfg = 2 },
+    NeogitChangeDDstaged           = { fg = ok_green, ctermfg = 2 },
+    NeogitChangeUUstaged           = { fg = ok_green, ctermfg = 2 }, -- typos: ignore
+    NeogitChangeAAstaged           = { fg = ok_green, ctermfg = 2 },
+    NeogitChangeDUstaged           = { fg = ok_green, ctermfg = 2 }, -- typos: ignore
+    NeogitChangeUDstaged           = { fg = ok_green, ctermfg = 2 },
+    NeogitChangeAUstaged           = { fg = ok_green, ctermfg = 2 }, -- typos: ignore
+    NeogitChangeUAstaged           = { fg = ok_green, ctermfg = 2 },
     NeogitChangeUntrackedstaged    = { fg = palette.red, ctermfg = 1 }, -- dead group: "?" never stages; kept red like the other "?" groups
     NeogitChangeModified           = { fg = palette.green, bold = palette.bold, italic = palette.italic, ctermfg = 2 },
     NeogitChangeAdded              = { fg = palette.bg_green, bold = palette.bold, italic = palette.italic, ctermfg = 2 },
@@ -309,14 +316,14 @@ function M.setup(config)
     NeogitSectionHeaderCount       = {},
     -- Bottom-center loading indicator (lib/loading.lua): full-width banner
     NeogitSpinner                  = { fg = palette.white, bg = palette.bg1, ctermfg = 7, ctermbg = 8 },
-    NeogitSpinnerSuccess           = { fg = palette.bg0, bg = palette.bg_green, bold = palette.bold, ctermfg = 0, ctermbg = 2 },
+    NeogitSpinnerSuccess           = { fg = palette.bg0, bg = ok_bg, bold = palette.bold, ctermfg = 0, ctermbg = 2 },
     NeogitSpinnerWarn              = { fg = palette.bg0, bg = palette.bg_yellow, bold = palette.bold, ctermfg = 0, ctermbg = 3 },
     NeogitSpinnerError             = { fg = palette.bg0, bg = palette.bg_red, bold = palette.bold, ctermfg = 0, ctermbg = 1 },
     -- Section headers: each section carries its own icon color; users who
     -- preferred the old uniform look can re-link these to NeogitSectionHeader.
     NeogitUntrackedfiles           = { fg = palette.bg_cyan, bold = palette.bold, ctermfg = 6 },
     NeogitUnstagedchanges          = { fg = palette.bg_orange, bold = palette.bold, ctermfg = 3 },
-    NeogitStagedchanges            = { fg = palette.bg_green, bold = palette.bold, ctermfg = 2 },
+    NeogitStagedchanges            = { fg = ok_bg, bold = palette.bold, ctermfg = 2 },
     NeogitStashes                  = { fg = palette.bg_yellow, bold = palette.bold, ctermfg = 3 },
     NeogitRecentcommits            = { fg = palette.bg_purple, bold = palette.bold, ctermfg = 5 },
     NeogitMerging                  = { fg = palette.bg_blue, bold = palette.bold, ctermfg = 4 },
