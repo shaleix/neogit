@@ -60,12 +60,75 @@ local function buffer_text(handle)
   return table.concat(vim.api.nvim_buf_get_lines(handle, 0, -1, false), "\n")
 end
 
+---Wait until the preview window exists and its buffer contains the given
+---literal text.
+local function wait_for_content(preview, needle, timeout)
+  return vim.wait(timeout or 5000, function()
+    local handle = preview.buffer_handle()
+    return handle ~= nil and buffer_text(handle):find(needle, 1, true) ~= nil
+  end, 20)
+end
+
+---Create a git wrapper that logs every invocation and sleeps `delay`
+---seconds before running the real git, but only when the command mentions
+---`slow_file` (pass an empty string to never delay). Returns the wrapper
+---path and the log path.
+local function slow_git(slow_file, delay)
+  local log = vim.fn.tempname()
+  local wrapper = vim.fn.tempname()
+  local fd = assert(io.open(wrapper, "w"))
+  fd:write(([[
+#!/bin/sh
+echo "$@" >> %s
+for a in "$@"; do
+  [ "$a" = "%s" ] && sleep %d
+done
+exec %s "$@"
+]]):format(log, slow_file, delay, vim.fn.exepath("git")))
+  fd:close()
+  vim.fn.setfperm(wrapper, "rwxr-xr-x")
+  return wrapper, log
+end
+
+---Count logged git invocations that are diff commands for the given file.
+local function count_diff_calls(log, file)
+  local calls = 0
+  for line in io.lines(log) do
+    if line:find(" diff ", 1, true) and line:find(file, 1, true) then
+      calls = calls + 1
+    end
+  end
+  return calls
+end
+
+---Move the status buffer cursor onto the line containing `needle` and fire
+---CursorMoved.
+local function cursor_onto(buf, needle)
+  local lines = vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false)
+  local found
+  for i, l in ipairs(lines) do
+    if l:find(needle, 1, true) then
+      found = i
+      buf.buffer:move_cursor(i)
+      break
+    end
+  end
+  assert.truthy(found, ("status buffer has no line containing %q"):format(needle))
+
+  -- let user-cursor mode settle (anchor cancel) before simulating the move
+  vim.wait(60)
+  vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf.buffer.handle })
+end
+
 neogit.setup { filewatcher = { enabled = false }, disable_context_highlighting = true }
 
 describe("status diff_preview", function()
+  local original_git = config.values.git_executable
+
   after_each(function()
     require("neogit.buffers.diff_preview").close()
     config.values.status.diff_preview = { enabled = false, kind = "vsplit", debounce = 200 }
+    config.values.git_executable = original_git
   end)
 
   it("validates the config shape", function()
@@ -86,29 +149,17 @@ describe("status diff_preview", function()
     config.values.status.diff_preview = { enabled = true, kind = "vsplit", debounce = 50 }
     local dir = workdir()
     local buf = open_status(dir)
+    local preview = require("neogit.buffers.diff_preview")
 
-    -- find the unstaged item line and move the cursor onto it
-    local lines = vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false)
-    local item_line
-    for i, l in ipairs(lines) do
-      if l:find("tracked.txt", 1, true) then
-        item_line = i
-        break
-      end
-    end
-    assert.truthy(item_line, "unstaged item not rendered")
-    buf.buffer:move_cursor(item_line)
-    vim.wait(60) -- let user-cursor mode settle (anchor cancel)
-    vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf.buffer.handle })
+    cursor_onto(buf, "tracked.txt")
 
     assert.truthy(vim.wait(5000, function()
-      return require("neogit.buffers.diff_preview").is_open()
+      return preview.is_open()
     end), "preview window must open")
 
-    local preview = require("neogit.buffers.diff_preview")
+    assert.truthy(wait_for_content(preview, "+two"), "diff content must render")
     local text = buffer_text(preview.buffer_handle())
     assert.truthy(text:find("tracked.txt", 1, true), "preview must show the file name")
-    assert.truthy(text:find("+two", 1, true), "preview must show the diff content")
 
     -- focus stays in the status buffer
     assert.equal(buf.buffer.handle, vim.api.nvim_get_current_buf())
@@ -120,26 +171,23 @@ describe("status diff_preview", function()
     local buf = open_status(dir)
     local preview = require("neogit.buffers.diff_preview")
 
-    local lines = vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false)
-    local item_line, title_line
-    for i, l in ipairs(lines) do
-      if l:find("tracked.txt", 1, true) then
-        item_line = i
-      elseif l:find("Unstaged changes", 1, true) then
-        title_line = i
-      end
-    end
-    assert.truthy(item_line and title_line, "status layout incomplete")
-
     -- open on the file item
-    buf.buffer:move_cursor(item_line)
-    vim.wait(60)
-    vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf.buffer.handle })
+    cursor_onto(buf, "tracked.txt")
     assert.truthy(vim.wait(5000, function()
       return preview.is_open()
     end), "preview must open on the file item")
 
     -- move onto the section title (not a file item)
+    local lines = vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false)
+    local title_line
+    for i, l in ipairs(lines) do
+      if l:find("Unstaged changes", 1, true) then
+        title_line = i
+        break
+      end
+    end
+    assert.truthy(title_line, "status layout incomplete")
+
     buf.buffer:move_cursor(title_line)
     vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf.buffer.handle })
     assert.truthy(vim.wait(5000, function()
@@ -163,15 +211,7 @@ describe("status diff_preview", function()
     local dir = workdir()
     local buf = open_status(dir)
 
-    local lines = vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false)
-    for i, l in ipairs(lines) do
-      if l:find("tracked.txt", 1, true) then
-        buf.buffer:move_cursor(i)
-        break
-      end
-    end
-    vim.wait(60)
-    vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf.buffer.handle })
+    cursor_onto(buf, "tracked.txt")
 
     local preview = require("neogit.buffers.diff_preview")
     assert.truthy(vim.wait(5000, function()
@@ -197,15 +237,7 @@ describe("status diff_preview", function()
     local dir = workdir()
     local buf = open_status(dir)
 
-    local lines = vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false)
-    for i, l in ipairs(lines) do
-      if l:find("tracked.txt", 1, true) then
-        buf.buffer:move_cursor(i)
-        break
-      end
-    end
-    vim.wait(60)
-    vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf.buffer.handle })
+    cursor_onto(buf, "tracked.txt")
 
     local preview = require("neogit.buffers.diff_preview")
     assert.truthy(vim.wait(5000, function()
@@ -214,8 +246,7 @@ describe("status diff_preview", function()
 
     local handle = preview.buffer_handle()
     assert.equal("NeogitDiffPreview", vim.bo[handle].filetype, "built-in filetype must be kept")
-    local text = table.concat(vim.api.nvim_buf_get_lines(handle, 0, -1, false), "\n")
-    assert.truthy(text:find("+two", 1, true), "built-in diff must render")
+    assert.truthy(wait_for_content(preview, "+two"), "built-in diff must render")
   end)
 
   it("does not expand hunks inline while enabled", function()
@@ -225,14 +256,7 @@ describe("status diff_preview", function()
 
     local before = buffer_text(buf.buffer.handle)
     -- cursor over the file item + CursorMoved fired
-    local lines = vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false)
-    for i, l in ipairs(lines) do
-      if l:find("tracked.txt", 1, true) then
-        buf.buffer:move_cursor(i)
-        break
-      end
-    end
-    vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf.buffer.handle })
+    cursor_onto(buf, "tracked.txt")
     vim.wait(300)
 
     local after = buffer_text(buf.buffer.handle)
@@ -253,15 +277,7 @@ describe("status diff_preview", function()
       local dir = workdir()
       local buf = open_status(dir)
 
-      local lines = vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false)
-      for i, l in ipairs(lines) do
-        if l:find("tracked.txt", 1, true) then
-          buf.buffer:move_cursor(i)
-          break
-        end
-      end
-      vim.wait(60)
-      vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf.buffer.handle })
+      cursor_onto(buf, "tracked.txt")
       assert.truthy(vim.wait(5000, function()
         return preview.is_open()
       end), "preview must open")
@@ -317,20 +333,16 @@ describe("status diff_preview", function()
     config.values.status.diff_preview = { enabled = true, kind = "vsplit", debounce = 50 }
     local buf = open_status(dir)
 
-    local lines = vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false)
-    for i, l in ipairs(lines) do
-      if l:find("tracked.txt", 1, true) then
-        buf.buffer:move_cursor(i)
-        break
-      end
-    end
-    vim.wait(60)
-    vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf.buffer.handle })
+    cursor_onto(buf, "tracked.txt")
 
     local preview = require("neogit.buffers.diff_preview")
     assert.truthy(vim.wait(5000, function()
       return preview.is_open()
     end), "preview must open")
+    assert.truthy(
+      wait_for_content(preview, "+line 5"),
+      "diff content must render before scrolling"
+    )
 
     local win = vim.fn.bufwinid(preview.buffer_handle())
     assert.truthy(win ~= -1, "preview window must exist")
@@ -353,5 +365,127 @@ describe("status diff_preview", function()
 
     -- cursor stays in the status buffer throughout
     assert.equal(buf.buffer.handle, vim.api.nvim_get_current_buf())
+  end)
+
+  it("opens with a loading placeholder instead of blocking on a slow diff", function()
+    local wrapper = slow_git("tracked.txt", 1)
+    config.values.git_executable = wrapper
+
+    config.values.status.diff_preview = { enabled = true, kind = "vsplit", debounce = 50 }
+    local dir = workdir()
+    local buf = open_status(dir)
+    local preview = require("neogit.buffers.diff_preview")
+
+    cursor_onto(buf, "tracked.txt")
+
+    -- the window opens right away, while the (sleeping) git diff is still
+    -- running: the deferred callback cannot have waited for the process
+    assert.truthy(vim.wait(1000, function()
+      return preview.is_open()
+    end), "preview window must open before the slow diff completes")
+    assert.truthy(
+      buffer_text(preview.buffer_handle()):find("Loading diff", 1, true),
+      "placeholder must be visible while the diff loads"
+    )
+
+    -- and the real content renders once the process finishes
+    assert.truthy(
+      wait_for_content(preview, "+two", 10000),
+      "diff content must render after the slow diff completes"
+    )
+  end)
+
+  it("switches to the next file's diff while a slow load is in flight", function()
+    local wrapper = slow_git("slow.txt", 1)
+    config.values.git_executable = wrapper
+
+    -- two untracked files: slow.txt's diff sleeps inside the wrapper,
+    -- fast.txt's returns immediately
+    local dir = workdir()
+    do
+      local fd = assert(io.open(dir .. "/slow.txt", "w"))
+      fd:write("slow content\n")
+      fd:close()
+      fd = assert(io.open(dir .. "/fast.txt", "w"))
+      fd:write("fast content\n")
+      fd:close()
+    end
+
+    config.values.status.diff_preview = { enabled = true, kind = "vsplit", debounce = 50 }
+    local buf = open_status(dir)
+    local preview = require("neogit.buffers.diff_preview")
+
+    cursor_onto(buf, "slow.txt")
+    assert.truthy(vim.wait(1000, function()
+      return preview.is_open()
+    end), "preview must open on the slow item")
+    assert.truthy(
+      buffer_text(preview.buffer_handle()):find("Loading diff", 1, true),
+      "slow item shows the placeholder"
+    )
+
+    -- move onto fast.txt while slow.txt's diff is still loading
+    cursor_onto(buf, "fast.txt")
+    assert.truthy(
+      wait_for_content(preview, "+fast content", 5000),
+      "fast item's diff must render while the slow load was in flight"
+    )
+
+    -- the slow diff completes (or is cancelled) without ever overwriting
+    -- the fast item's content
+    vim.wait(1500)
+    local text = buffer_text(preview.buffer_handle())
+    assert.truthy(text:find("+fast content", 1, true), "fast diff must stay rendered")
+    assert.is_nil(text:find("+slow content", 1, true), "stale slow diff must not render")
+  end)
+
+  it("fetches each item's diff once, reusing the cache on revisit", function()
+    local wrapper, log = slow_git("", 0)
+    config.values.git_executable = wrapper
+
+    -- a second file so the cursor can move away and back
+    local dir = workdir()
+    do
+      local fd = assert(io.open(dir .. "/other.txt", "w"))
+      fd:write("other content\n")
+      fd:close()
+    end
+
+    config.values.status.diff_preview = { enabled = true, kind = "vsplit", debounce = 50 }
+    local buf = open_status(dir)
+    local preview = require("neogit.buffers.diff_preview")
+
+    cursor_onto(buf, "tracked.txt")
+    assert.truthy(
+      wait_for_content(preview, "+two"),
+      "diff content must render"
+    )
+    local initial_calls = count_diff_calls(log, "tracked.txt")
+    assert.truthy(initial_calls > 0, "tracked.txt diff must have been fetched")
+
+    -- more cursor movement within the same item: no refetch, no re-render
+    for _ = 1, 3 do
+      vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf.buffer.handle })
+      vim.wait(100)
+    end
+
+    -- move away to another file and back: the cached diff renders without
+    -- a new git invocation
+    cursor_onto(buf, "other.txt")
+    assert.truthy(
+      wait_for_content(preview, "+other content"),
+      "other item's diff must render"
+    )
+    cursor_onto(buf, "tracked.txt")
+    assert.truthy(
+      wait_for_content(preview, "+two"),
+      "cached diff must render on revisit"
+    )
+
+    assert.equal(
+      initial_calls,
+      count_diff_calls(log, "tracked.txt"),
+      "tracked.txt diff must not be refetched for same-item moves or revisits"
+    )
   end)
 end)

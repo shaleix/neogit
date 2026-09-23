@@ -10,6 +10,7 @@ local sha256 = vim.fn.sha256
 ---@class NeogitGitDiff
 ---@field parse fun(raw_diff: string[], raw_stats: string[]): Diff
 ---@field build fun(section: string, file: StatusItem)
+---@field load fun(section: string, file: StatusItem, callback: fun(diff: Diff|nil, err: string|nil)): NeogitTask
 ---@field staged_stats fun(): DiffStagedStats
 ---
 ---@class Diff
@@ -360,20 +361,63 @@ end
 
 ---@param section string
 ---@param file StatusItem
-local function build(section, file)
+---@return fun(): table
+local function raw_for(section, file)
   if section == "untracked" then
-    build_metatable(file, raw_untracked(file.name))
+    return raw_untracked(file.name)
   elseif section == "unstaged" then
-    build_metatable(file, raw_unstaged(file.name))
+    return raw_unstaged(file.name)
   elseif section == "staged" and file.mode == "R" then
-    build_metatable(file, raw_staged_renamed(file.name, file.original_name))
+    return raw_staged_renamed(file.name, file.original_name)
   elseif section == "staged" and file.mode:match("^[UAD][UAD]") then
-    build_metatable(file, raw_staged_unmerged(file.name))
+    return raw_staged_unmerged(file.name)
   elseif section == "staged" then
-    build_metatable(file, raw_staged(file.name))
+    return raw_staged(file.name)
   else
     error("Unknown section: " .. vim.inspect(section))
   end
+end
+
+---@param section string
+---@param file StatusItem
+local function build(section, file)
+  build_metatable(file, raw_for(section, file))
+end
+
+---Asynchronously load and parse the diff for `file`, caching the result on
+---`file.diff` (the same field the lazy metatable from `build` writes, so
+---both paths share one cache). The git process runs as a background job and
+---the callback is delivered via vim.schedule, so the caller's event loop is
+---never blocked - unlike the lazy metatable, which blocks via
+---`util.block_on`.
+---
+---Returns the async Task: cancelling it kills the in-flight git process.
+---`callback` receives the parsed diff on success, or nil plus an error
+---message on failure.
+---@param section string
+---@param file StatusItem
+---@param callback fun(diff: Diff|nil, err: string|nil)
+---@return NeogitTask
+local function load(section, file, callback)
+  local raw = raw_for(section, file)
+
+  return a.run(function()
+    local ok, result = pcall(function()
+      return parse_diff(unpack(raw()))
+    end)
+
+    if ok then
+      file.diff = result
+    end
+
+    vim.schedule(function()
+      if ok then
+        callback(result, nil)
+      else
+        callback(nil, result)
+      end
+    end)
+  end)
 end
 
 ---@return DiffStagedStats
@@ -423,4 +467,5 @@ return { ---@type NeogitGitDiff
   parse = parse_diff,
   staged_stats = staged_stats,
   build = build,
+  load = load,
 }
