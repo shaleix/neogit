@@ -318,6 +318,8 @@ to Neovim users.
         -- Render file sections as a directory tree (diffview-style):
         -- foldable directory rows with a subtree file count, file rows
         -- indented and showing only their basename. Flat list when false.
+        -- Staging/unstaging on a directory row applies to the files under
+        -- that directory (the subtree), not the entire section.
         file_tree = false,
     },
     },

@@ -263,20 +263,95 @@ function Repo:git_path(...)
   return Path:new(self.git_dir):joinpath(...)
 end
 
+-- Runtime degradation bookkeeping (migration spec §7): a twin failure must
+-- be loud enough to diagnose from the log file of a long-running session,
+-- but a watcher-driven refresh loop fires every few seconds - so escalate
+-- to ERROR at most once per interval per module and keep counted DEBUG
+-- lines in between.
+local DEGRADE_LOG_INTERVAL = 60 * 1000 -- ms
+local degrade_state = {}
+local degrade_notified = {}
+
+local function log_twin_failure(name, err)
+  vim.uv.update_time()
+  local now = vim.uv.now()
+  local entry = degrade_state[name]
+
+  if entry and now - entry.last < DEGRADE_LOG_INTERVAL then
+    entry.suppressed = entry.suppressed + 1
+    logger.debug(
+      ("[REPO]: libgit2 %s failed again - degraded to CLI (%d repeat(s) since the last error log)"):format(
+        name,
+        entry.suppressed
+      )
+    )
+    return
+  end
+
+  local repeats = entry and entry.suppressed or 0
+  degrade_state[name] = { last = now, suppressed = 0 }
+
+  -- Runtime backend failures are exactly what a long-running session must
+  -- leave behind for post-mortem analysis: force file logging on (no-op
+  -- when already enabled) and record the full traceback at ERROR.
+  logger.config.use_file = true
+
+  if repeats > 0 then
+    logger.error(
+      ("[REPO]: libgit2 %s failed again (%d suppressed repeat(s)) - degrading to CLI:\n%s"):format(
+        name,
+        repeats,
+        tostring(err)
+      )
+    )
+  else
+    logger.error(("[REPO]: libgit2 %s failed - degrading to CLI:\n%s"):format(name, tostring(err)))
+  end
+
+  if not degrade_notified[name] then
+    degrade_notified[name] = true
+    vim.schedule(function()
+      vim.notify(
+        (
+          "neogit: the libgit2 %s task failed at runtime; the git CLI served this refresh instead.\n"
+          .. "Details recorded in %s/neogit.log"
+        ):format(name, vim.fn.stdpath("cache")),
+        vim.log.levels.WARN
+      )
+    end)
+  end
+end
+
 function Repo:tasks(filter, state, ctx)
   local backend = require("neogit.lib.git.backend")
   local use_libgit2 = backend.current() == "libgit2"
 
   local tasks = {}
   for name, fn in pairs(self.lib) do
-    local impl = fn
+    local twin = nil
     if use_libgit2 and self.libgit2_updates[name] and backend.capability(name) == "libgit2" then
-      impl = self.libgit2_updates[name]
+      twin = self.libgit2_updates[name]
     end
 
     table.insert(tasks, function()
       local start = vim.uv.now()
-      impl(state, filter, ctx)
+
+      if twin then
+        -- Runtime degradation (spec §7): a twin that fails mid-session
+        -- (stale handle, FFI error, version quirk) must not empty or abort
+        -- the refresh. Twins raise BEFORE mutating state (see the failure
+        -- contract in libgit2/status.lua), so re-running the CLI
+        -- implementation here starts from clean data.
+        local ok, err = xpcall(twin, debug.traceback, state, filter, ctx)
+        if ok then
+          logger.debug(("[REPO]: Refreshed %s (libgit2) in %d ms"):format(name, vim.uv.now() - start))
+          return
+        end
+
+        log_twin_failure(name, err)
+      end
+
+      fn(state, filter, ctx)
       logger.debug(("[REPO]: Refreshed %s in %d ms"):format(name, vim.uv.now() - start))
     end)
   end

@@ -15,6 +15,7 @@
 --     later without touching callers
 local ffi = require("ffi")
 local GitResult = require("neogit.lib.git.result")
+local logger = require("neogit.logger")
 
 local M = {}
 
@@ -282,7 +283,16 @@ end
 function M.open_repo(path, search)
   ensure_extra_cdefs()
   local git2 = vendored_require("core.git2")
-  return git2.Repository.open(path, search)
+  local repo, err = git2.Repository.open(path, search)
+
+  if not repo then
+    -- Every libgit2 query and refresh path funnels through here, so an open
+    -- failure is the root cause of most twin degradations: record the
+    -- libgit2 error text (git_error_last) for post-mortem analysis.
+    logger.warn(("[GIT2]: open_repo failed for %q: %s"):format(tostring(path), M.git_result(err, "").message))
+  end
+
+  return repo, err
 end
 
 ---Run `fn` against a freshly opened repository (single-shot queries; the

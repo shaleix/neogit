@@ -155,14 +155,17 @@ end
 
 ---update_recent twin: fill state.recent.items via revwalk + decorations.
 ---Signature matches the update_* contract plus the per-cycle context.
+---
+---Failure contract: like the status twin, every fallible call happens
+---before state mutation and raises on failure, so Repo:tasks can degrade
+---this module to the CLI backend for the cycle.
 ---@param repo_state NeogitRepoState
 ---@param _filter table?
 ---@param ctx { repo: table? }? per-refresh repository handle
 function M.update_recent(repo_state, _filter, ctx)
-  repo_state.recent = { items = {} }
-
   local count = config.values.status.recent_commit_count
   if count <= 0 then
+    repo_state.recent = { items = {} }
     return
   end
 
@@ -171,7 +174,7 @@ function M.update_recent(repo_state, _filter, ctx)
   git2.run(function()
     local repo = (ctx and ctx.repo) or git2.open_repo(worktree_root(), true)
     if not repo then
-      return
+      error(("libgit2: cannot open repository at %q"):format(worktree_root()))
     end
 
     local git = require("neogit.lib.git")
@@ -211,7 +214,7 @@ function M.update_recent(repo_state, _filter, ctx)
       }
     end
 
-    repo_state.recent.items = util.filter_map(records, git.log.present_commit)
+    repo_state.recent = { items = util.filter_map(records, git.log.present_commit) }
   end)
 end
 
@@ -445,7 +448,14 @@ function M.list(options, graph, files, graph_color)
     end
 
     return out
-  end) or {}
+  end)
+
+  if records == nil then
+    -- repository open failed (logged in git2.open_repo): return nil so the
+    -- CLI dispatcher in git/log.lua falls back instead of silently serving
+    -- an empty log view
+    return nil
+  end
 
   if vim.tbl_isempty(records) then
     return {}
