@@ -250,6 +250,9 @@ neogit.setup {
   notification_icon = "󰊢",
   status = {
     show_head_commit_hash = true,
+    -- Show a subtle "No changes" placeholder in place of the file sections
+    -- when the worktree is clean, instead of them silently vanishing.
+    show_no_changes = true,
     recent_commit_count = 10,
     HEAD_padding = 10,
     HEAD_folded = false,
