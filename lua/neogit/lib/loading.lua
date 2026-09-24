@@ -53,10 +53,14 @@ local function render()
   -- Full-width banner with one blank padding row above and below the text
   -- row; every row is padded to the full width so the highlight paints the
   -- whole strip as the background, and the icon+text centers inside it.
+  -- Centering uses display width, not byte length: the braille/check icons
+  -- are multi-byte but single-cell, and byte math leaves the row shorter
+  -- than the window, so the last cells miss the banner highlight.
   local width = vim.o.columns
   local inner = ("%s %s"):format(icon, state.text)
-  local pad = math.max(math.floor((width - #inner) / 2), 0)
-  local trailing = math.max(width - pad - #inner, 0)
+  local inner_width = vim.fn.strdisplaywidth(inner)
+  local pad = math.max(math.floor((width - inner_width) / 2), 0)
+  local trailing = math.max(width - pad - inner_width, 0)
   local content = ("%s%s%s"):format((" "):rep(pad), inner, (" "):rep(trailing))
   local blank = (" "):rep(width)
 
