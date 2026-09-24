@@ -835,6 +835,20 @@ function M.Status(state, config)
   local show_staged = #state.staged.items > 0
     and not config.sections.staged.hidden
 
+  -- Explicit "No changes" placeholder: when the worktree is clean the file
+  -- sections above silently vanish, so render a subtle marker in their slot
+  -- instead. Skipped when every file section is hidden by config (the user
+  -- wants no file-change information at all).
+  local show_no_changes = config.status.show_no_changes ~= false
+    and #state.untracked.items == 0
+    and #state.unstaged.items == 0
+    and #state.staged.items == 0
+    and not (
+      config.sections.untracked.hidden
+      and config.sections.unstaged.hidden
+      and config.sections.staged.hidden
+    )
+
   local show_upstream_unpulled = #state.upstream.unpulled.items > 0
     and not config.sections.unpulled_upstream.hidden
 
@@ -949,6 +963,11 @@ function M.Status(state, config)
           folded = config.sections.bisect.folded,
           name = "bisect",
         },
+        show_no_changes and row {
+          text("  "),
+          text.highlight("NeogitSubtleText")("No changes"),
+        },
+        show_no_changes and EmptyLine(),
         show_untracked and Section {
           title = SectionTitle { title = "Untracked files", highlight = "NeogitUntrackedfiles", icon = section_icons.untracked },
           count = true,
