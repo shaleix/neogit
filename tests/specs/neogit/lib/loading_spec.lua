@@ -39,13 +39,24 @@ describe("lib.loading", function()
     assert.equal(vim.o.columns, #(lines[1] or ""), "padding row must fill the width")
     assert.equal(vim.o.columns, #(lines[3] or ""), "padding row must fill the width")
 
-    -- the icon+text centers inside the full-width banner (byte-length math
-    -- is approximate around the multi-byte icon, so compare side padding)
+    -- The content row must span the full window width exactly (measured in
+    -- display cells; the byte count differs because the icon is multi-byte),
+    -- so the banner highlight reaches the last cell. Byte-length centering
+    -- with the multi-byte spinner icon left the row 2 cells short, exposing
+    -- two unhighlighted cells at the right edge.
     local line = content()
-    local leading = #(line:match("^%s*"))
-    local trailing = #(line:match("%s*$"))
+    assert.equal(
+      vim.o.columns,
+      vim.fn.strdisplaywidth(line),
+      "content row must fill the full width (no background gap on the right)"
+    )
+
+    -- Centering uses display width (icons are multi-byte, single-cell), so
+    -- compare display widths of the side paddings, not byte counts.
+    local leading = vim.fn.strdisplaywidth(line:match("^%s*"))
+    local trailing = vim.fn.strdisplaywidth(line:match("%s*$"))
     assert.truthy(
-      math.abs(leading - trailing) <= 4,
+      math.abs(leading - trailing) <= 1,
       ("text must be centered (leading=%d trailing=%d)"):format(leading, trailing)
     )
 
@@ -78,6 +89,12 @@ describe("lib.loading", function()
     assert.truthy(content():find("✗", 1, true), "failure icon")
     local s = loading.internal.state
     assert.truthy(s.result and s.result.hl == "NeogitSpinnerWarn", "warn highlight")
+
+    -- The result state repaints the banner with the multi-byte check/cross
+    -- icon, so its row must be display-width-correct too (byte count
+    -- exceeds the cell count).
+    local result_line = content()
+    assert.equal(vim.o.columns, vim.fn.strdisplaywidth(result_line), "result row must fill the full width")
   end)
 
   it("re-showing resets a settled result", function()
