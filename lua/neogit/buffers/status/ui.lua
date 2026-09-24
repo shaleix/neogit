@@ -515,6 +515,9 @@ local function render_file_tree(section, config, node, depth)
       foldable = true,
       folded = false,
       id = ("%s--tree:%s"):format(section, dir.path),
+      -- Marks this as a directory row so cursor-based actions (stage,
+      -- unstage, ...) can find the subtree path under the cursor.
+      directory = dir.path,
     }))
   end
 

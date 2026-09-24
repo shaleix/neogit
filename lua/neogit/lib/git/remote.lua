@@ -1,5 +1,6 @@
 local git = require("neogit.lib.git")
 local util = require("neogit.lib.util")
+local logger = require("neogit.logger")
 local backend = require("neogit.lib.git.backend")
 
 ---@class NeogitGitRemote
@@ -64,7 +65,14 @@ end
 ---@return string[]
 M.list = util.memoize(function()
   if backend.capability("query_remote_list") == "libgit2" then
-    return require("neogit.lib.git.libgit2.remote").list()
+    local result = require("neogit.lib.git.libgit2.remote").list()
+    if result ~= nil then
+      return result
+    end
+
+    -- twin could not serve (logged in the twin): fall back instead of
+    -- memoizing a false "no remotes" for the rest of the session
+    logger.warn("[REMOTE]: libgit2 list unavailable - falling back to CLI")
   end
 
   return git.cli.remote.call({ hidden = true }).stdout

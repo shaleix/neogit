@@ -1,6 +1,7 @@
 local git = require("neogit.lib.git")
 local Path = require("neogit.lib.path")
 local util = require("neogit.lib.util")
+local logger = require("neogit.logger")
 local backend = require("neogit.lib.git.backend")
 local GitResult = require("neogit.lib.git.result")
 
@@ -88,14 +89,18 @@ end
 
 ---@param patch string diff generated with M.generate_patch
 ---@param opts table
----@return table
+---@return GitResult
 function M.apply(patch, opts)
   opts = opts or { reverse = false, cached = false, index = false }
 
   -- Reverse application has no libgit2 equivalent: CLI only.
   if not opts.reverse and backend.capability("index_write") == "libgit2" then
-    local ok = require("neogit.lib.git.libgit2.index").apply_patch(patch, opts)
-    return GitResult.new(ok and 0 or 1)
+    local result = require("neogit.lib.git.libgit2.index").apply_patch(patch, opts)
+    if result ~= nil then
+      return result
+    end
+
+    logger.warn("[INDEX]: libgit2 apply unavailable (repo open failed) - falling back to CLI")
   end
 
   local cmd = git.cli.apply
@@ -112,31 +117,49 @@ function M.apply(patch, opts)
     cmd = cmd.index
   end
 
-  return cmd.ignore_space_change.with_patch(patch).call { await = true }
+  return GitResult.from_process(cmd.ignore_space_change.with_patch(patch).call { await = true })
 end
 
+---@return GitResult
 function M.add(files)
   if backend.capability("index_write") == "libgit2" then
-    return require("neogit.lib.git.libgit2.index").stage(files)
+    local result = require("neogit.lib.git.libgit2.index").stage(files)
+    if result ~= nil then
+      return result
+    end
+
+    logger.warn("[INDEX]: libgit2 stage unavailable (repo open failed) - falling back to CLI")
   end
 
-  return git.cli.add.files(unpack(files)).call { await = true }
+  return GitResult.from_process(git.cli.add.files(unpack(files)).call { await = true })
 end
 
+---@return GitResult
 function M.checkout(files)
   if backend.capability("index_write") == "libgit2" then
-    return require("neogit.lib.git.libgit2.index").checkout_files(files)
+    local result = require("neogit.lib.git.libgit2.index").checkout_files(files)
+    if result ~= nil then
+      return result
+    end
+
+    logger.warn("[INDEX]: libgit2 checkout unavailable (repo open failed) - falling back to CLI")
   end
 
-  return git.cli.checkout.files(unpack(files)).call { await = true }
+  return GitResult.from_process(git.cli.checkout.files(unpack(files)).call { await = true })
 end
 
+---@return GitResult
 function M.reset(files)
   if backend.capability("index_write") == "libgit2" then
-    return require("neogit.lib.git.libgit2.index").reset_files(files)
+    local result = require("neogit.lib.git.libgit2.index").reset_files(files)
+    if result ~= nil then
+      return result
+    end
+
+    logger.warn("[INDEX]: libgit2 reset unavailable (repo open failed) - falling back to CLI")
   end
 
-  return git.cli.reset.files(unpack(files)).call { await = true }
+  return GitResult.from_process(git.cli.reset.files(unpack(files)).call { await = true })
 end
 
 function M.reset_HEAD(...)
@@ -173,7 +196,9 @@ end
 function M.update()
   require("neogit.process")
     .new({
-      cmd = { "git", "update-index", "-q", "--refresh" },
+      -- not via cli.lua on purpose (see above), but the configured git
+      -- executable must still be honored
+      cmd = { require("neogit.config").get_git_executable(), "update-index", "-q", "--refresh" },
       on_error = function(_)
         return false
       end,

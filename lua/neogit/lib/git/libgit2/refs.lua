@@ -4,6 +4,7 @@
 local config = require("neogit.config")
 local util = require("neogit.lib.util")
 local git2 = require("neogit.lib.git2")
+local logger = require("neogit.logger")
 local sort_refs = require("neogit.lib.git.libgit2").sort_refs
 
 local M = {}
@@ -14,8 +15,9 @@ end
 
 ---List refs under the given namespaces, short names, config-sorted.
 ---Mirrors refs.M.list(namespaces) for the default %(refname) format.
+---Returns nil when the repository cannot be opened (dispatcher falls back).
 ---@param namespaces? string[] e.g. { "^refs/heads/" }
----@return string[]
+---@return string[]?
 function M.list(namespaces)
   namespaces = namespaces or { "^refs/" }
 
@@ -57,6 +59,8 @@ function M.list(namespaces)
       if ok and commit then
         local sig = lg2.C.git_commit_committer(commit.commit)
         entry.time = tonumber(sig.when.time) or 0
+      elseif not ok then
+        logger.debug(("[LG2:REFS]: commit time lookup failed for %q: %s"):format(full, tostring(commit)))
       end
 
       entries[#entries + 1] = entry
@@ -69,7 +73,7 @@ function M.list(namespaces)
       local name, _ = e.name:gsub("^refs/[^/]*/", "")
       return name
     end)
-  end) or {}
+  end)
 end
 
 return M

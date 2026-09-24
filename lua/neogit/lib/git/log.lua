@@ -3,6 +3,7 @@ local util = require("neogit.lib.util")
 local config = require("neogit.config")
 local record = require("neogit.lib.record")
 local state = require("neogit.lib.state")
+local logger = require("neogit.logger")
 local backend = require("neogit.lib.git.backend")
 
 ---@class NeogitGitLog
@@ -427,7 +428,12 @@ function M.list(options, graph, files, hidden, graph_color)
     backend.capability("query_log_list") == "libgit2"
     and require("neogit.lib.git.libgit2.log").supports(options, files)
   then
-    return require("neogit.lib.git.libgit2.log").list(options, graph, files, graph_color)
+    local records = require("neogit.lib.git.libgit2.log").list(options, graph, files, graph_color)
+    if records ~= nil then
+      return records
+    end
+
+    logger.debug("[LOG]: libgit2 list unavailable - falling back to CLI")
   end
 
   return list_cli(options, graph, files, hidden, graph_color)
@@ -482,7 +488,14 @@ end
 
 function M.message(commit)
   if backend.capability("query_log_message") == "libgit2" then
-    return require("neogit.lib.git.libgit2.log").message(commit)
+    local msg = require("neogit.lib.git.libgit2.log").message(commit)
+    if msg ~= nil then
+      return msg
+    end
+
+    -- Either the commit is unknown (the CLI answers nil too) or the repo
+    -- could not be opened (the CLI can still serve) - fall through.
+    logger.debug(("[LOG]: libgit2 message(%s) unavailable - falling back to CLI"):format(tostring(commit)))
   end
 
   return git.cli.log.max_count(1).format("%s").args(commit).call({ hidden = true }).stdout[1]

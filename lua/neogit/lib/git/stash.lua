@@ -3,6 +3,7 @@ local input = require("neogit.lib.input")
 local util = require("neogit.lib.util")
 local config = require("neogit.config")
 local event = require("neogit.lib.event")
+local logger = require("neogit.logger")
 local backend = require("neogit.lib.git.backend")
 
 ---@class NeogitGitStash
@@ -69,7 +70,14 @@ end
 
 function M.list()
   if backend.capability("query_stash_list") == "libgit2" then
-    return require("neogit.lib.git.libgit2.stash").list()
+    local result = require("neogit.lib.git.libgit2.stash").list()
+    if result ~= nil then
+      return result
+    end
+
+    -- twin could not serve (repo open / foreach failure, logged in the
+    -- twin): fall back instead of reporting "no stashes"
+    logger.warn("[STASH]: libgit2 list unavailable - falling back to CLI")
   end
 
   return git.cli.stash.args("list").call({ hidden = true }).stdout

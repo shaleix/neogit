@@ -8,6 +8,7 @@
 --     out of scope)
 local git2 = require("neogit.lib.git2")
 local bit = require("bit")
+local logger = require("neogit.logger")
 
 local M = {}
 
@@ -50,6 +51,7 @@ local function conflict_mode(index, path)
   end)
 
   if not ok then
+    logger.debug(("[LG2:STATUS]: git_index_conflict_get failed for %q - assuming UU"):format(path))
     return "UU"
   end
 
@@ -75,6 +77,7 @@ local function submodule_flags(repo, path)
   end)
 
   if not ok then
+    logger.debug(("[LG2:STATUS]: git_submodule_status failed for %q - dropping submodule flags"):format(path))
     return nil
   end
 
@@ -87,25 +90,21 @@ local function submodule_flags(repo, path)
 end
 
 ---update_status twin. Signature matches the update_* contract plus ctx.
+---
+---Failure contract: every fallible call (repo open, status list) happens
+---BEFORE any state mutation and raises on failure, so Repo:tasks can log
+---the error and re-run this module on the CLI backend with the previous
+---state (and its diff caches) intact.
 ---@param state NeogitRepoState
 ---@param filter table
 ---@param ctx { repo: table? }?
 function M.update_status(state, filter, ctx)
   local status = require("neogit.lib.git.status")
-  local old_files = {
-    staged_files = status.internal.item_collection(state, "staged", filter),
-    unstaged_files = status.internal.item_collection(state, "unstaged", filter),
-    untracked_files = status.internal.item_collection(state, "untracked", filter),
-  }
-
-  state.staged.items = {}
-  state.untracked.items = {}
-  state.unstaged.items = {}
 
   git2.run(function()
     local repo = (ctx and ctx.repo) or git2.open_repo(worktree_root(), true)
     if not repo then
-      return
+      error(("libgit2: cannot open repository at %q"):format(worktree_root()))
     end
 
     local lg2 = git2.binding.libgit2()
@@ -124,8 +123,20 @@ function M.update_status(state, filter, ctx)
 
     local list = ffi.new("git_status_list*[1]")
     if lg2.C.git_status_list_new(list, repo.repo, opts) ~= 0 then
-      return
+      error(git2.git_result(nil, "libgit2: git_status_list_new failed: ").message)
     end
+
+    -- Past every fallible boundary: only now start mutating state, so a
+    -- mid-loop surprise still leaves the CLI fallback with coherent data.
+    local old_files = {
+      staged_files = status.internal.item_collection(state, "staged", filter),
+      unstaged_files = status.internal.item_collection(state, "unstaged", filter),
+      untracked_files = status.internal.item_collection(state, "untracked", filter),
+    }
+
+    state.staged.items = {}
+    state.untracked.items = {}
+    state.unstaged.items = {}
 
     local delta_names = {}
     for k, v in pairs(lg2.GIT_DELTA) do
@@ -276,6 +287,8 @@ function M.update_status(state, filter, ctx)
 end
 
 -- Quick checks replacing the porcelain scans in anything_staged/unstaged.
+-- Returns nil (not false) when libgit2 cannot serve the query, so callers
+-- can distinguish "no changes" from "unknown" and fall back to the CLI.
 local function any_worktree_change(repo, staged)
   local lg2 = git2.binding.libgit2()
   local ffi = require("ffi")
@@ -286,7 +299,13 @@ local function any_worktree_change(repo, staged)
 
   local list = ffi.new("git_status_list*[1]")
   if lg2.C.git_status_list_new(list, repo.repo, opts) ~= 0 then
-    return false
+    logger.debug(
+      ("[LG2:STATUS]: git_status_list_new failed in anything_%s: %s"):format(
+        staged and "staged" or "unstaged",
+        git2.git_result(nil, "").message
+      )
+    )
+    return nil
   end
 
   local mask
@@ -320,18 +339,20 @@ local function any_worktree_change(repo, staged)
   return found
 end
 
----@return boolean
+---nil when libgit2 could not serve the query (dispatcher falls back to CLI).
+---@return boolean?
 function M.anything_staged()
   return git2.with_repo(worktree_root(), function(repo)
     return any_worktree_change(repo, true)
-  end) == true
+  end)
 end
 
----@return boolean
+---nil when libgit2 could not serve the query (dispatcher falls back to CLI).
+---@return boolean?
 function M.anything_unstaged()
   return git2.with_repo(worktree_root(), function(repo)
     return any_worktree_change(repo, false)
-  end) == true
+  end)
 end
 
 return M

@@ -120,6 +120,9 @@ function M.new(config, root, cwd)
     fold_state = nil,
     cursor_state = nil,
     view_state = nil,
+    -- dispatch_refresh coalescing (per instance, see merge_partial)
+    _refresh_scheduled = false,
+    _pending_partial = nil,
   }
 
   setmetatable(instance, M)
@@ -484,18 +487,45 @@ function M:redraw(cursor, view, fold_state)
   end
 end
 
-local refresh_scheduled = false
+---Merge two partial refresh specs: nil means "full refresh" and absorbs
+---the other side; otherwise the update_diffs filters are unioned, so
+---dispatches coalesced into one tick cannot lose diff-cache invalidations.
+local function merge_partial(a, b)
+  if a == nil or b == nil then
+    return nil
+  end
+
+  local merged, seen = {}, {}
+  for _, spec in ipairs { a, b } do
+    for _, f in ipairs(spec.update_diffs or {}) do
+      if not seen[f] then
+        seen[f] = true
+        table.insert(merged, f)
+      end
+    end
+  end
+
+  return { update_diffs = merged }
+end
 
 M.dispatch_refresh = a.void(function(self, partial, reason)
-  if refresh_scheduled then
+  -- Per-instance coalescing: the old module-level flag let a scheduled
+  -- refresh for one buffer silently drop dispatches from every other
+  -- instance in the same tick (e.g. parent repo + submodule status
+  -- buffers), losing their partial diff invalidations with it.
+  if self._refresh_scheduled then
+    self._pending_partial = merge_partial(self._pending_partial, partial)
     return
   end
 
-  refresh_scheduled = true
+  self._refresh_scheduled = true
+  self._pending_partial = partial
 
   vim.schedule(function()
-    refresh_scheduled = false
-    self:refresh(partial, reason)
+    self._refresh_scheduled = false
+    local merged = self._pending_partial
+    self._pending_partial = nil
+    self:refresh(merged, reason)
   end)
 end)
 

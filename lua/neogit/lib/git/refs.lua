@@ -2,6 +2,7 @@ local git = require("neogit.lib.git")
 local config = require("neogit.config")
 local record = require("neogit.lib.record")
 local util = require("neogit.lib.util")
+local logger = require("neogit.logger")
 local backend = require("neogit.lib.git.backend")
 
 ---@class NeogitGitRefs
@@ -18,8 +19,21 @@ end)
 
 ---@return string[]
 function M.list(namespaces, format, sortby)
-  if not format and backend.capability("query_refs_listing") == "libgit2" then
-    return require("neogit.lib.git.libgit2.refs").list(namespaces)
+  -- The twin mirrors only the default listing (refname format, sorted by
+  -- config.sort_branches). An explicit format OR sortby must stay on the
+  -- CLI: the twin honors neither, and silently ignoring the caller's sort
+  -- order is worse than one spawn.
+  if not format and not sortby and backend.capability("query_refs_listing") == "libgit2" then
+    local ok, result = xpcall(require("neogit.lib.git.libgit2.refs").list, debug.traceback, namespaces)
+    if ok and result ~= nil then
+      return result
+    end
+
+    if not ok then
+      logger.debug("[REFS]: libgit2 listing failed - falling back to CLI:\n" .. tostring(result))
+    else
+      logger.debug("[REFS]: libgit2 listing unavailable - falling back to CLI")
+    end
   end
 
   local filter = util.map(namespaces or {}, function(namespace)

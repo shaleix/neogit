@@ -1,7 +1,12 @@
 -- libgit2 twins for git.branch read queries: current branch, existence, and
 -- the branch listings used by fuzzy finders (zero-spawn interactions).
+--
+-- Failure contract: twins return nil (or raise, where nil is a legitimate
+-- answer) when libgit2 cannot serve the query; the CLI-side dispatchers in
+-- git/branch.lua detect that and fall back to the CLI backend.
 local config = require("neogit.config")
 local git2 = require("neogit.lib.git2")
+local logger = require("neogit.logger")
 local sort_refs = require("neogit.lib.git.libgit2").sort_refs
 
 local M = {}
@@ -74,6 +79,8 @@ end
 
 ---Current branch shorthand, or nil on detached/unborn HEAD.
 ---Mirrors git.branch.current()'s state-first contract.
+---Raises when the repository cannot be opened (nil is a legitimate
+---"detached" answer here, so failures must be distinguishable).
 ---@return string?
 function M.current()
   local cached = require("neogit.lib.git").repo.state.head.branch
@@ -81,7 +88,12 @@ function M.current()
     return cached
   end
 
-  return git2.with_repo(worktree_root(), current_branch)
+  local repo = git2.open_repo(worktree_root(), true)
+  if not repo then
+    error(("libgit2: cannot open repository at %q"):format(worktree_root()))
+  end
+
+  return current_branch(repo)
 end
 
 ---Full ref name of the current branch ("refs/heads/<name>"), nil when detached.
@@ -93,18 +105,42 @@ function M.current_full_name()
   end
 end
 
----Does a local branch exist?
+---Does a local branch exist? Returns nil when libgit2 cannot answer
+---(repo open failure or an unexpected lookup error), so the dispatcher
+---can fall back to the CLI instead of reporting a false negative.
 ---@param branch string
----@return boolean
+---@return boolean?
 function M.exists(branch)
-  return git2.with_repo(worktree_root(), function(repo)
-    local ref = repo:branch_lookup(branch, git2.binding.libgit2().GIT_BRANCH.LOCAL)
-    return ref ~= nil
-  end) == true
+  local repo = git2.open_repo(worktree_root(), true)
+  if not repo then
+    return nil
+  end
+
+  local lg2 = git2.binding.libgit2()
+  local ref, err = repo:branch_lookup(branch, lg2.GIT_BRANCH.LOCAL)
+  if ref then
+    return true
+  end
+
+  if err == lg2.GIT_ERROR.GIT_ENOTFOUND then
+    return false
+  end
+
+  logger.debug(
+    ("[LG2:BRANCH]: branch_lookup(%q) failed with code %s: %s")
+      :format(branch, tostring(err), git2.git_result(err, "").message)
+  )
+  return nil
 end
 
 local function list_branches(repo, locals, remotes, include_current, sortby)
-  local branches = repo:branches(locals, remotes) or {}
+  local branches, err = repo:branches(locals, remotes)
+  if not branches then
+    -- iterator creation failed: raise so the dispatcher degrades to CLI
+    -- instead of showing an empty fuzzy finder
+    local msg = git2.git_result(err, "").message
+    error(("libgit2: branch iterator failed (code %s): %s"):format(tostring(err), msg))
+  end
 
   local current = current_branch(repo)
   local entries = {}
@@ -127,6 +163,10 @@ local function list_branches(repo, locals, remotes, include_current, sortby)
           local lg2 = git2.binding.libgit2()
           local sig = lg2.C.git_commit_committer(commit.commit)
           entry.time = tonumber(sig.when.time) or 0
+        elseif not ok then
+          logger.debug(
+            ("[LG2:BRANCH]: commit time lookup failed for %q: %s"):format(tostring(b.name), tostring(commit))
+          )
         end
 
         entries[#entries + 1] = entry
@@ -143,28 +183,31 @@ local function list_branches(repo, locals, remotes, include_current, sortby)
   return names
 end
 
+-- Listings return nil when the repository cannot be opened, and raise when
+-- the branch iterator fails; both cases make the CLI dispatcher fall back.
+
 ---@param include_current? boolean
----@return string[]
+---@return string[]?
 function M.get_local_branches(include_current)
   return git2.with_repo(worktree_root(), function(repo)
     return list_branches(repo, true, false, include_current, config.values.sort_branches)
-  end) or {}
+  end)
 end
 
 ---@param include_current? boolean
----@return string[]
+---@return string[]?
 function M.get_remote_branches(include_current)
   return git2.with_repo(worktree_root(), function(repo)
     return list_branches(repo, false, true, include_current, config.values.sort_branches)
-  end) or {}
+  end)
 end
 
 ---@param include_current? boolean
----@return string[]
+---@return string[]?
 function M.get_all_branches(include_current)
   return git2.with_repo(worktree_root(), function(repo)
     return list_branches(repo, true, true, include_current, config.values.sort_branches)
-  end) or {}
+  end)
 end
 
 return M

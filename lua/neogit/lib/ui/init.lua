@@ -582,6 +582,53 @@ function Ui:get_item_under_cursor()
   return component and component.options.item
 end
 
+---File-tree directory row under the cursor, if any. Only matches the row
+---itself - a file row nested inside a directory is not "on" the directory.
+---@return Component|nil
+function Ui:get_directory_under_cursor()
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local node = self.node_index:find_by_line(cursor[1])[1]
+
+  while node do
+    if node.options.directory ~= nil then
+      return node
+    end
+
+    -- Reaching a file/hunk row first means the cursor is inside the
+    -- directory's subtree, not on the directory row itself.
+    if node.options.item ~= nil or node.options.filename ~= nil or node.options.hunk ~= nil then
+      return nil
+    end
+
+    node = node.parent
+  end
+
+  return nil
+end
+
+---File items rendered within a component's subtree (e.g. everything under a
+---file-tree directory row), in display order. Fold state does not matter:
+---folded children stay in the layout, only the display collapses.
+---@param component Component
+---@return StatusItem[]
+function Ui:files_in_component(component)
+  local files = {}
+
+  local function walk(node)
+    if node.options.item then
+      table.insert(files, node.options.item)
+    end
+
+    for _, child in ipairs(node.children or {}) do
+      walk(child)
+    end
+  end
+
+  walk(component)
+
+  return files
+end
+
 ---@param layout table
 ---@return table[]
 local function filter_layout(layout)

@@ -27,8 +27,9 @@ function M.hunk(hunk, _)
   if result:success() then
     return true, nil
   else
-    -- Extract error message from stderr, or provide default
-    local error_msg = #result.stderr > 0 and table.concat(result.stderr, "\n") or "Failed to apply patch"
+    -- index.apply returns a backend-neutral GitResult: the CLI stderr (or
+    -- the libgit2 error text) arrives pre-joined in `message`
+    local error_msg = result.message ~= "" and result.message or "Failed to apply patch"
     return false, error_msg
   end
 end

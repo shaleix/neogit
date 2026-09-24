@@ -559,7 +559,8 @@ function M.get_default_values()
       },
       -- Render file sections as a directory tree (diffview-style): foldable
       -- directory rows with a subtree file count, file rows indented and
-      -- showing only their basename. Flat list when false.
+      -- showing only their basename. Flat list when false. Staging/unstaging
+      -- on a directory row applies to the subtree's files, not the section.
       file_tree = false,
     },
     -- AI Commit ("m" in the commit popup). Two ways to configure:

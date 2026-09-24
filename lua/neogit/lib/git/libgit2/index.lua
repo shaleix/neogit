@@ -3,7 +3,14 @@
 --
 -- Divergence: reverse-applying a patch (hunk unstage / discard) has no
 -- libgit2 equivalent — those fall back to the CLI backend by design.
+--
+-- Result contract: every operation returns a GitResult (same shape the CLI
+-- dispatchers wrap ProcessResult into), or nil when the repository could
+-- not be opened - the dispatcher then falls back to the CLI. FFI failures
+-- are logged with the mapped libgit2 error message before being returned.
 local git2 = require("neogit.lib.git2")
+local GitResult = require("neogit.lib.git.result")
+local logger = require("neogit.logger")
 local bit = require("bit")
 
 local M = {}
@@ -28,19 +35,40 @@ local function c_strarray(files)
 end
 
 ---@param files string[]
+---@return GitResult
 local function stage_paths(_repo, index, files)
   local lg2 = git2.binding.libgit2()
 
+  local first_err = 0
   for _, path in ipairs(files) do
+    local code
     if vim.fn.filereadable(worktree_root() .. "/" .. path) == 1 then
-      lg2.C.git_index_add_bypath(index.index, path)
+      code = lg2.C.git_index_add_bypath(index.index, path)
     else
       -- staging a deleted file removes it from the index (git add semantics)
-      lg2.C.git_index_remove_bypath(index.index, path)
+      code = lg2.C.git_index_remove_bypath(index.index, path)
+    end
+
+    if code ~= 0 and first_err == 0 then
+      first_err = code
+      logger.error(("[LG2:INDEX]: staging %q failed: %s"):format(path, git2.git_result(code, "").message))
     end
   end
 
-  lg2.C.git_index_write(index.index)
+  local write_err = lg2.C.git_index_write(index.index)
+  if write_err ~= 0 then
+    -- the index was not persisted: nothing staged actually took effect
+    logger.error(("[LG2:INDEX]: index write failed: %s"):format(git2.git_result(write_err, "").message))
+    if first_err == 0 then
+      first_err = write_err
+    end
+  end
+
+  if first_err ~= 0 then
+    return git2.git_result(first_err, "staging failed: ")
+  end
+
+  return GitResult.new(0)
 end
 
 ---Collect paths with worktree changes (tracked only, or including untracked).
@@ -58,7 +86,8 @@ local function worktree_changed_paths(repo, include_untracked)
 
   local list = ffi.new("git_status_list*[1]")
   if lg2.C.git_status_list_new(list, repo.repo, opts) ~= 0 then
-    return {}
+    logger.error(("[LG2:INDEX]: git_status_list_new failed: %s"):format(git2.git_result(nil, "").message))
+    return nil
   end
 
   local paths = {}
@@ -83,72 +112,83 @@ end
 -- stage / unstage
 --------------------------------------------------------------------------------
 
----@param files string[]
-function M.stage(files)
-  git2.with_repo(worktree_root(), function(repo)
+-- Shared prologue: open repo + index, or report why we could not.
+-- Returns (repo, index) or (nil, GitResult|nil) - nil result means the
+-- repository itself could not be opened (dispatcher falls back to CLI).
+local function with_index(fn)
+  return git2.with_repo(worktree_root(), function(repo)
     local index = repo:index()
     if not index then
-      return
+      return git2.git_result(-1, "libgit2: cannot read the index: ")
     end
 
-    stage_paths(repo, index, files)
+    return fn(repo, index)
+  end)
+end
+
+---@param files string[]
+---@return GitResult? nil when the repository could not be opened
+function M.stage(files)
+  return with_index(function(repo, index)
+    return stage_paths(repo, index, files)
   end)
 end
 
 ---@param paths string[] tracked paths with worktree changes (git add -u)
+---@return GitResult?
 function M.stage_paths_modified(paths)
-  git2.with_repo(worktree_root(), function(repo)
-    local index = repo:index()
-    if not index then
-      return
-    end
-
-    stage_paths(repo, index, paths)
+  return with_index(function(repo, index)
+    return stage_paths(repo, index, paths)
   end)
 end
 
 ---`git add -u`
+---@return GitResult?
 function M.stage_modified()
-  git2.with_repo(worktree_root(), function(repo)
-    local index = repo:index()
-    if not index then
-      return
+  return with_index(function(repo, index)
+    local paths = worktree_changed_paths(repo, false)
+    if not paths then
+      return git2.git_result(-1, "libgit2: status list failed while collecting modified paths")
     end
 
-    stage_paths(repo, index, worktree_changed_paths(repo, false))
+    return stage_paths(repo, index, paths)
   end)
 end
 
 ---`git add -A`
+---@return GitResult?
 function M.stage_all()
-  git2.with_repo(worktree_root(), function(repo)
-    local index = repo:index()
-    if not index then
-      return
+  return with_index(function(repo, index)
+    local paths = worktree_changed_paths(repo, true)
+    if not paths then
+      return git2.git_result(-1, "libgit2: status list failed while collecting changed paths")
     end
 
-    stage_paths(repo, index, worktree_changed_paths(repo, true))
+    return stage_paths(repo, index, paths)
   end)
 end
 
 ---`git reset -- <paths>`: reset index entries to HEAD.
 ---@param files string[]
+---@return GitResult?
 function M.reset_files(files)
-  git2.with_repo(worktree_root(), function(repo)
-    repo:reset_default(files)
+  return git2.with_repo(worktree_root(), function(repo)
+    local err = repo:reset_default(files)
+    if err and err ~= 0 then
+      logger.error(("[LG2:INDEX]: reset failed: %s"):format(git2.git_result(err, "").message))
+      return git2.git_result(err, "reset failed: ")
+    end
+
+    return GitResult.new(0)
   end)
 end
 
 ---`git reset`: reset the whole index to HEAD.
+---@return GitResult?
 function M.reset_all()
-  git2.with_repo(worktree_root(), function(repo)
+  return with_index(function(repo, index)
     local lg2 = git2.binding.libgit2()
     local ffi = require("ffi")
-
-    local index = repo:index()
-    if not index then
-      return
-    end
 
     local count = tonumber(lg2.C.git_index_entrycount(index.index)) or 0
     local paths = {}
@@ -159,9 +199,17 @@ function M.reset_all()
       end
     end
 
-    if #paths > 0 then
-      repo:reset_default(paths)
+    if #paths == 0 then
+      return GitResult.new(0)
     end
+
+    local err = repo:reset_default(paths)
+    if err and err ~= 0 then
+      logger.error(("[LG2:INDEX]: reset failed: %s"):format(git2.git_result(err, "").message))
+      return git2.git_result(err, "reset failed: ")
+    end
+
+    return GitResult.new(0)
   end)
 end
 
@@ -170,15 +218,11 @@ end
 --------------------------------------------------------------------------------
 
 ---@param files string[]
+---@return GitResult?
 function M.checkout_files(files)
-  git2.with_repo(worktree_root(), function(repo)
+  return with_index(function(repo, index)
     local lg2 = git2.binding.libgit2()
     local ffi = require("ffi")
-
-    local index = repo:index()
-    if not index then
-      return
-    end
 
     local opts = ffi.new("git_checkout_options[1]", lg2.GIT_CHECKOUT_OPTIONS_INIT)
     opts[0].checkout_strategy = lg2.GIT_CHECKOUT.FORCE
@@ -187,7 +231,13 @@ function M.checkout_files(files)
     opts[0].paths.strings = paths_spec.strarray.strings
     opts[0].paths.count = paths_spec.strarray.count
 
-    lg2.C.git_checkout_index(repo.repo, index.index, opts)
+    local err = lg2.C.git_checkout_index(repo.repo, index.index, opts)
+    if err ~= 0 then
+      logger.error(("[LG2:INDEX]: checkout failed: %s"):format(git2.git_result(err, "").message))
+      return git2.git_result(err, "checkout failed: ")
+    end
+
+    return GitResult.new(0)
   end)
 end
 
@@ -247,7 +297,7 @@ end
 
 ---@param patch string unified diff, as produced by neogit's hunk serializer
 ---@param opts? { cached?: boolean, index?: boolean }
----@return boolean applied
+---@return GitResult? nil when the repository could not be opened
 function M.apply_patch(patch, opts)
   opts = opts or {}
 
@@ -261,7 +311,9 @@ function M.apply_patch(patch, opts)
 
     local diff_out = ffi.new("git_diff*[1]")
     if lg2.C.git_diff_from_buffer(diff_out, patch, #patch) ~= 0 then
-      return false
+      local result = git2.git_result(nil, "libgit2: patch parse failed: ")
+      logger.debug("[LG2:INDEX]: " .. result.message)
+      return result
     end
 
     local diff = git2mod.Diff.new(diff_out[0])
@@ -274,8 +326,14 @@ function M.apply_patch(patch, opts)
       err = repo:apply_workdir(diff)
     end
 
-    return err == 0
-  end) == true
+    if err ~= 0 then
+      local result = git2.git_result(err, "libgit2: patch application failed: ")
+      logger.debug("[LG2:INDEX]: " .. result.message)
+      return result
+    end
+
+    return GitResult.new(0)
+  end)
 end
 
 return M

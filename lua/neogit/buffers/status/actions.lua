@@ -140,6 +140,16 @@ local function open(type, path, cursor)
   jump.open(type, path, cursor, "[Status - Open]")
 end
 
+---Diff-cache invalidation keys for a set of file items, so a partial
+---refresh drops the cached diffs of exactly those files (both sections).
+---@param items StatusItem[]
+---@return string[]
+local function invalidated_diffs_for(items)
+  return util.map(items, function(item)
+    return "*:" .. item.name
+  end)
+end
+
 local M = {}
 
 ---@param self StatusBuffer
@@ -859,7 +869,11 @@ M.n_discard = function(self)
               git.status.stage { selection.item.name }
             end
           end
-          refresh = { update_diffs = { "unstaged:" .. selection.item.name } }
+          -- Resolution re-stages the file, so BOTH sides' diff caches are
+          -- stale; update_file carries cached diffs into the refreshed
+          -- state, and a single-section filter would keep the other side's
+          -- old diff alive.
+          refresh = { update_diffs = { "*:" .. selection.item.name } }
         else
           message = ("Discard %q?"):format(selection.item.name)
           action = function()
@@ -898,7 +912,11 @@ M.n_discard = function(self)
               git.status.stage { selection.item.name }
             end
           end
-          refresh = { update_diffs = { "unstaged:" .. selection.item.name } }
+          -- Resolution re-stages the file, so BOTH sides' diff caches are
+          -- stale; update_file carries cached diffs into the refreshed
+          -- state, and a single-section filter would keep the other side's
+          -- old diff alive.
+          refresh = { update_diffs = { "*:" .. selection.item.name } }
         else
           message = ("Discard %q?"):format(selection.item.name)
           action = function()
@@ -1267,7 +1285,33 @@ M.n_stage = function(self)
         self:dispatch_refresh({ update_diffs = { "*:" .. stagable.filename } }, "n_stage")
       end
     elseif section then
-      if section.options.section == "untracked" then
+      local directory = self.buffer.ui:get_directory_under_cursor()
+      if directory and (section.options.section == "untracked" or section.options.section == "unstaged") then
+        -- File-tree directory row: restrict the stage to the files in that
+        -- subtree instead of the entire section
+        local items = self.buffer.ui:files_in_component(directory)
+
+        for _, item in ipairs(items) do
+          if git.status.is_unmerged(item.mode) then
+            notification.info("Conflicts must be resolved before staging")
+            return
+          end
+        end
+
+        if #items > 0 then
+          local files = util.map(items, function(item)
+            return item.name
+          end)
+
+          if section.options.section == "untracked" then
+            git.index.add(files)
+          else
+            git.status.stage(files)
+          end
+
+          self:dispatch_refresh({ update_diffs = invalidated_diffs_for(items) }, "n_stage")
+        end
+      elseif section.options.section == "untracked" then
         git.status.stage_untracked()
         self:dispatch_refresh({ update_diffs = { "untracked:*" } }, "n_stage")
       elseif section.options.section == "unstaged" then
@@ -1350,8 +1394,22 @@ M.n_unstage = function(self)
         self:dispatch_refresh({ update_diffs = { "*:" .. unstagable.filename } }, "n_unstage")
       end
     elseif section then
-      git.status.unstage_all()
-      self:dispatch_refresh({ update_diffs = { "*:*" } }, "n_unstage")
+      local directory = self.buffer.ui:get_directory_under_cursor()
+      if directory then
+        -- File-tree directory row: restrict the unstage to the files in
+        -- that subtree instead of unstaging everything
+        local items = self.buffer.ui:files_in_component(directory)
+
+        if #items > 0 then
+          git.status.unstage(util.map(items, function(item)
+            return item.name
+          end))
+          self:dispatch_refresh({ update_diffs = invalidated_diffs_for(items) }, "n_unstage")
+        end
+      else
+        git.status.unstage_all()
+        self:dispatch_refresh({ update_diffs = { "*:*" } }, "n_unstage")
+      end
     end
   end)
 end
