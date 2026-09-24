@@ -161,6 +161,12 @@ function M.setup(config)
   local ok_green = ok_base
   local ok_bg = Color.from_hex(ok_base):shade(bg_factor * -0.35):to_css()
 
+  -- Loading banner background: dark, muted yellow. Shaded deeper than the
+  -- result banners (yellow reads perceptually brighter than green/red) and
+  -- desaturated toward the editor background, so the full-width strip is
+  -- noticeable without shouting for the whole duration of the work.
+  local spinner_bg = Color.from_hex(palette.yellow):shade(bg_factor * -0.45):set_saturation(0.4):to_css()
+
   -- stylua: ignore
   hl_store = {
     NeogitGraphAuthor              = { fg = palette.orange, ctermfg = 3 },
@@ -315,8 +321,11 @@ function M.setup(config)
     NeogitChangeNewFile            = { fg = palette.bg_green, bold = palette.bold, italic = palette.italic, ctermfg = 2 },
     NeogitSectionHeader            = { fg = palette.bg_purple, bold = palette.bold, ctermfg = 5 },
     NeogitSectionHeaderCount       = {},
-    -- Bottom-center loading indicator (lib/loading.lua): full-width banner
-    NeogitSpinner                  = { fg = palette.yellow, bg = palette.bg1, ctermfg = 3, ctermbg = 8 },
+    -- Bottom-center loading indicator (lib/loading.lua): full-width banner.
+    -- All states encode state in the background color with inverted (bg0)
+    -- text; loading uses a muted dark yellow so it doesn't upstage the
+    -- result states.
+    NeogitSpinner                  = { fg = palette.bg0, bg = spinner_bg, bold = palette.bold, ctermfg = 0, ctermbg = 3 },
     NeogitSpinnerSuccess           = { fg = palette.bg0, bg = ok_bg, bold = palette.bold, ctermfg = 0, ctermbg = 2 },
     NeogitSpinnerWarn              = { fg = palette.bg0, bg = palette.bg_yellow, bold = palette.bold, ctermfg = 0, ctermbg = 3 },
     NeogitSpinnerError             = { fg = palette.bg0, bg = palette.bg_red, bold = palette.bold, ctermfg = 0, ctermbg = 1 },
