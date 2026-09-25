@@ -129,6 +129,8 @@ log.new = function(config, standalone)
 
     obj[("fmt_%s"):format(x.name)] = function(...)
       local passed = { ... }
+      -- Forward the varargs: log_at_level bails on empty ones, and the
+      -- format closure below reads them from `passed` instead.
       return log_at_level(i, x, function()
         local fmt = table.remove(passed, 1)
         local inspected = {}
@@ -137,7 +139,7 @@ log.new = function(config, standalone)
         end
 
         return string.format(fmt, unpack(inspected))
-      end)
+      end, ...)
     end
   end
 end
