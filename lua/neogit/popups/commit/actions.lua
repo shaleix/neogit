@@ -169,6 +169,13 @@ function M.ai_commit(popup)
 
   -- Single settlement point: message commits directly, anything else
   -- (empty/nil, error, timeout) falls back to the editor-based flow.
+  -- `finish` fires from vim.schedule/system callbacks, i.e. OUTSIDE any
+  -- async context - but do_commit needs one (the editor path goes through
+  -- client.wrap, which calls async.util.scheduler). Run it in a fresh
+  -- async task; otherwise the fallback/success path dies with
+  -- "wrapped function called outside an async context".
+  local commit_async = a.void(do_commit)
+
   local finish = vim.schedule_wrap(function(message)
     if settled then
       return
@@ -183,23 +190,26 @@ function M.ai_commit(popup)
     if message ~= "" then
       -- msg = {} silences the generic "Committed" notification: the
       -- loading indicator settles into the final message instead.
-      local result = do_commit(popup, {}, { message = message, msg = {} })
-      if result.code == 0 then
-        loading.done(("AI Commit: %s"):format(message), vim.log.levels.INFO)
+      a.run(function()
+        return do_commit(popup, {}, { message = message, msg = {} })
+      end, function(result)
+        if result.code == 0 then
+          loading.done(("AI Commit: %s"):format(message), vim.log.levels.INFO)
 
-        -- The editor-based flow refreshes via NeogitEditorClosed; the -m
-        -- path skips the editor, so refresh the status buffer explicitly.
-        local status = require("neogit.buffers.status")
-        local instance = status.instance()
-        if instance then
-          instance:dispatch_refresh(nil, "ai_commit")
+          -- The editor-based flow refreshes via NeogitEditorClosed; the -m
+          -- path skips the editor, so refresh the status buffer explicitly.
+          local status = require("neogit.buffers.status")
+          local instance = status.instance()
+          if instance then
+            instance:dispatch_refresh(nil, "ai_commit")
+          end
+        else
+          loading.done("AI Commit: commit failed", vim.log.levels.ERROR)
         end
-      else
-        loading.done("AI Commit: commit failed", vim.log.levels.ERROR)
-      end
+      end)
     else
       loading.done("AI Commit: empty message - opening editor instead", vim.log.levels.WARN)
-      do_commit(popup, {}, {})
+      commit_async(popup, {}, {})
     end
   end)
 

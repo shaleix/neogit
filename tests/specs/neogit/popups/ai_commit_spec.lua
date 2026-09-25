@@ -177,6 +177,31 @@ describe("commit popup AI Commit", function()
       assert.equal("https://api.deepseek.com/v1", url, "trailing slash must be trimmed")
     end)
 
+    it("sanitizes invalid UTF-8 in the request body", function()
+      -- A byte-truncated multi-byte char (the staged diff is cut at a byte
+      -- limit) must not reach the server as an invalid code point: API
+      -- servers reject the whole request with HTTP 400 otherwise.
+      local body = ai.build_request_body("m", "sys", "diff with broken tail \xE4\xB8")
+      local decoded = vim.json.decode(body)
+      assert.truthy(decoded.messages[2].content:find("diff with broken tail", 1, true))
+      -- the broken sequence is replaced with U+FFFD, keeping the payload valid
+      assert.equal("\xEF\xBF\xBD", decoded.messages[2].content:sub(-3))
+
+      -- raw-encoded surrogate and invalid lead bytes are replaced per byte
+      body = ai.build_request_body("m", "s", "x\xED\xA0\x80y\xFFz\xC0\x80")
+      decoded = vim.json.decode(body)
+      assert.equal(
+        "x\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBDy\xEF\xBF\xBDz\xEF\xBF\xBD\xEF\xBF\xBD",
+        decoded.messages[2].content
+      )
+
+      -- valid text passes through untouched
+      body = ai.build_request_body("m", "中文 ok", "em-dash —")
+      decoded = vim.json.decode(body)
+      assert.equal("中文 ok", decoded.messages[1].content)
+      assert.equal("em-dash —", decoded.messages[2].content)
+    end)
+
     it("end-to-end: declarative model config commits without a generator", function()
       local dir = workdir()
       vim.cmd.cd(dir)
