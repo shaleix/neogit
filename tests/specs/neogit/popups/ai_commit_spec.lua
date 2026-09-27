@@ -51,9 +51,12 @@ describe("commit popup AI Commit", function()
 
     neogit.action("commit", "ai_commit", {})()
 
-    assert.truthy(vim.wait(10000, function()
-      return last_message(dir) == "generated: add file"
-    end), "commit with generated message never landed")
+    assert.truthy(
+      vim.wait(10000, function()
+        return last_message(dir) == "generated: add file"
+      end),
+      "commit with generated message never landed"
+    )
   end)
 
   it("refreshes the status buffer after committing", function()
@@ -83,9 +86,12 @@ describe("commit popup AI Commit", function()
       end,
     })
     buf:dispatch_refresh()
-    assert.truthy(vim.wait(10000, function()
-      return fired
-    end, 10), "initial refresh did not complete")
+    assert.truthy(
+      vim.wait(10000, function()
+        return fired
+      end, 10),
+      "initial refresh did not complete"
+    )
     vim.wait(100)
     local baseline = refreshed
 
@@ -94,9 +100,12 @@ describe("commit popup AI Commit", function()
     end
     neogit.action("commit", "ai_commit", {})()
 
-    assert.truthy(vim.wait(10000, function()
-      return refreshed > baseline
-    end, 10), "status buffer must refresh after an AI commit")
+    assert.truthy(
+      vim.wait(10000, function()
+        return refreshed > baseline
+      end, 10),
+      "status buffer must refresh after an AI commit"
+    )
   end)
 
   it("warns instead of committing when no generator is configured", function()
@@ -145,8 +154,7 @@ describe("commit popup AI Commit", function()
     local ai = require("neogit.lib.ai")
 
     it("builds conventional-commit prompts from the context", function()
-      local system_prompt, user_prompt =
-        ai.build_prompts({ files = { "a.lua" }, diff = "+x" }, nil)
+      local system_prompt, user_prompt = ai.build_prompts({ files = { "a.lua" }, diff = "+x" }, nil)
       assert.truthy(system_prompt:find("conventional", 1, true))
       assert.truthy(user_prompt:find("a.lua", 1, true))
       assert.truthy(user_prompt:find("+x", 1, true))
@@ -158,11 +166,11 @@ describe("commit popup AI Commit", function()
     end)
 
     it("parses chat/completions responses and rejects malformed ones", function()
-      local ok_body = vim.json.encode({ choices = { { message = { content = "  feat: x \n" } } } })
+      local ok_body = vim.json.encode { choices = { { message = { content = "  feat: x \n" } } } }
       assert.equal("feat: x", ai.parse_response(ok_body))
       assert.equal("", ai.parse_response("not json"))
-      assert.equal("", ai.parse_response(vim.json.encode({ choices = {} })))
-      assert.equal("", ai.parse_response(vim.json.encode({ error = "x" })))
+      assert.equal("", ai.parse_response(vim.json.encode { choices = {} }))
+      assert.equal("", ai.parse_response(vim.json.encode { error = "x" }))
     end)
 
     it("resolves endpoints per backend", function()
@@ -210,8 +218,8 @@ describe("commit popup AI Commit", function()
       -- Intercept the process seam: pretend to be the backend.
       local real_spawn = ai.internal.spawn
       ai.internal.spawn = function(_args, cb)
-        local body = vim.json.encode({ choices = { { message = { content = "feat: via builtin" } } } })
-        cb({ code = 0, stdout = body })
+        local body = vim.json.encode { choices = { { message = { content = "feat: via builtin" } } } }
+        cb { code = 0, stdout = body }
       end
 
       config.values.ai_commit = {

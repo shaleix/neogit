@@ -30,7 +30,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           version: latest
-          args: --check --glob '!lua/neogit/lib/vendor/**' --glob '**/*.lua' lua tests
+          # NB: stylua-action passes args straight to the binary (no shell),
+          # so quoting the globs would make them match nothing and silently
+          # skip every file.
+          args: --check --glob !lua/neogit/lib/vendor/** --glob **/*.lua lua tests
 
   ruby_lint:
     name: Rubocop

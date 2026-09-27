@@ -62,9 +62,12 @@ describe("lib.loading", function()
 
     -- spinner animates
     local first = content()
-    assert.truthy(vim.wait(500, function()
-      return content() ~= first
-    end), "spinner frames must animate")
+    assert.truthy(
+      vim.wait(500, function()
+        return content() ~= first
+      end),
+      "spinner frames must animate"
+    )
   end)
 
   it("settles into a colored result state and auto-dismisses", function()
@@ -77,9 +80,12 @@ describe("lib.loading", function()
     local s = loading.internal.state
     assert.truthy(s.result and s.result.hl == "NeogitSpinnerSuccess", "success highlight")
 
-    assert.truthy(vim.wait(5000, function()
-      return not loading.is_active()
-    end), "window must auto-dismiss after lingering")
+    assert.truthy(
+      vim.wait(5000, function()
+        return not loading.is_active()
+      end),
+      "window must auto-dismiss after lingering"
+    )
   end)
 
   it("uses warn styling for failures and lingers longer", function()

@@ -88,6 +88,10 @@ function M.rename(stash)
   local message = input.get_user_input("rename", { prepend = current })
   if message then
     local oid = git.rev_parse.oid(stash)
+    -- Resolve BEFORE the destructive drop and refuse to proceed without a
+    -- valid oid: dropping first and failing in `stash store` afterwards
+    -- would silently lose the stash.
+    assert(oid and oid ~= "", ("could not resolve %s - refusing to drop it"):format(tostring(stash)))
     git.cli.stash.drop.args(stash).call()
     git.cli.stash.store.message(message).args(oid).call()
   end

@@ -59,7 +59,9 @@ local function utf8_seq_len(b)
   return nil -- invalid lead byte (overlong C0/C1, F5-FF)
 end
 
-local REPLACEMENT_CHAR = "\xEF\xBF\xBD"
+-- U+FFFD REPLACEMENT CHARACTER; decimal escapes keep selene's Lua 5.1
+-- string lint happy (\xNN is a 5.2/LuaJIT extension).
+local REPLACEMENT_CHAR = "\239\191\189"
 
 ---@param s string
 ---@return string

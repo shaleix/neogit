@@ -138,10 +138,12 @@ describe("status diff_preview", function()
     config.values.status.diff_preview = { enabled = "yes", debounce = "soon" }
     assert.truthy(vim.tbl_count(config.validate_config()) > 0, "types must be checked")
 
-    config.values.status.diff_preview = { enabled = true, kind = "split", debounce = 100, content = "not-a-fn" }
+    config.values.status.diff_preview =
+      { enabled = true, kind = "split", debounce = 100, content = "not-a-fn" }
     assert.truthy(vim.tbl_count(config.validate_config()) > 0, "content must be a function")
 
-    config.values.status.diff_preview = { enabled = true, kind = "split", debounce = 100, content = function() end }
+    config.values.status.diff_preview =
+      { enabled = true, kind = "split", debounce = 100, content = function() end }
     assert.equal(0, vim.tbl_count(config.validate_config()))
   end)
 
@@ -153,9 +155,12 @@ describe("status diff_preview", function()
 
     cursor_onto(buf, "tracked.txt")
 
-    assert.truthy(vim.wait(5000, function()
-      return preview.is_open()
-    end), "preview window must open")
+    assert.truthy(
+      vim.wait(5000, function()
+        return preview.is_open()
+      end),
+      "preview window must open"
+    )
 
     assert.truthy(wait_for_content(preview, "+two"), "diff content must render")
     local text = buffer_text(preview.buffer_handle())
@@ -173,9 +178,12 @@ describe("status diff_preview", function()
 
     -- open on the file item
     cursor_onto(buf, "tracked.txt")
-    assert.truthy(vim.wait(5000, function()
-      return preview.is_open()
-    end), "preview must open on the file item")
+    assert.truthy(
+      vim.wait(5000, function()
+        return preview.is_open()
+      end),
+      "preview must open on the file item"
+    )
 
     -- move onto the section title (not a file item)
     local lines = vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false)
@@ -190,9 +198,12 @@ describe("status diff_preview", function()
 
     buf.buffer:move_cursor(title_line)
     vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf.buffer.handle })
-    assert.truthy(vim.wait(5000, function()
-      return not preview.is_open()
-    end), "preview must hide when the cursor leaves the file items")
+    assert.truthy(
+      vim.wait(5000, function()
+        return not preview.is_open()
+      end),
+      "preview must hide when the cursor leaves the file items"
+    )
   end)
 
   it("renders custom content from diff_preview.content with its filetype", function()
@@ -214,9 +225,12 @@ describe("status diff_preview", function()
     cursor_onto(buf, "tracked.txt")
 
     local preview = require("neogit.buffers.diff_preview")
-    assert.truthy(vim.wait(5000, function()
-      return preview.is_open()
-    end), "preview must open")
+    assert.truthy(
+      vim.wait(5000, function()
+        return preview.is_open()
+      end),
+      "preview must open"
+    )
 
     local handle = preview.buffer_handle()
     assert.equal("diff", vim.bo[handle].filetype, "custom filetype must be applied")
@@ -240,9 +254,12 @@ describe("status diff_preview", function()
     cursor_onto(buf, "tracked.txt")
 
     local preview = require("neogit.buffers.diff_preview")
-    assert.truthy(vim.wait(5000, function()
-      return preview.is_open()
-    end), "preview must open")
+    assert.truthy(
+      vim.wait(5000, function()
+        return preview.is_open()
+      end),
+      "preview must open"
+    )
 
     local handle = preview.buffer_handle()
     assert.equal("NeogitDiffPreview", vim.bo[handle].filetype, "built-in filetype must be kept")
@@ -278,9 +295,12 @@ describe("status diff_preview", function()
       local buf = open_status(dir)
 
       cursor_onto(buf, "tracked.txt")
-      assert.truthy(vim.wait(5000, function()
-        return preview.is_open()
-      end), "preview must open")
+      assert.truthy(
+        vim.wait(5000, function()
+          return preview.is_open()
+        end),
+        "preview must open"
+      )
 
       local handle = preview.buffer_handle()
       return vim.api.nvim_win_get_width(vim.fn.bufwinid(handle))
@@ -336,13 +356,13 @@ describe("status diff_preview", function()
     cursor_onto(buf, "tracked.txt")
 
     local preview = require("neogit.buffers.diff_preview")
-    assert.truthy(vim.wait(5000, function()
-      return preview.is_open()
-    end), "preview must open")
     assert.truthy(
-      wait_for_content(preview, "+line 5"),
-      "diff content must render before scrolling"
+      vim.wait(5000, function()
+        return preview.is_open()
+      end),
+      "preview must open"
     )
+    assert.truthy(wait_for_content(preview, "+line 5"), "diff content must render before scrolling")
 
     local win = vim.fn.bufwinid(preview.buffer_handle())
     assert.truthy(win ~= -1, "preview window must exist")
@@ -356,7 +376,10 @@ describe("status diff_preview", function()
     local before = top()
     vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-d>", true, false, true), "x", false)
     vim.wait(100)
-    assert.truthy(top() > before, ("C-d must scroll the preview down (before=%d after=%d)"):format(before, top()))
+    assert.truthy(
+      top() > before,
+      ("C-d must scroll the preview down (before=%d after=%d)"):format(before, top())
+    )
 
     local mid = top()
     vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-u>", true, false, true), "x", false)
@@ -380,9 +403,12 @@ describe("status diff_preview", function()
 
     -- the window opens right away, while the (sleeping) git diff is still
     -- running: the deferred callback cannot have waited for the process
-    assert.truthy(vim.wait(1000, function()
-      return preview.is_open()
-    end), "preview window must open before the slow diff completes")
+    assert.truthy(
+      vim.wait(1000, function()
+        return preview.is_open()
+      end),
+      "preview window must open before the slow diff completes"
+    )
     assert.truthy(
       buffer_text(preview.buffer_handle()):find("Loading diff", 1, true),
       "placeholder must be visible while the diff loads"
@@ -416,9 +442,12 @@ describe("status diff_preview", function()
     local preview = require("neogit.buffers.diff_preview")
 
     cursor_onto(buf, "slow.txt")
-    assert.truthy(vim.wait(1000, function()
-      return preview.is_open()
-    end), "preview must open on the slow item")
+    assert.truthy(
+      vim.wait(1000, function()
+        return preview.is_open()
+      end),
+      "preview must open on the slow item"
+    )
     assert.truthy(
       buffer_text(preview.buffer_handle()):find("Loading diff", 1, true),
       "slow item shows the placeholder"
@@ -456,10 +485,7 @@ describe("status diff_preview", function()
     local preview = require("neogit.buffers.diff_preview")
 
     cursor_onto(buf, "tracked.txt")
-    assert.truthy(
-      wait_for_content(preview, "+two"),
-      "diff content must render"
-    )
+    assert.truthy(wait_for_content(preview, "+two"), "diff content must render")
     local initial_calls = count_diff_calls(log, "tracked.txt")
     assert.truthy(initial_calls > 0, "tracked.txt diff must have been fetched")
 
@@ -472,15 +498,9 @@ describe("status diff_preview", function()
     -- move away to another file and back: the cached diff renders without
     -- a new git invocation
     cursor_onto(buf, "other.txt")
-    assert.truthy(
-      wait_for_content(preview, "+other content"),
-      "other item's diff must render"
-    )
+    assert.truthy(wait_for_content(preview, "+other content"), "other item's diff must render")
     cursor_onto(buf, "tracked.txt")
-    assert.truthy(
-      wait_for_content(preview, "+two"),
-      "cached diff must render on revisit"
-    )
+    assert.truthy(wait_for_content(preview, "+two"), "cached diff must render on revisit")
 
     assert.equal(
       initial_calls,

@@ -151,13 +151,17 @@ function M.progress(message)
   if M.internal.replace_capable() then
     self.animated = true
     self.timer = vim.uv.new_timer()
-    self.timer:start(90, 90, vim.schedule_wrap(function()
-      if self.closed then
-        return
-      end
-      self.frame = self.frame + 1
-      self:update()
-    end))
+    self.timer:start(
+      90,
+      90,
+      vim.schedule_wrap(function()
+        if self.closed then
+          return
+        end
+        self.frame = self.frame + 1
+        self:update()
+      end)
+    )
   end
 
   return self
