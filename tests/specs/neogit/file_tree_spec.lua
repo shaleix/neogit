@@ -48,9 +48,12 @@ local function open_status(dir)
     end,
   })
   buf:dispatch_refresh()
-  assert.truthy(vim.wait(10000, function()
-    return fired
-  end, 10), "refresh did not complete")
+  assert.truthy(
+    vim.wait(10000, function()
+      return fired
+    end, 10),
+    "refresh did not complete"
+  )
   vim.wait(50)
   return buf
 end

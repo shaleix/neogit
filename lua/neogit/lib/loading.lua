@@ -129,13 +129,17 @@ function M.show(text)
   render()
 
   state.timer = vim.uv.new_timer()
-  state.timer:start(SPINNER_INTERVAL, SPINNER_INTERVAL, vim.schedule_wrap(function()
-    if state.result then
-      return
-    end
-    state.frame = state.frame + 1
-    render()
-  end))
+  state.timer:start(
+    SPINNER_INTERVAL,
+    SPINNER_INTERVAL,
+    vim.schedule_wrap(function()
+      if state.result then
+        return
+      end
+      state.frame = state.frame + 1
+      render()
+    end)
+  )
 end
 
 ---Settle into the result state: icon and color follow `level`, the window
@@ -158,9 +162,13 @@ function M.done(text, level)
   end
 
   state.close_timer = vim.uv.new_timer()
-  state.close_timer:start(DONE_LINGER, 0, vim.schedule_wrap(function()
-    M.close()
-  end))
+  state.close_timer:start(
+    DONE_LINGER,
+    0,
+    vim.schedule_wrap(function()
+      M.close()
+    end)
+  )
 end
 
 ---Close the indicator immediately (idempotent).

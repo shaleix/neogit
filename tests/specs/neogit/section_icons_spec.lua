@@ -172,7 +172,13 @@ describe("section header icons and colors", function()
     end
     assert.truthy(staged_line, "staged script.lua line not found")
 
-    local marks = vim.api.nvim_buf_get_extmarks(handle, -1, { staged_line, 0 }, { staged_line, -1 }, { details = true })
+    local marks = vim.api.nvim_buf_get_extmarks(
+      handle,
+      -1,
+      { staged_line, 0 },
+      { staged_line, -1 },
+      { details = true }
+    )
     local staged_groups = 0
     for _, m in ipairs(marks) do
       local d = m[4] or {}

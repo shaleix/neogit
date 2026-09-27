@@ -142,10 +142,10 @@ M.internal = {
 ---and the buffer filetype is set to the returned value, so external
 ---renderers can hook in via the FileType event (e.g. diffs.nvim with
 ---filetype "diff").
----@param status_buffer Buffer the requesting status buffer (focus target)
+---@param _status_buffer Buffer the requesting status buffer (focus target)
 ---@param section string section name: "untracked"|"unstaged"|"staged"
 ---@param item table StatusItem
-function M.show(status_buffer, section, item)
+function M.show(_status_buffer, section, item)
   local self = current()
 
   -- custom content hook: full takeover when it returns a table

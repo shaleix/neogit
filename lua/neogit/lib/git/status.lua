@@ -103,8 +103,10 @@ local function update_status(state, filter)
   -- --untracked-files=all: expand untracked directories into individual file
   -- entries, so the status buffer can list (and stage/discard) each file
   -- instead of one collapsed "dir/" row.
-  local result =
-    git.cli.status.null_separated.porcelain(2).untracked_files("all").call { hidden = true, remove_ansi = false }
+  local result = git.cli.status.null_separated
+    .porcelain(2)
+    .untracked_files("all")
+    .call { hidden = true, remove_ansi = false }
   result = vim.split(result.stdout[1] or "", "\n")
   result = util.collect(result, function(line, collection)
     if line == "" then
@@ -138,7 +140,7 @@ local function update_status(state, filter)
         update_file("untracked", state.worktree_root, old_files.untracked_files[rest], "?", rest)
       )
     elseif kind == "1" then
-      local mode_staged, mode_unstaged, submodule, mH, mI, mW, hH, _, name = rest:match(match_1)
+      local mode_staged, mode_unstaged, submodule, mH, mI, mW, _hH, _, name = rest:match(match_1)
       local file_mode = { head = mH, index = mI, worktree = mW }
       local submodule = parse_submodule_status(submodule)
 

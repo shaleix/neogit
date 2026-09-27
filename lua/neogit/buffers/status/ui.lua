@@ -359,14 +359,12 @@ local SectionItemFile = function(section, config, depth)
       else
         local ext = vim.fn.fnamemodify(item.name, ":e"):lower()
         local glyph = file_icons[ext] or file_icons.default
-        icon_text = glyph
-          and text.highlight(staged_line and highlight or "NeogitSubtleText")(glyph .. " ")
+        icon_text = glyph and text.highlight(staged_line and highlight or "NeogitSubtleText")(glyph .. " ")
           or text("")
       end
     else
       local glyph = file_icons.submodule
-      icon_text = glyph
-        and text.highlight(staged_line and highlight or "NeogitSubtleText")(glyph .. " ")
+      icon_text = glyph and text.highlight(staged_line and highlight or "NeogitSubtleText")(glyph .. " ")
         or text("")
     end
 
@@ -468,10 +466,10 @@ local function build_file_tree(items)
 end
 
 local DirRow = Component.new(function(props)
-  return row({
+  return row {
     text(props.indent),
     text.highlight("NeogitSubtleText")(props.icon .. " " .. props.name),
-  })
+  }
 end)
 
 -- Collapse single-child directory chains: when a directory holds no files
@@ -504,21 +502,24 @@ local function render_file_tree(section, config, node, depth)
   table.sort(names)
   for _, dirname in ipairs(names) do
     local dir, display = collapse_dir(node.dirs[dirname])
-    table.insert(children, col.tag("Directory")({
-      DirRow {
-        name = display,
-        icon = dir_icon,
-        indent = ("  "):rep(depth + 1),
-      },
-      render_file_tree(section, config, dir, depth + 1),
-    }, {
-      foldable = true,
-      folded = false,
-      id = ("%s--tree:%s"):format(section, dir.path),
-      -- Marks this as a directory row so cursor-based actions (stage,
-      -- unstage, ...) can find the subtree path under the cursor.
-      directory = dir.path,
-    }))
+    table.insert(
+      children,
+      col.tag("Directory")({
+        DirRow {
+          name = display,
+          icon = dir_icon,
+          indent = ("  "):rep(depth + 1),
+        },
+        render_file_tree(section, config, dir, depth + 1),
+      }, {
+        foldable = true,
+        folded = false,
+        id = ("%s--tree:%s"):format(section, dir.path),
+        -- Marks this as a directory row so cursor-based actions (stage,
+        -- unstage, ...) can find the subtree path under the cursor.
+        directory = dir.path,
+      })
+    )
   end
 
   for _, item in ipairs(node.files) do

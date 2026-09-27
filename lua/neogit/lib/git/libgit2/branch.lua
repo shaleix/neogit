@@ -127,8 +127,11 @@ function M.exists(branch)
   end
 
   logger.debug(
-    ("[LG2:BRANCH]: branch_lookup(%q) failed with code %s: %s")
-      :format(branch, tostring(err), git2.git_result(err, "").message)
+    ("[LG2:BRANCH]: branch_lookup(%q) failed with code %s: %s"):format(
+      branch,
+      tostring(err),
+      git2.git_result(err, "").message
+    )
   )
   return nil
 end

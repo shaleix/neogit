@@ -11,3 +11,5 @@ extend-ignore-re = [
 [default.extend-words]
 # `enew` is a valid nvim command
 enew = "enew"
+# noice.nvim is a plugin name
+noice = "noice"

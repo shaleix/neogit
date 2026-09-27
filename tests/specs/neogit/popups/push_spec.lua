@@ -56,22 +56,31 @@ describe("push loading banner", function()
     neogit.action("push", "to_upstream", {})()
 
     -- push lands on the remote
-    assert.truthy(vim.wait(15000, function()
-      local r = vim.system({ "git", "-C", remote, "log", "-1", "--pretty=%s" }):wait()
-      return vim.trim(r.stdout or "") == "second"
-    end), "push never landed on the remote")
+    assert.truthy(
+      vim.wait(15000, function()
+        local r = vim.system({ "git", "-C", remote, "log", "-1", "--pretty=%s" }):wait()
+        return vim.trim(r.stdout or "") == "second"
+      end),
+      "push never landed on the remote"
+    )
 
     -- the banner settles into the success state (the async continuation
     -- may resume a tick after the push process itself finishes)
-    assert.truthy(vim.wait(5000, function()
-      return loading.internal.state.result ~= nil
-    end), "banner must settle after the push")
+    assert.truthy(
+      vim.wait(5000, function()
+        return loading.internal.state.result ~= nil
+      end),
+      "banner must settle after the push"
+    )
     assert.truthy(loading.is_active(), "result banner must linger after settling")
     assert.equal("NeogitSpinnerSuccess", loading.internal.state.result.hl)
 
     -- ... and auto-dismisses after the linger
-    assert.truthy(vim.wait(5000, function()
-      return not loading.is_active()
-    end), "banner must auto-dismiss")
+    assert.truthy(
+      vim.wait(5000, function()
+        return not loading.is_active()
+      end),
+      "banner must auto-dismiss"
+    )
   end)
 end)
