@@ -325,7 +325,8 @@ to Neovim users.
     },
     ai_commit = {
         -- Full-control override: produces the message and calls `done`.
-        -- When set, everything below is ignored.
+        -- When set, everything below is ignored. Plug in any LLM stack here
+        -- (e.g. llm.nvim, Kurama622/llm.nvim).
         -- Signature: fun(done: fun(message: string), ctx: { files: string[], diff: string })
         generator = nil,
         -- Built-in OpenAI-compatible client (DeepSeek, Ollama, LM Studio,
