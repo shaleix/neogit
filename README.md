@@ -44,6 +44,13 @@ Here's an example spec for [Lazy](https://github.com/folke/lazy.nvim), but you'r
     "ibhagwan/fzf-lua",              -- optional
     "nvim-mini/mini.pick",           -- optional
     "folke/snacks.nvim",             -- optional
+
+    -- AI commit-message generation ("m" in the commit popup): neogit has a
+    -- built-in OpenAI-compatible client (see `ai_commit` below, no extra
+    -- plugin needed); llm.nvim is an alternative LLM frontend (multi-provider
+    -- / free models) with its own AI-Commit-Messages tool, and can be wired
+    -- into neogit through `ai_commit.generator`.
+    "Kurama622/llm.nvim",            -- optional
   },
   cmd = "Neogit",
   keys = {
@@ -315,7 +322,9 @@ neogit.setup {
   -- Any failure (missing config, error, empty message, timeout) falls back
   -- to the regular editor-based commit.
   ai_commit = {
-    generator = nil,
+    generator = nil, -- fun(done: fun(message: string), ctx: { files: string[], diff: string })
+    --            full-control escape hatch: plug in any LLM stack here
+    --            (e.g. llm.nvim - see the optional dependency in Installation)
     backend = "openai",
     url = nil, -- default api.openai.com/v1 (ollama: localhost:11434/v1)
     model = nil, -- e.g. "deepseek-flash"; required for the built-in client
