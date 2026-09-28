@@ -418,6 +418,9 @@ end
 ---@field api_token_env? string Environment variable the built-in client reads the bearer token from
 ---@field prompt? string|fun(ctx: { files: string[], diff: string }): string System prompt override for the built-in client (default: conventional-commit single-line subject)
 ---@field timeout? number Seconds to wait for the generator before falling back to the editor
+---@field disable_thinking? boolean Inject the known vendor's thinking-off request field (ollama/deepseek/dashscope/openrouter/openai); unknown endpoints are left untouched
+---@field extra_body? table Extra fields deep-merged into the chat/completions request body (e.g. `{ chat_template_kwargs = { enable_thinking = false } }` for vLLM); wins over disable_thinking presets
+---@field extra_headers? table<string, string|number|boolean> Extra HTTP headers sent with the request (for gateways that control features via headers)
 
 ---@class NeogitConfigIcons
 ---@field sections? table<string, string?> Nerd font icons shown before status section titles; nil disables that section's icon
@@ -583,6 +586,9 @@ function M.get_default_values()
       api_token_env = "OPENAI_API_KEY",
       prompt = nil,
       timeout = 30,
+      disable_thinking = false,
+      extra_body = nil,
+      extra_headers = nil,
     },
     commit_editor = {
       kind = "tab",
@@ -1433,6 +1439,9 @@ function M.validate_config()
       validate_type(config.ai_commit.api_token_env, "ai_commit.api_token_env", { "string", "nil" })
       validate_type(config.ai_commit.prompt, "ai_commit.prompt", { "string", "function", "nil" })
       validate_type(config.ai_commit.timeout, "ai_commit.timeout", "number")
+      validate_type(config.ai_commit.disable_thinking, "ai_commit.disable_thinking", { "boolean", "nil" })
+      validate_type(config.ai_commit.extra_body, "ai_commit.extra_body", { "table", "nil" })
+      validate_type(config.ai_commit.extra_headers, "ai_commit.extra_headers", { "table", "nil" })
     end
     -- Commit Editor
     if validate_type(config.commit_editor, "commit_editor", "table") then
