@@ -148,6 +148,17 @@ describe("commit popup AI Commit", function()
 
     config.values.ai_commit = { model = 42, prompt = {} }
     assert.truthy(vim.tbl_count(config.validate_config()) > 0, "bad declarative types must fail")
+
+    config.values.ai_commit = { disable_thinking = "yes", extra_body = 1, extra_headers = "x" }
+    assert.truthy(vim.tbl_count(config.validate_config()) > 0, "thinking/extra field types must be checked")
+
+    config.values.ai_commit = {
+      disable_thinking = true,
+      extra_body = { chat_template_kwargs = { enable_thinking = false } },
+      extra_headers = { ["X-Switch"] = "off" },
+      timeout = 30,
+    }
+    assert.equal(0, vim.tbl_count(config.validate_config()), "valid thinking/extra fields must pass")
   end)
 
   describe("built-in OpenAI-compatible client", function()
@@ -208,6 +219,91 @@ describe("commit popup AI Commit", function()
       decoded = vim.json.decode(body)
       assert.equal("中文 ok", decoded.messages[1].content)
       assert.equal("em-dash —", decoded.messages[2].content)
+    end)
+
+    it("injects the vendor thinking-off field and merges extra_body", function()
+      local function build(settings, url)
+        return vim.json.decode(ai.build_request_body("m", "s", "u", settings, url))
+      end
+
+      assert.equal(
+        false,
+        build({ disable_thinking = true, backend = "ollama" }, "http://localhost:11434/v1").think
+      )
+      assert.equal(
+        "disabled",
+        build({ disable_thinking = true }, "https://api.deepseek.com/v1").thinking.type
+      )
+      assert.equal(
+        false,
+        build({ disable_thinking = true }, "https://dashscope.aliyuncs.com/compatible-mode/v1").enable_thinking
+      )
+      assert.equal(
+        false,
+        build({ disable_thinking = true }, "https://openrouter.ai/api/v1").reasoning.enabled
+      )
+      assert.equal(
+        "minimal",
+        build({ disable_thinking = true }, "https://api.openai.com/v1").reasoning_effort
+      )
+
+      -- unknown endpoints get nothing injected (strict APIs reject foreign fields)
+      local unknown = build({ disable_thinking = true }, "https://my-gateway.example/v1")
+      assert.is_nil(unknown.think)
+      assert.is_nil(unknown.enable_thinking)
+      assert.is_nil(unknown.thinking)
+      assert.is_nil(unknown.reasoning)
+      assert.is_nil(unknown.reasoning_effort)
+
+      -- extra_body covers self-hosted runtimes ...
+      local vllm = build({
+        extra_body = { chat_template_kwargs = { enable_thinking = false } },
+      }, "https://my-gateway.example/v1")
+      assert.equal(false, vllm.chat_template_kwargs.enable_thinking)
+
+      -- ... and wins over the presets
+      assert.equal(
+        true,
+        build({
+          disable_thinking = true,
+          backend = "ollama",
+          extra_body = { think = true },
+        }, "http://localhost:11434/v1").think
+      )
+    end)
+
+    it("sends extra_headers and the thinking preset through to curl", function()
+      local captured
+      local real_spawn = ai.internal.spawn
+      ai.internal.spawn = function(args, cb)
+        captured = args
+        cb { code = 0, stdout = vim.json.encode { choices = { { message = { content = "feat: x" } } } } }
+      end
+
+      local message
+      ai.generate({ files = { "a.lua" }, diff = "+x" }, {
+        backend = "ollama",
+        url = "http://127.0.0.1:11434/v1",
+        model = "qwen3:8b",
+        disable_thinking = true,
+        extra_headers = { ["X-Gateway-Switch"] = "no-think" },
+      }, function(m)
+        message = m
+      end)
+      ai.internal.spawn = real_spawn
+
+      assert.equal("feat: x", message)
+
+      local found_header, payload
+      for i = 1, #captured - 1 do
+        if captured[i] == "-H" and captured[i + 1] == "X-Gateway-Switch: no-think" then
+          found_header = true
+        elseif captured[i] == "-d" then
+          payload = vim.json.decode(captured[i + 1])
+        end
+      end
+      assert.truthy(found_header, "extra_headers must be sent as -H pairs")
+      assert.truthy(payload and payload.think == false, "ollama think=false must be in the body")
     end)
 
     it("end-to-end: declarative model config commits without a generator", function()

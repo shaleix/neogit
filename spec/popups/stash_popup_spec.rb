@@ -190,7 +190,8 @@ RSpec.describe "Stash Popup", :git, :nvim, :popup do
       nvim.keys("m")
       nvim.keys("<cr>") # select first stash
 
-      expect(`git stash list`).to include("my-renamed-stash")
+      # rename settles asynchronously (drop + store): poll for the new name
+      await { expect(`git stash list`).to include("my-renamed-stash") }
     end
 
     it "does not drop the stash when renaming" do
@@ -198,6 +199,7 @@ RSpec.describe "Stash Popup", :git, :nvim, :popup do
       nvim.keys("m")
       nvim.keys("<cr>") # select first stash
 
+      await { expect(`git stash list`).to include("renamed-stash") }
       expect(`git stash list`).not_to be_empty
     end
 
@@ -206,6 +208,7 @@ RSpec.describe "Stash Popup", :git, :nvim, :popup do
       nvim.keys("m")
       nvim.keys("<cr>") # select first stash
 
+      await { expect(`git stash list`).to include("content-check") }
       `git stash pop`
       expect(File.read("testfile")).to eq("original stash content")
     end
@@ -232,6 +235,9 @@ RSpec.describe "Stash Popup", :git, :nvim, :popup do
       nvim.input("second-stash-renamed")
       nvim.keys("m")
       nvim.keys("<cr>") # select stash@{0}
+
+      # rename settles asynchronously (drop + store): poll for the new name
+      await { expect(`git stash list`).to include("second-stash-renamed") }
 
       stash_list = `git stash list`
 

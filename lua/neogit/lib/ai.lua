@@ -105,13 +105,45 @@ function M.sanitize_utf8(s)
   return table.concat(out)
 end
 
+---Per-vendor body fields that turn OFF thinking/reasoning mode. Keyed by a
+---plain-text url needle checked in order; the ollama backend also matches by
+---name. Returns nil for unknown hosts - blindly injecting foreign fields
+---makes strict APIs (OpenAI, DashScope, ...) reject the whole request with
+---400, so unknown endpoints should use `extra_body` explicitly instead.
+---@param settings table ai_commit config
+---@param url string resolved endpoint url
+---@return table? body fields to merge into the request
+function M.no_thinking_body(settings, url)
+  if settings.backend == "ollama" or url:find(":11434", 1, true) then
+    return { think = false }
+  end
+  if url:find("dashscope.aliyuncs.com", 1, true) then
+    return { enable_thinking = false }
+  end
+  if url:find("api.deepseek.com", 1, true) then
+    return { thinking = { type = "disabled" } }
+  end
+  if url:find("openrouter.ai", 1, true) then
+    return { reasoning = { enabled = false } }
+  end
+  if url:find("api.openai.com", 1, true) then
+    -- OpenAI reasoning models cannot disable thinking outright; "minimal"
+    -- is the fastest supported effort.
+    return { reasoning_effort = "minimal" }
+  end
+
+  return nil
+end
+
 ---Assemble the chat/completions request body.
 ---@param model string
 ---@param system_prompt string
 ---@param user_prompt string
+---@param settings? table ai_commit config (disable_thinking / extra_body)
+---@param url? string resolved endpoint url (for the no-thinking presets)
 ---@return string json encoded body
-function M.build_request_body(model, system_prompt, user_prompt)
-  return vim.json.encode {
+function M.build_request_body(model, system_prompt, user_prompt, settings, url)
+  local body = {
     model = model,
     messages = {
       { role = "system", content = M.sanitize_utf8(system_prompt) },
@@ -119,6 +151,25 @@ function M.build_request_body(model, system_prompt, user_prompt)
     },
     stream = false,
   }
+
+  settings = settings or {}
+  if settings.disable_thinking then
+    local preset = M.no_thinking_body(settings, url or "")
+    if preset then
+      body = vim.tbl_deep_extend("force", body, preset)
+    else
+      logger.debug(
+        "[AI COMMIT]: disable_thinking set but the endpoint is unknown - "
+          .. "set ai_commit.extra_body with your provider's thinking-off field"
+      )
+    end
+  end
+
+  if type(settings.extra_body) == "table" then
+    body = vim.tbl_deep_extend("force", body, settings.extra_body)
+  end
+
+  return vim.json.encode(body)
 end
 
 ---Extract the assistant message from a chat/completions response; empty
@@ -208,12 +259,18 @@ function M.generate(ctx, settings, done)
     "-H",
     "Accept: application/json",
     "-d",
-    M.build_request_body(settings.model, system_prompt, user_prompt),
+    M.build_request_body(settings.model, system_prompt, user_prompt, settings, url),
   }
 
   if token then
     table.insert(args, "-H")
     table.insert(args, "Authorization: Bearer " .. token)
+  end
+  if type(settings.extra_headers) == "table" then
+    for header, value in pairs(settings.extra_headers) do
+      table.insert(args, "-H")
+      table.insert(args, ("%s: %s"):format(header, tostring(value)))
+    end
   end
   table.insert(args, url .. "/chat/completions")
 

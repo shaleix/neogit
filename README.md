@@ -323,6 +323,23 @@ neogit.setup {
     prompt = nil, -- string or fun(ctx): string; default asks for a
     --           conventional-commit single-line subject
     timeout = 30, -- seconds before falling back to the editor
+    -- Thinking/reasoning models are slow for one-line commit messages.
+    -- Injects the known vendor's off-switch into the request body:
+    --   ollama -> think=false | api.deepseek.com -> thinking.type="disabled"
+    --   dashscope -> enable_thinking=false | openrouter -> reasoning.enabled=false
+    --   api.openai.com -> reasoning_effort="minimal"
+    -- Unknown endpoints are left untouched (use extra_body there).
+    disable_thinking = false,
+    -- Extra fields deep-merged into the request body (wins over the
+    -- disable_thinking presets). Recipes:
+    --   vLLM / LM Studio: { chat_template_kwargs = { enable_thinking = false } }
+    --   DashScope Qwen:   { enable_thinking = false }
+    --   DeepSeek:         { thinking = { type = "disabled" } }
+    -- (Qwen3 also honors a "/no_think" suffix in `prompt` on any backend.)
+    extra_body = nil,
+    -- Extra HTTP headers, for gateways controlled via headers:
+    --   { ["X-Some-Gateway-Switch"] = "value" }
+    extra_headers = nil,
   },
   commit_editor = {
     kind = "tab",

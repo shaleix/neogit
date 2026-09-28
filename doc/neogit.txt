@@ -338,6 +338,25 @@ to Neovim users.
         --                   conventional-commit single-line subject
         -- Seconds to wait for the generator before falling back to the editor
         timeout = 30,
+        -- Reasoning/thinking models are slow for one-line commit messages.
+        -- disable_thinking injects the known vendor's off-switch into the
+        -- request body: ollama -> think=false, api.deepseek.com ->
+        -- thinking.type="disabled", dashscope -> enable_thinking=false,
+        -- openrouter -> reasoning.enabled=false, api.openai.com ->
+        -- reasoning_effort="minimal". Unknown endpoints are left untouched.
+        disable_thinking = false,
+        -- Extra fields deep-merged into the request body; wins over the
+        -- disable_thinking presets. Recipes:
+        --   vLLM / LM Studio: { chat_template_kwargs = { enable_thinking = false } }
+        --   DashScope Qwen:   { enable_thinking = false }
+        --   Ollama:           { think = false }
+        --   DeepSeek:         { thinking = { type = "disabled" } }
+        --   OpenRouter:       { reasoning = { enabled = false } }
+        -- (Qwen3 also honors a "/no_think" suffix in `prompt` on any backend.)
+        extra_body = nil,
+        -- Extra HTTP headers for gateways that are controlled via headers:
+        --   { ["X-Some-Gateway-Switch"] = "value" }
+        extra_headers = nil,
     },
     commit_editor = {
         kind = "tab",
