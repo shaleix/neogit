@@ -390,6 +390,57 @@ describe("status diff_preview", function()
     assert.equal(buf.buffer.handle, vim.api.nvim_get_current_buf())
   end)
 
+  it("resets the viewport to the top when switching to another file", function()
+    -- two long diffs, so the preview actually scrolls on both
+    local dir = workdir()
+    do
+      local fd = assert(io.open(dir .. "/tracked.txt", "a"))
+      for i = 1, 200 do
+        fd:write(("line %d\n"):format(i))
+      end
+      fd:close()
+      fd = assert(io.open(dir .. "/other.txt", "w"))
+      for i = 1, 200 do
+        fd:write(("other %d\n"):format(i))
+      end
+      fd:close()
+    end
+
+    config.values.status.diff_preview = { enabled = true, kind = "vsplit", debounce = 50 }
+    local buf = open_status(dir)
+    local preview = require("neogit.buffers.diff_preview")
+
+    cursor_onto(buf, "tracked.txt")
+    assert.truthy(wait_for_content(preview, "+line 5"), "first file's diff must render")
+
+    local win = vim.fn.bufwinid(preview.buffer_handle())
+    assert.truthy(win ~= -1, "preview window must exist")
+
+    -- simulate the user scrolling deep into the first file's diff
+    vim.api.nvim_win_set_cursor(win, { 80, 0 })
+    vim.api.nvim_win_call(win, function()
+      vim.cmd("normal! zt")
+    end)
+    local top = function()
+      return vim.api.nvim_win_call(win, function()
+        return vim.fn.line("w0")
+      end)
+    end
+    assert.truthy(top() > 1, "viewport must be scrolled before switching files")
+
+    -- switch to the next file: the viewport must snap back to its top
+    cursor_onto(buf, "other.txt")
+    assert.truthy(wait_for_content(preview, "+other 5"), "second file's diff must render")
+    assert.equal(1, top(), "switching files must reset the viewport to the top")
+    assert.equal(
+      1,
+      vim.api.nvim_win_call(win, function()
+        return vim.fn.line(".")
+      end),
+      "preview cursor must sit on the first line after the switch"
+    )
+  end)
+
   it("opens with a loading placeholder instead of blocking on a slow diff", function()
     local wrapper = slow_git("tracked.txt", 1)
     config.values.git_executable = wrapper

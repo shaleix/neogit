@@ -188,6 +188,9 @@ function M.show(_status_buffer, section, item)
 
   if self.buffer and self.buffer:is_visible() then
     self:refresh_content()
+    -- New item in a reused window: snap the viewport back to the top, the
+    -- scroll position of the previous file's diff must not carry over.
+    -- self:_reset_view()
   else
     local status_window = vim.api.nvim_get_current_win()
     local status_maps = config.get_reversed_status_maps()
@@ -308,6 +311,24 @@ function M.show(_status_buffer, section, item)
       if self.buffer and self.buffer.handle then
         self:refresh_content()
       end
+    end)
+  end
+end
+
+---Reset the preview window's viewport to the top of the buffer. Called
+---after re-rendering for a different item: the user may have scrolled the
+---previous file's diff, and the next file must start from its first line
+---instead of inheriting the old view.
+function M:_reset_view()
+  if not self.buffer or not self.buffer.handle then
+    return
+  end
+
+  local win = vim.fn.bufwinid(self.buffer.handle)
+  if win ~= -1 then
+    vim.api.nvim_win_call(win, function()
+      vim.api.nvim_win_set_cursor(0, { 1, 0 })
+      vim.cmd("normal! zt")
     end)
   end
 end
