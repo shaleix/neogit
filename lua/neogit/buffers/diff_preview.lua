@@ -190,7 +190,7 @@ function M.show(_status_buffer, section, item)
     self:refresh_content()
     -- New item in a reused window: snap the viewport back to the top, the
     -- scroll position of the previous file's diff must not carry over.
-    -- self:_reset_view()
+    self:_reset_view()
   else
     local status_window = vim.api.nvim_get_current_win()
     local status_maps = config.get_reversed_status_maps()
