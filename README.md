@@ -51,6 +51,13 @@ Here's an example spec for [Lazy](https://github.com/folke/lazy.nvim), but you'r
     -- / free models) with its own AI-Commit-Messages tool, and can be wired
     -- into neogit through `ai_commit.generator`.
     "Kurama622/llm.nvim",            -- optional
+
+    -- File diff preview (`status.diff_preview`, see the example under
+    -- Configuration): optional renderer for raw diff buffers. The `content`
+    -- hook sets the preview buffer's filetype to "diff", and diffs.nvim
+    -- attaches via that FileType event - see the note about
+    -- `extra_filetypes` there.
+    "barrettruth/diffs.nvim",        -- optional
   },
   cmd = "Neogit",
   keys = {
@@ -648,6 +655,91 @@ neogit.setup {
 }
 ```
 </details>
+
+### File diff preview
+
+With `status.diff_preview.enabled = true`, diffs render in a separate window
+instead of hunks expanding inline in the status buffer. The preview follows the
+cursor: moving onto a file item renders its diff (after `debounce` ms), moving
+off the file items hides it, and `C-d`/`C-u` scroll the preview straight from
+the status buffer. Diffs load asynchronously (a cancellable git process with a
+loading placeholder), so a slow diff never blocks the cursor.
+
+The built-in renderer needs no extra plugins. For full control over the body,
+set `content` to return `{ filetype, lines }` - the preview buffer gets that
+filetype, so external renderers can hook in via the `FileType` event. The
+example below pipes the raw `git diff` and collapses the four-line file header
+into a single `path (mode)` line:
+
+```lua
+neogit.setup({
+  status = {
+    diff_preview = {
+      enabled = true,
+      kind = "vsplit", -- "split" | "vsplit" | "tab"
+      debounce = 200,
+      content = function(item, section)
+        -- item.name: path relative to the repository root
+        -- item.mode / item.original_name are also available
+        -- section: "untracked" | "unstaged" | "staged"
+        --
+        -- A file that was staged and then modified again appears in BOTH the
+        -- "staged" and "unstaged" sections; the two must diff against
+        -- different baselines, or both would show the full HEAD diff:
+        --   staged   -> index vs HEAD (--cached: staged hunks only)
+        --   unstaged -> worktree vs index (hunks changed since staging)
+        local cmd
+        if section == "untracked" then
+          cmd = { "git", "diff", "--no-color", "--no-index", "/dev/null", item.name }
+        elseif section == "staged" then
+          cmd = { "git", "diff", "--no-color", "--cached", "--", item.name }
+        else -- unstaged
+          cmd = { "git", "diff", "--no-color", "--", item.name }
+        end
+
+        local out = vim.system(cmd, { text = true }):wait().stdout or ""
+        if out == "" then
+          return nil -- empty diff: the item no longer matches the worktree
+        end
+
+        -- Collapse `diff --git`/`index`/`---`/`+++` into "path (mode)";
+        -- keep everything from the first @@ hunk header on.
+        local lines = vim.split(out, "\n", { plain = true })
+        local path = lines[1]:match("^diff %-%-git a/(.*) b/") or item.name
+        local collapsed = { ("%s (%s)"):format(path, item.mode or "?") }
+        for i = 2, #lines do
+          if vim.startswith(lines[i], "@@") then
+            for j = i, #lines do
+              collapsed[#collapsed + 1] = lines[j]
+            end
+            break
+          end
+        end
+
+        return { filetype = "diff", lines = collapsed }
+      end,
+    },
+  },
+})
+```
+
+Returning `nil` (or the callback erroring) falls back to the built-in
+renderer.
+
+**External dependencies:** none are required - the built-in renderer and the
+example above need only `git` in your `PATH`. Optional:
+
+- [barrettruth/diffs.nvim](https://github.com/barrettruth/diffs.nvim)
+  renders raw `diff`-filetype buffers (word-level highlights, treesitter
+  intra-diff, ...). It attaches via the `FileType` event, so it takes over the
+  preview above. It hooks `git`/`gitcommit` buffers by default; add `diff` to
+  cover this preview too:
+
+  ```lua
+  vim.g.diffs = { extra_filetypes = { "diff" } }
+  ```
+
+  It is listed under Installation as an optional dependency.
 
 
 ## Popups
