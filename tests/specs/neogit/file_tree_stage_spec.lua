@@ -130,6 +130,41 @@ describe("status file_tree stage/unstage on directory rows", function()
     assert.equal(" M", status["root.txt"], "root.txt must stay unstaged")
   end)
 
+  it("stages mass deletions under the cursor's directory", function()
+    config.values.status.file_tree = true
+    local dir, write = workdir()
+    for i = 1, 500 do
+      write(("src/gen/f%03d.lua"):format(i), ("x%d\n"):format(i))
+    end
+    assert(vim.system({ "git", "-C", dir, "add", "." }):wait().code == 0)
+    assert(vim.system({ "git", "-C", dir, "commit", "-qm", "gen" }):wait().code == 0)
+    -- wipe the entire src/ tree from the worktree (500 deletions + main.lua)
+    assert(vim.system({ "rm", "-rf", dir .. "/src" }):wait().code == 0)
+
+    local buf = open_status(dir)
+    buf.buffer:focus()
+    cursor_to_directory("src")
+
+    run_action(buf, actions.n_stage)
+
+    local status = porcelain(dir)
+    for i = 1, 500 do
+      local path = ("src/gen/f%03d.lua"):format(i)
+      assert.equal("D ", status[path], path .. " deletion must be staged")
+    end
+    assert.equal("D ", status["src/main.lua"], "src/main.lua deletion must be staged")
+
+    -- the UI must reflect the move: deletions leave "Unstaged changes",
+    -- appear under "Staged changes"
+    local text = table.concat(vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false), "\n")
+    local unstaged = text:match("Unstaged changes(.-)%f[%a].-Staged")
+      or text:match("Unstaged changes(.*)")
+      or ""
+    local staged = text:match("Staged changes(.*)") or ""
+    assert.truthy(staged:find("src", 1, true), "staged section must list the src tree:\n" .. text)
+    assert.falsy(unstaged:find("src", 1, true), "unstaged section must no longer list src:\n" .. text)
+  end)
+
   it("stages only the files under the cursor's directory (untracked)", function()
     config.values.status.file_tree = true
     local dir, write = workdir()
@@ -147,6 +182,31 @@ describe("status file_tree stage/unstage on directory rows", function()
     assert.equal("A ", status["new/a.txt"], "new/a.txt must be staged")
     assert.equal("A ", status["new/sub/b.txt"], "new/sub/b.txt must be staged")
     assert.equal("??", status["other_new/c.txt"], "other_new/c.txt must stay untracked")
+  end)
+
+  it("stages in the requesting buffer's repo, not the last-opened one", function()
+    config.values.status.file_tree = true
+    local dir_a, write_a = workdir()
+    local dir_b, write_b = workdir()
+    write_a("src/main.lua", "a\nb\n")
+    write_b("src/main.lua", "b\nb\n")
+
+    -- open A, then B: the global repo singleton now points at B
+    local buf_a = open_status(dir_a)
+    local buf_b = open_status(dir_b)
+
+    -- user switches back to A's status buffer and stages a directory row
+    buf_a.buffer:focus()
+    cursor_to_directory("src")
+
+    run_action(buf_a, function(b)
+      return b:_action("n_stage")
+    end)
+
+    local status_a = porcelain(dir_a)
+    local status_b = porcelain(dir_b)
+    assert.equal("M ", status_a["src/main.lua"], "A's file must be staged in A's index")
+    assert.equal(" M", status_b["src/main.lua"], "B's index must be left untouched")
   end)
 
   it("unstages only the files under the cursor's directory", function()

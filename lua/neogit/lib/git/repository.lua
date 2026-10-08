@@ -180,7 +180,16 @@ local Repo = {}
 Repo.__index = Repo
 
 local instances = {}
-local lastDir = vim.uv.cwd()
+
+-- Seeded lazily with the cwd of the FIRST Repo.instance()/`git.repo` access,
+-- not at module load: loading order must not decide which repository the
+-- libgit2 twins see (require-chain timing used to pin this to whatever the
+-- cwd happened to be when repository.lua was first pulled in). After the
+-- seed, explicit Repo.instance(dir) calls move the binding; parameterless
+-- calls keep it, so a status buffer's binding survives unrelated :cd's.
+-- (A window-local `lcd` cannot serve here: nvim clears window lcd's on a
+-- global `:cd`.)
+local lastDir = nil
 
 ---@param dir? string
 ---@param opts? { autorefresh?: boolean } Set `autorefresh = false` when the
@@ -190,6 +199,12 @@ local lastDir = vim.uv.cwd()
 ---milliseconds later. Defaults to true, preserving the existing contract.
 ---@return NeogitRepo
 function Repo.instance(dir, opts)
+  -- Without an explicit dir and with no binding yet, seed from the current
+  -- directory of this first access (see lastDir above for why this is lazy).
+  if not dir and not lastDir then
+    lastDir = vim.uv.cwd()
+  end
+
   if dir and dir ~= lastDir then
     lastDir = dir
   end

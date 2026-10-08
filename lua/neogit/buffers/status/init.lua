@@ -3,6 +3,7 @@ local Buffer = require("neogit.lib.buffer")
 local ui = require("neogit.buffers.status.ui")
 local popups = require("neogit.popups")
 local git = require("neogit.lib.git")
+local Repo = require("neogit.lib.git.repository")
 local Watcher = require("neogit.watcher")
 local a = require("neogit.lib.async")
 local logger = require("neogit.logger") -- TODO: Add logging
@@ -140,7 +141,23 @@ function M:_action(name)
   local action = require("neogit.buffers.status.actions")[name]
   assert(action, ("Status Buffer action %q is undefined"):format(name))
 
-  return action(self)
+  -- Bind the repo singleton to THIS buffer's repository before the action
+  -- runs. Actions resolve their target through `git.repo` (which follows the
+  -- last directory handed to Repo.instance): with several repositories'
+  -- status buffers alive at once, that pointer may name a different
+  -- repository, and index writes (stage/unstage/reset) would silently land
+  -- in the wrong repository's index.
+  -- The action is invoked through its returned closure: n_*/v_* build an
+  -- a.void(...) coroutine there, and nvim's keymap callback is what normally
+  -- runs it.
+  return function()
+    Repo.instance(self.cwd)
+    local task = action(self)
+    if type(task) == "function" then
+      return task()
+    end
+    return task
+  end
 end
 
 ---status.diff_preview: debounce cursor movement, then render the diff of
@@ -205,7 +222,12 @@ function M:open(kind)
   local mappings = config.get_reversed_status_maps()
 
   self.buffer = Buffer.create {
-    name = "NeogitStatus",
+    -- One buffer per repository: a fixed name made the second repository's
+    -- status view reuse the first one's buffer (same name => same buffer),
+    -- so its refresh overwrote the other repo's rendering and actions mixed
+    -- up which repository they read from and wrote to. Suffixing with the
+    -- worktree cwd keeps every repository's status view in its own buffer.
+    name = "NeogitStatus (" .. self.cwd .. ")",
     filetype = "NeogitStatus",
     cwd = self.cwd,
     context_highlight = not config.values.disable_context_highlighting and config.values.log_pager == nil,
@@ -424,7 +446,12 @@ function M:refresh(partial, reason)
     end)
   end
 
-  git.repo:dispatch_refresh {
+  -- Route the refresh through this buffer's own repo instance: the global
+  -- `git.repo` pointer follows the last directory any code handed to
+  -- Repo.instance, so with multiple status buffers open it may name another
+  -- repository (wrong data source, and the "status" callback slot of that
+  -- other repo's instance table would be hijacked).
+  Repo.instance(self.cwd):dispatch_refresh {
     source = "status",
     partial = partial,
     callback = function()
@@ -446,7 +473,7 @@ function M:redraw(cursor, view, fold_state)
   end
 
   logger.debug("[STATUS] Rendering UI")
-  self.buffer.ui:render(unpack(ui.Status(git.repo.state, self.config)))
+  self.buffer.ui:render(unpack(ui.Status(Repo.instance(self.cwd).state, self.config)))
 
   if fold_state then
     logger.debug("[STATUS] Restoring explicit fold state")
