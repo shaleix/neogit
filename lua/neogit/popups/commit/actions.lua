@@ -204,7 +204,18 @@ function M.ai_commit(popup)
             instance:dispatch_refresh(nil, "ai_commit")
           end
         else
-          loading.done("AI Commit: commit failed", vim.log.levels.ERROR)
+          -- Surface the git-side failure reason (e.g. a commit-msg hook
+          -- rejecting the message): stderr travels on GitResult.message;
+          -- without it the user cannot tell a hook blocked the commit.
+          local detail = vim.trim(result.message or ""):gsub("%s+", " ")
+          if detail ~= "" then
+            loading.done(
+              ("AI Commit: commit failed (%s)"):format(vim.fn.strcharpart(detail, 0, 200)),
+              vim.log.levels.ERROR
+            )
+          else
+            loading.done("AI Commit: commit failed", vim.log.levels.ERROR)
+          end
         end
       end)
     else

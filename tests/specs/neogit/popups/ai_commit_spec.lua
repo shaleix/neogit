@@ -108,6 +108,41 @@ describe("commit popup AI Commit", function()
     )
   end)
 
+  it("surfaces the commit-msg hook rejection in the failure notification", function()
+    local dir = workdir()
+    vim.cmd.cd(dir)
+    Repo.instance(dir, { autorefresh = false })
+
+    -- a husky-style commit-msg hook that rejects the commit from stderr
+    local hook = dir .. "/.git/hooks/commit-msg"
+    local fd = assert(io.open(hook, "w"))
+    fd:write('#!/bin/sh\necho "commit-msg hook: dictionary file missing" >&2\nexit 1\n')
+    fd:close()
+    assert(vim.system({ "chmod", "+x", hook }):wait().code == 0)
+
+    config.values.ai_commit.generator = function(done)
+      done("feat: add file")
+    end
+    neogit.action("commit", "ai_commit", {})()
+
+    local loading = require("neogit.lib.loading")
+    assert.truthy(
+      vim.wait(10000, function()
+        return loading.internal.settled_text():find("commit failed", 1, true) ~= nil
+      end, 10),
+      "loading must settle into the failure state"
+    )
+
+    -- the hook's stderr must be part of the notification
+    assert.truthy(
+      loading.internal.settled_text():find("dictionary file missing", 1, true) ~= nil,
+      ("hook stderr missing from notification: %q"):format(loading.internal.settled_text())
+    )
+
+    -- and the commit must not have landed
+    assert.truthy(last_message(dir) ~= "feat: add file", "commit must be rejected by the hook")
+  end)
+
   it("warns instead of committing when no generator is configured", function()
     local dir = workdir()
     vim.cmd.cd(dir)

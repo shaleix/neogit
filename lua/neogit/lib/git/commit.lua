@@ -52,7 +52,10 @@ function M.create(args, opts)
       notification.error(opts.msg.fail)
     end
 
-    return GitResult.new(code)
+    -- Keep the process stderr on the result (GitResult.message): callers
+    -- like AI Commit surface it in their failure notification, which is the
+    -- only place a rejected commit-msg hook becomes diagnosable.
+    return GitResult.from_process(result)
   end
 
   local code = client.wrap(cmd.arg_list(args or {}), {

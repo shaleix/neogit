@@ -193,6 +193,12 @@ function M.wrap(cmd, opts)
     if opts.msg.fail then
       notification.warn(opts.msg.fail, { dismiss = true })
     end
+
+    -- Keep the git-side stderr (a rejected hook, a refused push, ...) in the
+    -- log for post-mortem; the notification above carries the fixed text only.
+    if result.stderr and #result.stderr > 0 then
+      logger.error(("[CLIENT] command failed:\n%s"):format(table.concat(result.stderr, "\n")))
+    end
   end
 
   return result.code

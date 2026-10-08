@@ -356,6 +356,10 @@ neogit.setup {
     -- Extra HTTP headers, for gateways controlled via headers:
     --   { ["X-Some-Gateway-Switch"] = "value" }
     extra_headers = nil,
+    -- Troubleshooting: generation errors and failed-commit stderr (e.g. a
+    -- commit-msg hook rejecting the message) appear in the notification
+    -- itself; the full details go to the log, which is off by default -
+    -- export NEOGIT_LOG_FILE=1 (and NEOGIT_LOG_LEVEL=debug) to capture them.
   },
   commit_editor = {
     kind = "tab",

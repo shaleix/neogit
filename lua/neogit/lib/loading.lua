@@ -185,6 +185,14 @@ function M.close()
   state.result = nil
 end
 
+-- Test seam: the settled text (or "" while running/closed), for specs
+-- asserting on the final notification content.
+M.internal = {
+  settled_text = function()
+    return state.text or ""
+  end,
+}
+
 ---Whether the indicator is currently visible.
 ---@return boolean
 function M.is_active()
@@ -192,8 +200,6 @@ function M.is_active()
 end
 
 -- Test seam; not public API.
-M.internal = {
-  state = state,
-}
+M.internal.state = state
 
 return M
