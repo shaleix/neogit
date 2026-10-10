@@ -138,11 +138,18 @@ local HEAD = Component.new(function(props)
   -- its first value on LuaJIT, which silently dropped the ↓ counter)
   local content = {
     text.highlight("NeogitStatusHEAD")(util.pad_right(props.name .. ": ", props.HEAD_padding)),
+  }
+  -- Divergence sits directly behind the line label: it is the first thing
+  -- worth glancing at, before oid/branch/message.
+  vim.list_extend(content, divergence)
+  if #divergence > 0 then
+    table.insert(content, text(" "))
+  end
+  vim.list_extend(content, {
     text.highlight("NeogitObjectId")(show_oid and oid or ""),
     text(show_oid and " " or ""),
     text.highlight(highlight)(ref),
-  }
-  vim.list_extend(content, divergence)
+  })
   table.insert(content, text(" "))
   table.insert(content, text(props.msg or "(no commits)"))
 
