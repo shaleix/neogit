@@ -105,28 +105,58 @@ end
 ---@field message string the message associated with each stash.
 
 function M.register(meta)
+  ---Parse one `git stash list --format=%gd%x1f%H%x1f%gs` line into a stash
+  ---entry (single spawn for the whole list).
+  local function parse_stash_line(line)
+    local ref, oid, message = line:match("stash@{(%-?%d*)}\x1f([0-9a-f]+)\x1f(.*)")
+    local idx = tonumber(ref)
+    if not idx or not oid or not message then
+      return nil
+    end
+
+    return {
+      idx = idx,
+      message = message,
+      oid = oid,
+      name = ("stash@{%d}: %s"):format(idx, message),
+    }
+  end
+
   meta.update_stashes = function(state)
-    state.stashes.items = util.map(M.list(), function(line)
-      local idx, message = line:match("stash@{(%d*)}: (.*)")
+    local entries = nil
 
-      idx = tonumber(idx)
-      assert(idx, "index cannot be nil")
+    -- libgit2 twin: one foreach, oids included at no extra cost
+    if backend.capability("query_stash_list") == "libgit2" then
+      entries = require("neogit.lib.git.libgit2.stash").list_detailed()
+      if entries == nil then
+        logger.warn("[STASH]: libgit2 detailed list unavailable - falling back to CLI")
+      end
+    end
 
+    if not entries then
+      -- CLI fallback: ONE spawn resolves index, oid and subject together
+      local lines = git.cli.stash.args("list", "--format=%gd%x1f%H%x1f%gs").call({ hidden = true }).stdout
+      entries = util.filter_map(lines, parse_stash_line)
+    end
+
+    state.stashes.items = util.map(entries, function(entry)
       ---@class StashItem
       local item = {
-        idx = idx,
-        name = line,
-        message = message,
+        idx = entry.idx,
+        name = entry.name,
+        message = entry.message,
+        oid = entry.oid, -- concrete: rendering yankables must not spawn
       }
 
-      -- These calls can be somewhat expensive, so lazy load them
+      -- Display-only extras stay lazy (each costs a git call, the status
+      -- view never touches them).
       setmetatable(item, {
         __index = function(self, key)
           if key == "rel_date" then
             self.rel_date = git.cli.log
               .max_count(1)
               .format("%cr")
-              .args(("stash@{%s}"):format(idx))
+              .args(("stash@{%s}"):format(entry.idx))
               .call({ hidden = true }).stdout[1]
 
             return self.rel_date
@@ -135,13 +165,10 @@ function M.register(meta)
               .max_count(1)
               .format("%cd")
               .args("--date=format:" .. config.values.log_date_format)
-              .args(("stash@{%s}"):format(idx))
+              .args(("stash@{%s}"):format(entry.idx))
               .call({ hidden = true }).stdout[1]
 
             return self.date
-          elseif key == "oid" then
-            self.oid = git.rev_parse.oid("stash@{" .. idx .. "}")
-            return self.oid
           end
         end,
       })
