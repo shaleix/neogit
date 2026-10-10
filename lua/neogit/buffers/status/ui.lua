@@ -906,8 +906,6 @@ function M.Status(state, config)
   -- "Unmerged into <upstream>" no longer renders as a section: the Head
   -- line's ↑N ↓M counters carry the divergence overview and <cr> there
   -- opens the range diff. The unmerged items stay in state (counter data).
-  local has_outgoing = #state.upstream.unmerged.items > 0
-
   local show_pushRemote_unmerged = #state.pushRemote.unmerged.items > 0
     and state.pushRemote.ref ~= state.upstream.ref
     and not config.sections.unmerged_pushRemote.hidden
@@ -915,11 +913,10 @@ function M.Status(state, config)
   local show_stashes = #state.stashes.items > 0
     and not config.sections.stashes.hidden
 
-  -- Recent commits duplicate the outgoing commits while they exist, so the
-  -- list only shows once the branch is back in sync (the section the list
-  -- used to share screen estate with is gone, the rule survives it).
+  -- Recent commits show whenever there are any: the old rule of hiding
+  -- them while outgoing commits existed only avoided duplicating the
+  -- "Unmerged into" list, which no longer renders.
   local show_recent = #state.recent.items > 0
-    and not has_outgoing
     and not config.sections.recent.hidden
 
   return {
