@@ -908,6 +908,15 @@ function M.Status(state, config)
             yankable = state.head.oid,
             show_oid = config.status.show_head_commit_hash,
             HEAD_padding = config.status.HEAD_padding,
+            -- Divergence lives on the FIRST head line so it stays visible
+            -- when the head block is folded (a folded block keeps only
+            -- this line). Counts the upstream; `<cr>` on the line opens
+            -- the range diff.
+            divergence = state.upstream.ref and {
+              ref = state.upstream.ref,
+              ahead = #state.upstream.unmerged.items,
+              behind = #state.upstream.unpulled.items,
+            } or nil,
           },
           show_upstream and HEAD {
             name = "Merge",
@@ -917,11 +926,6 @@ function M.Status(state, config)
             yankable = state.upstream.oid,
             show_oid = config.status.show_head_commit_hash,
             HEAD_padding = config.status.HEAD_padding,
-            divergence = state.upstream.ref and {
-              ref = state.upstream.ref,
-              ahead = #state.upstream.unmerged.items,
-              behind = #state.upstream.unpulled.items,
-            } or nil,
           },
           show_pushRemote and HEAD {
             name = "Push",

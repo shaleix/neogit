@@ -70,7 +70,7 @@ end
 neogit.setup { filewatcher = { enabled = false }, disable_context_highlighting = true }
 
 describe("status HEAD divergence counters", function()
-  it("shows ↑N ↓M on the Merge line when ahead and behind", function()
+  it("shows ↑N ↓M on the Head line when ahead and behind", function()
     local dir = workdir()
     -- local-only commit => ahead
     local fd = assert(io.open(dir .. "/file.txt", "a"))
@@ -86,9 +86,40 @@ describe("status HEAD divergence counters", function()
     local buf = open_status(dir)
     local text = buffer_text(buf)
 
-    local merge_line = text:match("Merge:[^\n]*")
-    assert.truthy(merge_line and merge_line:find("↑1", 1, true), "Merge line must show ↑1:\n" .. text)
-    assert.truthy(merge_line and merge_line:find("↓1", 1, true), "Merge line must show ↓1:\n" .. text)
+    local head_line = text:match("Head:[^\n]*")
+    assert.truthy(head_line and head_line:find("↑1", 1, true), "Head line must show ↑1:\n" .. text)
+    assert.truthy(head_line and head_line:find("↓1", 1, true), "Head line must show ↓1:\n" .. text)
+  end)
+
+  it("keeps the counters visible on the Head line when the head block is folded", function()
+    local dir = workdir()
+    local fd = assert(io.open(dir .. "/file.txt", "a"))
+    fd:write("two\n")
+    fd:close()
+    run(dir, "add", "file.txt")
+    run(dir, "commit", "-qm", "local-only")
+    run(dir, "branch", "fake-remote")
+    run(dir, "branch", "--set-upstream-to=fake-remote")
+    advance_ref(dir, "fake-remote")
+
+    config.values.status.HEAD_folded = true
+    local ok_open, buf = pcall(open_status, dir)
+    if not ok_open then
+      config.values.status.HEAD_folded = false
+      error(buf)
+    end
+    config.values.status.HEAD_folded = false
+
+    local text = buffer_text(buf)
+    local head_line = text:match("Head:[^\n]*")
+    assert.truthy(head_line and head_line:find("↑1", 1, true), "folded Head line must show ↑1:\n" .. text)
+
+    -- display-level fold: the head block collapses to its first line, and
+    -- that first (kept) line is where the counters live
+    local head_lnum = vim.fn.search("Head:")
+    local merge_lnum = vim.fn.search("Merge:", "n")
+    assert.truthy(merge_lnum > 0, "Merge line must still exist in the buffer:\n" .. text)
+    assert.equal(head_lnum, vim.fn.foldclosed(merge_lnum), "Merge line must sit inside the closed head fold")
   end)
 
   it("stays clean when the branch is in sync", function()
@@ -99,8 +130,8 @@ describe("status HEAD divergence counters", function()
     local buf = open_status(dir)
     local text = buffer_text(buf)
 
-    local merge_line = text:match("Merge:[^\n]*")
-    assert.truthy(merge_line, "Merge line must render:\n" .. text)
-    assert.falsy(merge_line:find("[↑↓]"), "in-sync Merge line must not show counters:\n" .. text)
+    local head_line = text:match("Head:[^\n]*")
+    assert.truthy(head_line, "Head line must render:\n" .. text)
+    assert.falsy(head_line:find("[↑↓]"), "in-sync Head line must not show counters:\n" .. text)
   end)
 end)
