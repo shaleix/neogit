@@ -429,6 +429,7 @@ local configurations = {
       shortstat = "--shortstat",
       oneline = "--oneline",
       no_patch = "--no-patch",
+      no_ext_diff = "--no-ext-diff",
     },
     options = {
       format = "--format",

@@ -191,6 +191,10 @@ function M:_preview_diff_under_cursor()
         and vim.tbl_contains({ "untracked", "unstaged", "staged" }, section_name)
       then
         require("neogit.buffers.diff_preview").show(self.buffer, section_name, item)
+      elseif section_name == "recent" and item and item.commit then
+        -- Recent Commits rows preview like files: the commit's diff under
+        -- the cursor, <cr> still opens the full commit view
+        require("neogit.buffers.diff_preview").show(self.buffer, "commit", item)
       else
         -- cursor left the file items: hide the preview split
         require("neogit.buffers.diff_preview").close()
