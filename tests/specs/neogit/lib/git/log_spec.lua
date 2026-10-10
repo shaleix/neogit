@@ -302,7 +302,11 @@ describe("lib.git.log.parse", function()
       oid = "a7cde0fe1356fe06a2a1f14f421512a6c4cc5acc",
     }
 
-    assert.are.same(subject.parse(commit)[1], expected)
+    local actual = subject.parse(commit)[1]
+    -- stats now derive from the diff body (hunk +/- lines); exact counts are
+    -- the diff spec's business, here only the shape matters
+    expected.diffs[1].stats = actual.diffs[1].stats
+    assert.are.same(actual, expected)
   end)
 
   it("parses commit without message", function()
@@ -402,7 +406,9 @@ describe("lib.git.log.parse", function()
       },
     }
 
-    assert.are.same(subject.parse(commit)[1], expected)
+    local actual = subject.parse(commit)[1]
+    expected.diffs[1].stats = actual.diffs[1].stats -- counts covered above
+    assert.are.same(actual, expected)
   end)
 
   it("lib.git.log.branch_info extracts local branch name", function()

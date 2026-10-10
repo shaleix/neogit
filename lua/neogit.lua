@@ -73,6 +73,17 @@ function M.setup(opts)
   signs.setup(config.values)
   state.setup(config.values)
   autocmds.setup()
+
+  -- Warm the libgit2 binding in the background: the first status refresh
+  -- otherwise pays ~100ms loading the shared library (ffi.load +
+  -- git_libgit2_init) right when the user is watching. Doing it shortly
+  -- after setup keeps that cost out of the first-open latency for anyone
+  -- who opens neogit a moment later. Harmless with the CLI backend forced.
+  if config.values.git_backend == nil or config.values.git_backend == "auto" then
+    vim.defer_fn(function()
+      require("neogit.lib.git.backend").current()
+    end, 1000)
+  end
 end
 
 local function construct_opts(opts)

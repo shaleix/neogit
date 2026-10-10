@@ -50,35 +50,6 @@ local sha256 = vim.fn.sha256
 ---@field insertions string|nil
 ---@field deletions string|nil
 
----@param raw string|string[]
----@return DiffStats
-local function parse_diff_stats(raw)
-  if type(raw) == "string" then
-    raw = vim.split(raw, ", ")
-  end
-  local stats = {
-    additions = 0,
-    deletions = 0,
-  }
-
-  -- local matches raw:match('1 file changed, (%d+ insertions?%(%+%))?(, )?(%d+ deletions?%(%-%))?')
-  for _, part in ipairs(raw) do
-    part = util.trim(part)
-    local additions = part:match("(%d+) insertion.*")
-    local deletions = part:match("(%d+) deletion.*")
-
-    if additions then
-      stats.additions = tonumber(additions)
-    end
-
-    if deletions then
-      stats.deletions = tonumber(deletions)
-    end
-  end
-
-  return stats
-end
-
 ---@param output string[]
 ---@return string[], number
 local function build_diff_header(output)
@@ -267,7 +238,21 @@ local function parse_diff(raw_diff, raw_stats)
   local pager_contents = build_pager_contents(header, lines, hunks)
   local kind, info = build_kind(header)
   local file = build_file(header, kind)
-  local stats = parse_diff_stats(raw_stats or {})
+
+  -- Stats derive from the diff body itself: counting +/- hunk lines makes
+  -- the dedicated `--shortstat` spawn per file redundant (its only consumer
+  -- was the diffview integration's per-file additions/deletions). raw_stats
+  -- stays in the signature for compatibility but is no longer queried.
+  local stats = { additions = 0, deletions = 0 }
+  for _, hunk in ipairs(hunks) do
+    for _, line in ipairs(hunk.lines or {}) do
+      if line:match("^%+") then
+        stats.additions = stats.additions + 1
+      elseif line:match("^%-") then
+        stats.deletions = stats.deletions + 1
+      end
+    end
+  end
 
   util.map(hunks, function(hunk)
     hunk.file = file
@@ -319,9 +304,7 @@ end
 local function raw_unstaged(name)
   return function()
     local diff = git.cli.diff.no_ext_diff.files(name).call({ hidden = true }).stdout
-    local stats = git.cli.diff.no_ext_diff.shortstat.files(name).call({ hidden = true }).stdout
-
-    return { diff, stats }
+    return { diff }
   end
 end
 
@@ -330,9 +313,7 @@ end
 local function raw_staged_unmerged(name)
   return function()
     local diff = git.cli.diff.no_ext_diff.files(name).call({ hidden = true }).stdout
-    local stats = git.cli.diff.no_ext_diff.shortstat.files(name).call({ hidden = true }).stdout
-
-    return { diff, stats }
+    return { diff }
   end
 end
 
@@ -341,9 +322,7 @@ end
 local function raw_staged(name)
   return function()
     local diff = git.cli.diff.no_ext_diff.cached.files(name).call({ hidden = true }).stdout
-    local stats = git.cli.diff.no_ext_diff.cached.shortstat.files(name).call({ hidden = true }).stdout
-
-    return { diff, stats }
+    return { diff }
   end
 end
 
@@ -352,10 +331,7 @@ end
 local function raw_staged_renamed(name, original)
   return function()
     local diff = git.cli.diff.no_ext_diff.cached.files(name, original).call({ hidden = true }).stdout
-    local stats =
-      git.cli.diff.no_ext_diff.cached.shortstat.files(name, original).call({ hidden = true }).stdout
-
-    return { diff, stats }
+    return { diff }
   end
 end
 
