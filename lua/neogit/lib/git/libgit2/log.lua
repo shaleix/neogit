@@ -201,6 +201,14 @@ function M.update_recent(repo_state, _filter, ctx)
       local committer_time = tonumber(sig.when.time) or 0
       local author_name = ffi.string(lg2.C.git_commit_author(commit.commit).name)
 
+      -- Parent hashes (space-joined, like %P): the recent-rows graph
+      -- prefixes fan out on merge commits (2+ parents)
+      local parent_count = tonumber(lg2.C.git_commit_parentcount(commit.commit)) or 0
+      local parents = {}
+      for i = 0, parent_count - 1 do
+        parents[#parents + 1] = git2.oid_hex(lg2.C.git_commit_parent_id(commit.commit, i))
+      end
+
       records[#records + 1] = {
         oid = hex,
         abbreviated_commit = hex:sub(1, git.log.abbreviated_size()),
@@ -211,6 +219,13 @@ function M.update_recent(repo_state, _filter, ctx)
         author_date = committer_time,
         committer_date = committer_time,
         unix_date = committer_time,
+        parent = table.concat(parents, " "),
+        abbreviated_parent = table.concat(
+          vim.tbl_map(function(p)
+            return p:sub(1, 7)
+          end, parents),
+          " "
+        ),
       }
     end
 

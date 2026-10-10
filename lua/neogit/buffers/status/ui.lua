@@ -728,6 +728,28 @@ local SectionItemCommit = Component.new(function(item)
   )
 end)
 
+local SectionItemRecent = Component.new(function(item)
+  -- Git-history-style prefix: a commit point per row, with merge commits
+  -- (2+ parents) fanning out. Everything renders left-aligned - author
+  -- initials follow the hash and the date/author right margin stays off.
+  local parent_count = select(2, (item.commit.parent or ""):gsub("%S+", ""))
+  local graph = parent_count >= 2 and "*─╮ " or "* "
+
+  return row({
+    text("  "),
+    text.highlight("NeogitGraphOrange")(graph),
+    text.highlight("NeogitObjectId")(item.commit.abbreviated_commit),
+    text(" "),
+    text.highlight("NeogitGraphAuthor")(item.commit.author_name:sub(1, 2)),
+    text(" "),
+    text(item.commit.subject),
+  }, {
+    oid = item.commit.oid,
+    yankable = item.commit.oid,
+    item = item,
+  })
+end)
+
 local SectionItemRebase = Component.new(function(item)
   if item.oid then
     local action_hl = (item.done and "NeogitRebaseDone")
@@ -1059,7 +1081,7 @@ function M.Status(state, config)
         show_recent and Section {
           title = SectionTitle { title = "Recent Commits", highlight = "NeogitRecentcommits", icon = section_icons.recent },
           count = false,
-          render = SectionItemCommit,
+          render = SectionItemRecent,
           items = state.recent.items,
           folded = config.sections.recent.folded,
           name = "recent",
