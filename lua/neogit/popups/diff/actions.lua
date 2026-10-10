@@ -49,14 +49,13 @@ function M.range(popup)
     commit = item and item.name
   end
 
-  local options = util.deduplicate(
-    util.merge(
-      { commit, git.branch.current() or "HEAD" },
-      git.branch.get_all_branches(false),
-      git.tag.list(),
-      git.refs.heads()
-    )
-  )
+  local options = util.deduplicate(util.merge(
+    -- nil upstream (detached/no tracking branch) truncates away safely
+    { commit, git.branch.current() or "HEAD", git.branch.upstream() },
+    git.branch.get_all_branches(false),
+    git.tag.list(),
+    git.refs.heads()
+  ))
 
   local range_from = FuzzyFinderBuffer.new(options):open_async {
     prompt_prefix = "Diff for range from",

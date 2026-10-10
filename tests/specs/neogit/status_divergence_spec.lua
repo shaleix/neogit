@@ -1,0 +1,106 @@
+-- Status HEAD lines: upstream divergence counters (↑N ↓M) render on the
+-- Merge/Push lines when the branch is ahead/behind its remote, and stay
+-- clean when in sync.
+local neogit = require("neogit")
+local config = require("neogit.config")
+local Repo = require("neogit.lib.git.repository")
+local status_buf = require("neogit.buffers.status")
+
+local function run(dir, ...)
+  local r = vim.system({ "git", "-C", dir, ... }):wait()
+  assert(r.code == 0, tostring(r.stderr))
+end
+
+local function workdir()
+  local dir = vim.fn.tempname()
+  vim.uv.fs_mkdir(dir, 493)
+
+  run(dir, "init", "-q", "-b", "main")
+  run(dir, "config", "user.email", "t@t")
+  run(dir, "config", "user.name", "t")
+
+  local fd = assert(io.open(dir .. "/file.txt", "w"))
+  fd:write("one\n")
+  fd:close()
+  run(dir, "add", "file.txt")
+  run(dir, "commit", "-qm", "base")
+
+  return dir
+end
+
+local function open_status(dir)
+  vim.cmd.cd(dir)
+  Repo.instance(dir, { autorefresh = false })
+  local buf = status_buf.new(config.values, Repo.instance(dir).worktree_root, dir)
+  buf:open("split")
+  local fired = false
+  vim.api.nvim_create_autocmd("User", {
+    pattern = "NeogitStatusRefreshed",
+    once = true,
+    callback = function()
+      fired = true
+    end,
+  })
+  buf:dispatch_refresh()
+  assert.truthy(
+    vim.wait(10000, function()
+      return fired
+    end, 10),
+    "refresh did not complete"
+  )
+  vim.wait(50)
+  return buf
+end
+
+local function buffer_text(buf)
+  return table.concat(vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false), "\n")
+end
+
+---Advance `ref` by one commit on top of HEAD~1 (a sibling of the local
+---tip): the remote gains one commit the local side lacks, without sharing
+---the local-only tip.
+local function advance_ref(dir, ref)
+  local base = vim.trim(vim.system({ "git", "-C", dir, "rev-parse", "HEAD~1" }):wait().stdout)
+  local tree = vim.trim(vim.system({ "git", "-C", dir, "rev-parse", base .. "^{tree}" }):wait().stdout)
+  local oid =
+    vim.system({ "git", "-C", dir, "commit-tree", tree, "-p", base, "-m", "remote-only" }):wait().stdout
+  run(dir, "branch", "-f", ref, vim.trim(oid))
+end
+
+neogit.setup { filewatcher = { enabled = false }, disable_context_highlighting = true }
+
+describe("status HEAD divergence counters", function()
+  it("shows ↑N ↓M on the Merge line when ahead and behind", function()
+    local dir = workdir()
+    -- local-only commit => ahead
+    local fd = assert(io.open(dir .. "/file.txt", "a"))
+    fd:write("two\n")
+    fd:close()
+    run(dir, "add", "file.txt")
+    run(dir, "commit", "-qm", "local-only")
+    -- local branch as upstream, advanced by one => behind
+    run(dir, "branch", "fake-remote")
+    run(dir, "branch", "--set-upstream-to=fake-remote")
+    advance_ref(dir, "fake-remote")
+
+    local buf = open_status(dir)
+    local text = buffer_text(buf)
+
+    local merge_line = text:match("Merge:[^\n]*")
+    assert.truthy(merge_line and merge_line:find("↑1", 1, true), "Merge line must show ↑1:\n" .. text)
+    assert.truthy(merge_line and merge_line:find("↓1", 1, true), "Merge line must show ↓1:\n" .. text)
+  end)
+
+  it("stays clean when the branch is in sync", function()
+    local dir = workdir()
+    run(dir, "branch", "fake-remote")
+    run(dir, "branch", "--set-upstream-to=fake-remote")
+
+    local buf = open_status(dir)
+    local text = buffer_text(buf)
+
+    local merge_line = text:match("Merge:[^\n]*")
+    assert.truthy(merge_line, "Merge line must render:\n" .. text)
+    assert.falsy(merge_line:find("[↑↓]"), "in-sync Merge line must not show counters:\n" .. text)
+  end)
+end)

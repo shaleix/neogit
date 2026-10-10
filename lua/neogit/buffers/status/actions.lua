@@ -1455,6 +1455,24 @@ M.n_goto_file = function(self)
       return
     end
 
+    -- Divergence entry: `<cr>` on a remote HEAD line (Merge/Push) that
+    -- shows `↑N ↓M` opens the symmetric range diff against that remote -
+    -- "what would a push/fetch change" in one keypress. In sync (no
+    -- counters rendered), the line keeps its commit-view behaviour below.
+    local component = self.buffer.ui:get_component_on_line(vim.fn.line("."), function(c)
+      return c.options and type(c.options.divergence) == "table"
+    end)
+    if component then
+      local d = component.options.divergence
+      if d.ref and (d.ahead > 0 or d.behind > 0) then
+        local viewer = config.get_diff_viewer()
+        local integration = viewer == "codediff" and require("neogit.integrations.codediff")
+          or require("neogit.integrations.diffview")
+        integration.open("range", d.ref .. "...HEAD")
+        return
+      end
+    end
+
     -- Goto COMMIT
     local ref = self.buffer.ui:get_yankable_under_cursor()
     if ref then

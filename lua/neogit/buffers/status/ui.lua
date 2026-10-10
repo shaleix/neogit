@@ -118,14 +118,38 @@ local HEAD = Component.new(function(props)
     oid = oid:sub(1, 7)
   end
 
-  return row({
+  -- Divergence against the remote ref this line names: `↑N` local commits
+  -- not on the remote, `↓M` remote commits not local. Only non-zero
+  -- directions render, so an in-sync line stays clean. `props.divergence`
+  -- carries the ref so `<cr>` on the line can open the range diff.
+  local divergence = {}
+  if props.divergence then
+    if props.divergence.ahead > 0 then
+      divergence[#divergence + 1] =
+        text.highlight("NeogitDivergenceAhead")((" ↑%d"):format(props.divergence.ahead))
+    end
+    if props.divergence.behind > 0 then
+      divergence[#divergence + 1] =
+        text.highlight("NeogitDivergenceBehind")((" ↓%d"):format(props.divergence.behind))
+    end
+  end
+
+  -- (built via list_extend: an unpack() mid-table-constructor keeps only
+  -- its first value on LuaJIT, which silently dropped the ↓ counter)
+  local content = {
     text.highlight("NeogitStatusHEAD")(util.pad_right(props.name .. ": ", props.HEAD_padding)),
     text.highlight("NeogitObjectId")(show_oid and oid or ""),
     text(show_oid and " " or ""),
     text.highlight(highlight)(ref),
-    text(" "),
-    text(props.msg or "(no commits)"),
-  }, { yankable = props.yankable })
+  }
+  vim.list_extend(content, divergence)
+  table.insert(content, text(" "))
+  table.insert(content, text(props.msg or "(no commits)"))
+
+  return row(content, {
+    yankable = props.yankable,
+    divergence = props.divergence,
+  })
 end)
 
 local Tag = Component.new(function(props)
@@ -893,6 +917,11 @@ function M.Status(state, config)
             yankable = state.upstream.oid,
             show_oid = config.status.show_head_commit_hash,
             HEAD_padding = config.status.HEAD_padding,
+            divergence = state.upstream.ref and {
+              ref = state.upstream.ref,
+              ahead = #state.upstream.unmerged.items,
+              behind = #state.upstream.unpulled.items,
+            } or nil,
           },
           show_pushRemote and HEAD {
             name = "Push",
@@ -902,6 +931,11 @@ function M.Status(state, config)
             yankable = state.pushRemote.oid,
             show_oid = config.status.show_head_commit_hash,
             HEAD_padding = config.status.HEAD_padding,
+            divergence = state.pushRemote.ref and state.pushRemote.ref ~= state.upstream.ref and {
+              ref = state.pushRemote.ref,
+              ahead = #state.pushRemote.unmerged.items,
+              behind = #state.pushRemote.unpulled.items,
+            } or nil,
           },
           show_tag and Tag {
             name = state.head.tag.name,
