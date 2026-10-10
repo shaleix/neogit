@@ -727,7 +727,10 @@ function M.get_default_values()
       },
       unmerged_upstream = {
         folded = false,
-        hidden = false,
+        -- Hidden by default: the Head line's divergence counters (↑N ↓M)
+        -- carry the overview, and `<cr>` there opens the range diff - the
+        -- per-commit list was mostly screen estate.
+        hidden = true,
       },
       unpulled_pushRemote = {
         folded = true,
@@ -735,7 +738,7 @@ function M.get_default_values()
       },
       unmerged_pushRemote = {
         folded = false,
-        hidden = false,
+        hidden = true,
       },
       recent = {
         folded = true,

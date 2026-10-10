@@ -122,6 +122,11 @@ describe("section header icons and colors", function()
   end)
 
   it("renders upload/download icons on remote sections", function()
+    -- the unmerged sections are hidden by default (Head-line counters
+    -- replaced the overview); opt back in to exercise their icons
+    config.values.sections.unmerged_upstream.hidden = false
+    config.values.sections.unmerged_pushRemote.hidden = false
+
     local dir = workdir_diverged()
     local buf = open_status(dir)
     local text = buffer_text(buf)
@@ -129,6 +134,9 @@ describe("section header icons and colors", function()
     local icons = config.values.icons.sections
     assert.truthy(text:find(icons.unmerged .. " Unmerged into", 1, true), "unmerged (upload) icon missing")
     assert.truthy(text:find(icons.unpulled .. " Unpulled from", 1, true), "unpulled (download) icon missing")
+
+    config.values.sections.unmerged_upstream.hidden = true
+    config.values.sections.unmerged_pushRemote.hidden = true
   end)
 
   it("renders the single-letter mode column with file-type icons", function()

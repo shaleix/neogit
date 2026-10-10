@@ -520,7 +520,9 @@ neogit.setup {
     },
     unmerged_upstream = {
       folded = false,
-      hidden = false,
+      -- hidden by default: Head-line ↑N ↓M counters + <cr> range diff
+      -- replace the per-commit list
+      hidden = true,
     },
     unpulled_pushRemote = {
       folded = true,
@@ -528,7 +530,7 @@ neogit.setup {
     },
     unmerged_pushRemote = {
       folded = false,
-      hidden = false,
+      hidden = true,
     },
     recent = {
       folded = true,
