@@ -518,12 +518,8 @@ neogit.setup {
       folded = true,
       hidden = false,
     },
-    unmerged_upstream = {
-      folded = false,
-      -- hidden by default: Head-line ↑N ↓M counters + <cr> range diff
-      -- replace the per-commit list
-      hidden = true,
-    },
+    -- (no unmerged_upstream section: the "Unmerged into" list is gone; the
+    -- Head line's ↑N ↓M counters and its <cr> range diff replaced it)
     unpulled_pushRemote = {
       folded = true,
       hidden = false,

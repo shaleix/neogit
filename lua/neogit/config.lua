@@ -148,7 +148,6 @@ end
 ---@field staged NeogitConfigSection|nil
 ---@field stashes NeogitConfigSection|nil
 ---@field unpulled_upstream NeogitConfigSection|nil
----@field unmerged_upstream NeogitConfigSection|nil
 ---@field unpulled_pushRemote NeogitConfigSection|nil
 ---@field unmerged_pushRemote NeogitConfigSection|nil
 ---@field recent NeogitConfigSection|nil
@@ -724,13 +723,6 @@ function M.get_default_values()
       unpulled_upstream = {
         folded = true,
         hidden = false,
-      },
-      unmerged_upstream = {
-        folded = false,
-        -- Hidden by default: the Head line's divergence counters (↑N ↓M)
-        -- carry the overview, and `<cr>` there opens the range diff - the
-        -- per-commit list was mostly screen estate.
-        hidden = true,
       },
       unpulled_pushRemote = {
         folded = true,

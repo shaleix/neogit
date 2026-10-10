@@ -881,8 +881,10 @@ function M.Status(state, config)
     and state.pushRemote.ref ~= state.upstream.ref
     and not config.sections.unpulled_pushRemote.hidden
 
-  local show_upstream_unmerged = #state.upstream.unmerged.items > 0
-    and not config.sections.unmerged_upstream.hidden
+  -- "Unmerged into <upstream>" no longer renders as a section: the Head
+  -- line's ↑N ↓M counters carry the divergence overview and <cr> there
+  -- opens the range diff. The unmerged items stay in state (counter data).
+  local has_outgoing = #state.upstream.unmerged.items > 0
 
   local show_pushRemote_unmerged = #state.pushRemote.unmerged.items > 0
     and state.pushRemote.ref ~= state.upstream.ref
@@ -891,7 +893,11 @@ function M.Status(state, config)
   local show_stashes = #state.stashes.items > 0
     and not config.sections.stashes.hidden
 
+  -- Recent commits duplicate the outgoing commits while they exist, so the
+  -- list only shows once the branch is back in sync (the section the list
+  -- used to share screen estate with is gone, the rule survives it).
   local show_recent = #state.recent.items > 0
+    and not has_outgoing
     and not config.sections.recent.hidden
 
   return {
@@ -1037,19 +1043,6 @@ function M.Status(state, config)
           file_tree = config.status.file_tree,
           config = config,
         },
-        show_upstream_unmerged and Section {
-          title = SectionTitleRemote {
-            title = "Unmerged into",
-            ref = state.upstream.ref,
-            highlight = "NeogitUnmergedchanges",
-            icon = section_icons.unmerged,
-          },
-          count = true,
-          render = SectionItemCommit,
-          items = state.upstream.unmerged.items,
-          folded = config.sections.unmerged_upstream.folded,
-          name = "upstream_unmerged",
-        },
         show_pushRemote_unmerged and Section {
           title = SectionTitleRemote {
             title = "Unpushed to",
@@ -1063,7 +1056,7 @@ function M.Status(state, config)
           folded = config.sections.unmerged_pushRemote.folded,
           name = "pushRemote_unmerged",
         },
-        not show_upstream_unmerged and show_recent and Section {
+        show_recent and Section {
           title = SectionTitle { title = "Recent Commits", highlight = "NeogitRecentcommits", icon = section_icons.recent },
           count = false,
           render = SectionItemCommit,
