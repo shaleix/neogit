@@ -45,6 +45,7 @@ Here's an example spec for [Lazy](https://github.com/folke/lazy.nvim), but you'r
     "nvim-mini/mini.pick",           -- optional
     "folke/snacks.nvim",             -- optional
 
+
     -- AI commit-message generation ("m" in the commit popup): neogit has a
     -- built-in OpenAI-compatible client (see `ai_commit` below, no extra
     -- plugin needed); llm.nvim is an alternative LLM frontend (multi-provider
