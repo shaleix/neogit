@@ -319,6 +319,14 @@ neogit.setup {
     -- on a directory row applies to the subtree's files, not the section.
     file_tree = false,
   },
+  -- Background `git fetch` when the status buffer opens, so the Head line's
+  -- ↓N behind counter stays current without a manual fetch. A fetch that
+  -- moves the upstream ref triggers one refresh; the fetch NEVER pulls,
+  -- merges or rebases anything, and failures stay silent (remotes without
+  -- cached credentials fail fast instead of hanging on a credential prompt).
+  auto_fetch = {
+    enabled = true,
+  },
   -- AI Commit ("m" in the commit popup): commits with a generated message
   -- without opening the editor. Two ways to configure:
   --   1. Declarative (recommended): set `model` (+ optionally `url`,

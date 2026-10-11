@@ -391,6 +391,7 @@ end
 ---@field auto_show_console_on? string Specify "output" (show always; default) or "error" if `auto_show_console` enabled
 ---@field auto_close_console? boolean Automatically hide the console if the process exits with a 0 status
 ---@field status? NeogitConfigStatusOptions Status buffer options
+---@field auto_fetch? NeogitAutoFetchConfig Background fetch when the status buffer opens
 ---@field commit_editor? NeogitCommitEditorConfigPopup Commit editor options
 ---@field commit_select_view? NeogitConfigPopup Commit select view options
 ---@field stash? NeogitConfigPopup Commit select view options
@@ -418,11 +419,15 @@ end
 ---@field extra_body? table Extra fields deep-merged into the chat/completions request body (e.g. `{ chat_template_kwargs = { enable_thinking = false } }` for vLLM); wins over disable_thinking presets
 ---@field extra_headers? table<string, string|number|boolean> Extra HTTP headers sent with the request (for gateways that control features via headers)
 
+---@class NeogitAutoFetchConfig
+---@field enabled? boolean Fetch from the remote in the background when the status buffer opens, so the Head line's ↓N behind counter is current (a fetch that moves the upstream ref triggers one refresh; the fetch never pulls, merges or rebases)
+
 ---@class NeogitConfigIcons
 ---@field sections? table<string, string?> Nerd font icons shown before status section titles; nil disables that section's icon
 ---@field use_devicons? boolean Use nvim-web-devicons for file icons when installed (falls back to the builtin table otherwise)
 ---@field integrations? { diffview: boolean, codediff: boolean, telescope: boolean, fzf_lua: boolean, mini_pick: boolean, snacks: boolean } Which integrations to enable
 ---@field diff_viewer? "diffview"|"codediff"|nil Which diff viewer to use (nil = auto-detect)
+
 ---@field sections? NeogitConfigSections
 ---@field ignored_settings? string[] Settings to never persist, format: "Filetype--cli-value", i.e. "NeogitCommitPopup--author"
 ---@field mappings? NeogitConfigMappings
@@ -566,6 +571,15 @@ function M.get_default_values()
       -- showing only their basename. Flat list when false. Staging/unstaging
       -- on a directory row applies to the subtree's files, not the section.
       file_tree = false,
+    },
+    -- Fetch from the remote in the background when the status buffer opens,
+    -- so the Head line's ↓N behind counter stays current without a manual
+    -- fetch. A fetch that moves the upstream ref triggers one refresh; the
+    -- fetch NEVER pulls, merges or rebases anything, and failures stay
+    -- silent (remotes without cached credentials fail fast instead of
+    -- hanging on a credential prompt).
+    auto_fetch = {
+      enabled = true,
     },
     -- AI Commit ("m" in the commit popup). Two ways to configure:
     --   1. Declarative (recommended): set `model` (+ optionally `url`,
@@ -1405,6 +1419,9 @@ function M.validate_config()
         validate_type(config.status.diff_preview.width, "diff_preview.width", { "number", "function", "nil" })
       end
       validate_type(config.status.file_tree, "status.file_tree", { "boolean", "nil" })
+    end
+    if validate_type(config.auto_fetch, "auto_fetch", "table") then
+      validate_type(config.auto_fetch.enabled, "auto_fetch.enabled", "boolean")
     end
     validate_signs()
     validate_trinary_auto(config.disable_insert_on_commit, "disable_insert_on_commit")

@@ -320,6 +320,15 @@ to Neovim users.
         -- that directory (the subtree), not the entire section.
         file_tree = false,
     },
+    -- Background `git fetch` when the status buffer opens, so the Head
+    -- line's ↓N behind counter stays current without a manual fetch. A
+    -- fetch that moves the upstream ref triggers one refresh; the fetch
+    -- NEVER pulls, merges or rebases anything, and failures stay silent
+    -- (remotes without cached credentials fail fast instead of hanging on
+    -- a credential prompt).
+    auto_fetch = {
+        enabled = true,
+    },
     },
     ai_commit = {
         -- Full-control override: produces the message and calls `done`.

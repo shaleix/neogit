@@ -394,6 +394,13 @@ function M:open(kind)
     },
   }
 
+  -- Background auto-fetch once per open (never part of a refresh cycle):
+  -- keeps the Head line's ↓N behind counter current when the remote moved
+  -- since the last manual fetch.
+  vim.schedule(function()
+    require("neogit.lib.git.autofetch").trigger(self)
+  end)
+
   return self
 end
 
