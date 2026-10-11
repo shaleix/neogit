@@ -114,8 +114,6 @@ to Neovim users.
             untracked = "󰝒",
             unstaged = "󰷈",
             staged = "󰸞",
-            unmerged = "󰕒",
-            unpulled = "󰇚",
             stashes = "󰏗",
             recent = "󰜘",
             merge = "󰘭",
@@ -464,22 +462,10 @@ to Neovim users.
         folded = true,
         hidden = false,
         },
-        unpulled_upstream = {
-        folded = true,
-        hidden = true,
-        },
-        unmerged_upstream = {
-        folded = false,
-        hidden = false,
-        },
-        unpulled_pushRemote = {
-        folded = true,
-        hidden = true,
-        },
-        unmerged_pushRemote = {
-        folded = false,
-        hidden = false,
-        },
+        -- (no unmerged_upstream/unpulled_upstream/unpulled_pushRemote/
+        -- unmerged_pushRemote sections: the "Unmerged into"/"Unpulled from"/
+        -- "Unpushed to" lists are gone; the Head line's ↑N ↓M counters and
+        -- its <cr> range diff replaced them)
         recent = {
         folded = true,
         hidden = false,
@@ -880,14 +866,8 @@ NeogitStatusHEAD            The left text in the HEAD section
 
 STATUS BUFFER SECTION HEADERS
 NeogitSectionHeader
-NeogitUnpushedTo            Linked to NeogitSectionHeader
-NeogitUnmergedInto          ^
-NeogitUnpulledFrom          ^
 NeogitUntrackedfiles        ^
 NeogitUnstagedchanges       ^
-NeogitUnmergedchanges       ^
-NeogitUnpushedchanges       ^
-NeogitUnpulledchanges       ^
 NeogitRecentcommits         ^
 NeogitStagedchanges         ^
 NeogitStashes               ^

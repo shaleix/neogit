@@ -44,7 +44,8 @@ local function workdir()
 end
 
 -- Upstream divergence: one local-only commit and one remote-only commit, so
--- both "Unmerged into" (outgoing) and "Unpulled from" (incoming) render.
+-- the Head line shows both the outgoing (↑N) and incoming (↓N) counters and
+-- none of the removed remote list sections render.
 local function workdir_diverged()
   local dir = workdir()
   local function run(...)
@@ -121,21 +122,29 @@ describe("section header icons and colors", function()
     assert.truthy(text:find(icons.recent .. " Recent Commits", 1, true), "recent icon missing")
   end)
 
-  it("renders the download icon on remote sections; Unmerged into is gone", function()
+  it("renders no remote list sections; divergence stays on the Head line", function()
     local dir = workdir_diverged()
-    -- The unpulled sections are hidden by default; this spec pins icon
-    -- rendering, so opt them back in for the duration of the test.
-    config.values.sections.unpulled_upstream.hidden = false
-    config.values.sections.unpulled_pushRemote.hidden = false
     local buf = open_status(dir)
     local text = buffer_text(buf)
 
-    local icons = config.values.icons.sections
-    assert.truthy(text:find(icons.unpulled .. " Unpulled from", 1, true), "unpulled (download) icon missing")
-    assert.falsy(text:find("Unmerged into", 1, true), "the Unmerged into section must not render")
+    -- The unpulled/unmerged/unpushed lists no longer render as sections; the
+    -- Head line's ↑N ↓M counters carry the divergence overview and <cr> there
+    -- opens the range diff.
+    assert.is_nil(text:find("Unpulled from", 1, true), "the Unpulled from section must not render")
+    assert.is_nil(text:find("Unmerged into", 1, true), "the Unmerged into section must not render")
+    assert.is_nil(text:find("Unpushed to", 1, true), "the Unpushed to section must not render")
 
-    config.values.sections.unpulled_upstream.hidden = true
-    config.values.sections.unpulled_pushRemote.hidden = true
+    -- the divergence is still visible: the Head line shows ↑N ↓N
+    local head_line
+    for line in text:gmatch("[^\n]+") do
+      if line:find("Head:", 1, true) then
+        head_line = line
+        break
+      end
+    end
+    assert.truthy(head_line, "Head line must render:\n" .. text)
+    assert.truthy(head_line:find("↓1", 1, true), "Head line must show the behind counter:\n" .. text)
+    assert.truthy(head_line:find("↑1", 1, true), "Head line must show the ahead counter:\n" .. text)
   end)
 
   it("renders the single-letter mode column with file-type icons", function()

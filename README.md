@@ -425,8 +425,6 @@ neogit.setup {
       untracked = "󰝒", -- nf-md-file_plus
       unstaged = "󰷈", -- nf-md-file_document_edit
       staged = "󰸞", -- nf-md-check_bold
-      unmerged = "󰕒", -- nf-md-upload (outgoing: Unmerged into / Unpushed to)
-      unpulled = "󰇚", -- nf-md-download (incoming: Unpulled from)
       stashes = "󰏗", -- nf-md-package_variant_closed
       recent = "󰜘", -- nf-md-source_commit
       merge = "󰘭", -- nf-md-source_merge
@@ -514,20 +512,10 @@ neogit.setup {
       folded = true,
       hidden = false,
     },
-    unpulled_upstream = {
-      folded = true,
-      hidden = true,
-    },
-    -- (no unmerged_upstream section: the "Unmerged into" list is gone; the
-    -- Head line's ↑N ↓M counters and its <cr> range diff replaced it)
-    unpulled_pushRemote = {
-      folded = true,
-      hidden = true,
-    },
-    unmerged_pushRemote = {
-      folded = false,
-      hidden = true,
-    },
+    -- (no unmerged_upstream/unpulled_upstream/unpulled_pushRemote/
+    -- unmerged_pushRemote sections: the "Unmerged into"/"Unpulled from"/
+    -- "Unpushed to" lists are gone; the Head line's ↑N ↓M counters and its
+    -- <cr> range diff replaced them)
     recent = {
       folded = true,
       hidden = false,

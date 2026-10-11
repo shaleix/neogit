@@ -147,9 +147,6 @@ end
 ---@field unstaged NeogitConfigSection|nil
 ---@field staged NeogitConfigSection|nil
 ---@field stashes NeogitConfigSection|nil
----@field unpulled_upstream NeogitConfigSection|nil
----@field unpulled_pushRemote NeogitConfigSection|nil
----@field unmerged_pushRemote NeogitConfigSection|nil
 ---@field recent NeogitConfigSection|nil
 ---@field rebase NeogitConfigSection|nil
 ---@field sequencer NeogitConfigSection|nil
@@ -639,8 +636,6 @@ function M.get_default_values()
         untracked = "󰝒", -- nf-md-file_plus
         unstaged = "󰷈", -- nf-md-file_document_edit
         staged = "󰸞", -- nf-md-check_bold
-        unmerged = "󰕒", -- nf-md-upload (outgoing: Unmerged into / Unpushed to)
-        unpulled = "󰇚", -- nf-md-download (incoming: Unpulled from)
         stashes = "󰏗", -- nf-md-package_variant_closed
         recent = "󰜘", -- nf-md-source_commit
         merge = "󰘭", -- nf-md-source_merge
@@ -719,18 +714,6 @@ function M.get_default_values()
       stashes = {
         folded = true,
         hidden = false,
-      },
-      unpulled_upstream = {
-        folded = true,
-        hidden = true,
-      },
-      unpulled_pushRemote = {
-        folded = true,
-        hidden = true,
-      },
-      unmerged_pushRemote = {
-        folded = false,
-        hidden = true,
       },
       recent = {
         folded = true,

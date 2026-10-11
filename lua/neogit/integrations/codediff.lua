@@ -298,11 +298,7 @@ function M.open(section_name, item_name, opts)
   -- selene: allow(if_same_then_else)
   if section_name == "staged" or section_name == "unstaged" or section_name == "merge" then
     open_status_explorer(codediff_git, view, git_root, get_focus_file(section_name, item_name))
-  elseif
-    section_name == "recent"
-    or section_name == "log"
-    or (section_name and section_name:match("unmerged$"))
-  then
+  elseif section_name == "recent" or section_name == "log" then
     local rev1, rev2
 
     if type(item_name) == "table" then

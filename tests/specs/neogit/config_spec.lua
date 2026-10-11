@@ -369,36 +369,6 @@ describe("Neogit config", function()
         assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
       end)
 
-      it("should return invalid when sections.unpulled_upstream isn't a table", function()
-        config.values.sections.unpulled_upstream = "not a table"
-        assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
-      end)
-
-      it("should return invalid when sections.unpulled.folded_upstream isn't a boolean", function()
-        config.values.sections.unpulled_upstream.folded = "not a boolean"
-        assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
-      end)
-
-      it("should return invalid when sections.unpulled_pushRemote isn't a table", function()
-        config.values.sections.unpulled_pushRemote = "not a table"
-        assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
-      end)
-
-      it("should return invalid when sections.unpulled_pushRemote.folded_upstream isn't a boolean", function()
-        config.values.sections.unpulled_pushRemote.folded = "not a boolean"
-        assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
-      end)
-
-      it("should return invalid when sections.unmerged_pushRemote isn't a table", function()
-        config.values.sections.unmerged_pushRemote = "not a table"
-        assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
-      end)
-
-      it("should return invalid when sections.unmerged_pushRemote.folded isn't a boolean", function()
-        config.values.sections.unmerged_pushRemote.folded = "not a boolean"
-        assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
-      end)
-
       it("should return invalid when sections.recent isn't a table", function()
         config.values.sections.recent = "not a table"
         assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)

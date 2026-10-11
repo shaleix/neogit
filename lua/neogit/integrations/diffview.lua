@@ -127,10 +127,7 @@ function M.open(section_name, item_name, opts)
 
   local view
   -- selene: allow(if_same_then_else)
-  if
-    (section_name == "recent" or section_name == "log" or (section_name and section_name:match("unmerged$")))
-    and item_name
-  then
+  if (section_name == "recent" or section_name == "log") and item_name then
     local range
     if type(item_name) == "table" then
       range = string.format("%s..%s", item_name[1], item_name[#item_name])

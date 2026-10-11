@@ -4,7 +4,6 @@ local util = require("neogit.lib.util")
 local common = require("neogit.buffers.common")
 local config = require("neogit.config")
 local a = require("neogit.lib.async")
-local state = require("neogit.lib.state")
 local event = require("neogit.lib.event")
 
 local col = Ui.col
@@ -187,14 +186,6 @@ end
 
 local SectionTitle = Component.new(function(props)
   return { text.highlight(props.highlight or "NeogitSectionHeader")(section_icon(props.icon) .. props.title) }
-end)
-
-local SectionTitleRemote = Component.new(function(props)
-  return {
-    text.highlight(props.highlight or "NeogitSectionHeader")(section_icon(props.icon) .. props.title),
-    text(" "),
-    text.highlight("NeogitRemote")(props.ref),
-  }
 end)
 
 local SectionTitleRebase = Component.new(function(props)
@@ -580,162 +571,6 @@ local SectionItemStash = Component.new(function(item)
   }, { yankable = item.oid, item = item })
 end)
 
-local SectionItemCommit = Component.new(function(item)
-  local ref = {}
-  local ref_last = {}
-
-  if item.commit.ref_name ~= "" and state.get({ "NeogitMarginPopup", "decorate" }, true) then
-    -- Render local only branches first
-    for name, _ in pairs(item.decoration.locals) do
-      if name:match("^refs/") then
-        table.insert(ref_last, text(name, { highlight = "NeogitGraphGray" }))
-        table.insert(ref_last, text(" "))
-      elseif item.decoration.remotes[name] == nil then
-        local branch_highlight = item.decoration.head == name and "NeogitBranchHead" or "NeogitBranch"
-        table.insert(ref, text(name, { highlight = branch_highlight }))
-        table.insert(ref, text(" "))
-      end
-    end
-
-    -- Render tracked (local+remote) branches next
-    for name, remotes in pairs(item.decoration.remotes) do
-      if #remotes == 1 then
-        table.insert(ref, text(remotes[1] .. "/", { highlight = "NeogitRemote" }))
-      end
-
-      if #remotes > 1 then
-        table.insert(ref, text("{" .. table.concat(remotes, ",") .. "}/", { highlight = "NeogitRemote" }))
-      end
-
-      local branch_highlight = item.decoration.head == name and "NeogitBranchHead" or "NeogitBranch"
-      local locally = item.decoration.locals[name] ~= nil
-      table.insert(ref, text(name, { highlight = locally and branch_highlight or "NeogitRemote" }))
-      table.insert(ref, text(" "))
-    end
-
-    -- Render tags
-    for _, tag in pairs(item.decoration.tags) do
-      table.insert(ref, text(tag, { highlight = "NeogitTagName" }))
-      table.insert(ref, text(" "))
-    end
-  end
-
-  local virtual_text
-
-  -- Render margin, if visible
-  if state.get({ "margin", "visibility" }, true) then
-    local is_shortstat = state.get({ "margin", "shortstat" }, false)
-
-    if is_shortstat then
-      local cli_shortstat = item.shortstat
-      local files_changed
-      local insertions
-      local deletions
-
-      files_changed = cli_shortstat:match("^ (%d+) files?")
-      files_changed = util.str_min_width(files_changed, 3, nil, { mode = "insert" })
-      insertions = cli_shortstat:match("(%d+) insertions?")
-      insertions = util.str_min_width(insertions and insertions .. "+" or " ", 5, nil, { mode = "insert" })
-      deletions = cli_shortstat:match("(%d+) deletions?")
-      deletions = util.str_min_width(deletions and deletions .. "-" or " ", 5, nil, { mode = "insert" })
-
-      virtual_text = {
-        { " ", "Constant" },
-        { insertions, "NeogitDiffAdditions" },
-        { " ", "Constant" },
-        { deletions, "NeogitDiffDeletions" },
-        { " ", "Constant" },
-        { files_changed, "NeogitSubtleText" },
-      }
-    else -- Author & date margin
-      local margin_date_style = state.get({ "margin", "date_style" }, 1)
-      local details = state.get({ "margin", "details" }, true)
-
-      local date
-      local rel_date
-      local date_width = 10
-      local clamp_width = 30 -- to avoid having too much space when relative date is short
-
-      -- Render date
-      if item.commit.rel_date:match(" years?,") then
-        rel_date, _ = item.commit.rel_date:gsub(" years?,", "y")
-        rel_date = rel_date .. " "
-      elseif item.commit.rel_date:match("^%d ") then
-        rel_date = " " .. item.commit.rel_date
-      else
-        rel_date = item.commit.rel_date
-      end
-
-      if margin_date_style == 1 then -- relative date (short)
-        local unpacked = vim.split(rel_date, " ")
-
-        -- above, we added a space if the rel_date started with a single number
-        -- we get the last two elements to deal with that
-        local date_number = unpacked[#unpacked - 1]
-        local date_quantifier = unpacked[#unpacked]
-        if date_quantifier:match("months?") then
-          date_quantifier = date_quantifier:gsub("m", "M") -- to distinguish from minutes
-        end
-
-        -- add back the space if we have a single number
-        local left_pad
-        if #unpacked > 2 then
-          left_pad = " "
-        else
-          left_pad = ""
-        end
-
-        date = left_pad .. date_number .. util.str_first_char(date_quantifier)
-        date_width = 3
-        clamp_width = 23
-      elseif margin_date_style == 2 then -- relative date (long)
-        date = rel_date
-        date_width = 10
-      else -- local iso date
-        if config.values.log_date_format == nil then
-          -- we get the unix date to be able to convert the date to the local timezone
-          date = os.date("%Y-%m-%d %H:%M", item.commit.unix_date)
-          date_width = 16 -- TODO: what should the width be here?
-        else
-          date = item.commit.log_date
-          date_width = 16
-        end
-      end
-
-      local author_table = { "" }
-      if details then
-        author_table = {
-          util.str_clamp(item.commit.author_name, clamp_width - (#date > date_width and #date or date_width)),
-          "NeogitGraphAuthor",
-        }
-      end
-
-      virtual_text = {
-        { " ", "Constant" },
-        author_table,
-        { util.str_min_width(date, date_width), "Special" },
-      }
-    end
-  end
-
-  return row(
-    util.merge(
-      { text("  ") },
-      { text.highlight("NeogitObjectId")(item.commit.abbreviated_commit) },
-      { text(" ") },
-      ref,
-      ref_last,
-      { text(item.commit.subject) }
-    ),
-    {
-      virtual_text = virtual_text,
-      oid = item.commit.oid,
-      yankable = item.commit.oid,
-      item = item,
-    }
-  )
-end)
-
 local SectionItemRecent = Component.new(function(item)
   -- Connector Row: a graph-only row git emits between commit rows (merge
   -- fan-out, lane turns). It holds no commit: not an item, never selectable,
@@ -913,19 +748,10 @@ function M.Status(state, config)
       and config.sections.staged.hidden
     )
 
-  local show_upstream_unpulled = #state.upstream.unpulled.items > 0
-    and not config.sections.unpulled_upstream.hidden
-
-  local show_pushRemote_unpulled = #state.pushRemote.unpulled.items > 0
-    and state.pushRemote.ref ~= state.upstream.ref
-    and not config.sections.unpulled_pushRemote.hidden
-
-  -- "Unmerged into <upstream>" no longer renders as a section: the Head
-  -- line's ↑N ↓M counters carry the divergence overview and <cr> there
-  -- opens the range diff. The unmerged items stay in state (counter data).
-  local show_pushRemote_unmerged = #state.pushRemote.unmerged.items > 0
-    and state.pushRemote.ref ~= state.upstream.ref
-    and not config.sections.unmerged_pushRemote.hidden
+  -- The "Unpulled from"/"Unmerged into"/"Unpushed to" lists no longer render
+  -- as sections: the Head line's ↑N ↓M counters carry the divergence overview
+  -- and <cr> there opens the range diff. The unpulled/unmerged items stay in
+  -- state (counter data).
 
   local show_stashes = #state.stashes.items > 0
     and not config.sections.stashes.hidden
@@ -1079,19 +905,6 @@ function M.Status(state, config)
           file_tree = config.status.file_tree,
           config = config,
         },
-        show_pushRemote_unmerged and Section {
-          title = SectionTitleRemote {
-            title = "Unpushed to",
-            ref = state.pushRemote.ref,
-            highlight = "NeogitUnpushedchanges",
-            icon = section_icons.unmerged,
-          },
-          count = true,
-          render = SectionItemCommit,
-          items = state.pushRemote.unmerged.items,
-          folded = config.sections.unmerged_pushRemote.folded,
-          name = "pushRemote_unmerged",
-        },
         show_recent and Section {
           title = SectionTitle { title = "Recent Commits", highlight = "NeogitRecentcommits", icon = section_icons.recent },
           count = false,
@@ -1099,32 +912,6 @@ function M.Status(state, config)
           items = state.recent.items,
           folded = config.sections.recent.folded,
           name = "recent",
-        },
-        show_upstream_unpulled and Section {
-          title = SectionTitleRemote {
-            title = "Unpulled from",
-            ref = state.upstream.ref,
-            highlight = "NeogitUnpulledchanges",
-            icon = section_icons.unpulled,
-          },
-          count = true,
-          render = SectionItemCommit,
-          items = state.upstream.unpulled.items,
-          folded = config.sections.unpulled_upstream.folded,
-          name = "upstream_unpulled",
-        },
-        show_pushRemote_unpulled and Section {
-          title = SectionTitleRemote {
-            title = "Unpulled from",
-            ref = state.pushRemote.ref,
-            highlight = "NeogitUnpulledchanges",
-            icon = section_icons.unpulled,
-          },
-          count = true,
-          render = SectionItemCommit,
-          items = state.pushRemote.unpulled.items,
-          folded = config.sections.unpulled_pushRemote.folded,
-          name = "pushRemote_unpulled",
         },
         show_stashes and Section {
           title = SectionTitle { title = "Stashes", highlight = "NeogitStashes", icon = section_icons.stashes },
