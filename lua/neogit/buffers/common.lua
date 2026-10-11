@@ -302,6 +302,10 @@ M.CommitGraph = Component.new(function(commit, padding)
   return col.tag("graph").padding_left(padding) { row(build_graph(commit.graph)) }
 end)
 
+-- Shared with the status buffer's Recent Commits renderer: commit rows
+-- inline the Commit Graph prefix, Connector Rows render it standalone.
+M.build_graph = build_graph
+
 M.Grid = Component.new(function(props)
   props = vim.tbl_extend("force", {
     -- Gap between columns

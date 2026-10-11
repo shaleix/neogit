@@ -1,5 +1,7 @@
--- Recent Commits rows: git-history-style star prefixes, hash followed by
--- the author's first two characters, no date, everything left-aligned.
+-- Recent Commits rows: the real Commit Graph prefix (per-glyph highlights,
+-- same dispatch as the Log view), hash followed by the author's first two
+-- characters, no date, everything left-aligned. Graph-only Connector Rows
+-- (merge fan-out, lane turns) render between commit rows.
 local neogit = require("neogit")
 local config = require("neogit.config")
 local Repo = require("neogit.lib.git.repository")
@@ -86,7 +88,7 @@ end
 neogit.setup { filewatcher = { enabled = false }, disable_context_highlighting = true }
 
 describe("status Recent Commits rows", function()
-  it("renders star-prefixed rows with author initials after the hash", function()
+  it("renders the Commit Graph with author initials after the hash", function()
     local dir = workdir()
     local buf = open_status(dir)
     local text = table.concat(vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false), "\n")
@@ -95,17 +97,53 @@ describe("status Recent Commits rows", function()
     local linear = text:match("%* (%x+) (sh) linear two\n")
     assert.truthy(linear, "linear row must match '* <hash> sh linear two':\n" .. text)
 
-    -- merge commit (two parents): fan-out prefix
+    -- merge commit (two parents): the row keeps the wider graph lane
+    -- (`*  `) the Log view renders, no fake fan-out glyph
     assert.truthy(
-      text:match("%*─╮ (%x+) (sh) merge side\n"),
-      "merge row must use the fan-out prefix:\n" .. text
+      text:match("%* +(%x+) (sh) merge side\n"),
+      "merge row must match '*  <hash> sh merge side':\n" .. text
     )
+    assert.falsy(text:find("*─╮", 1, true), "the fake fan-out glyph must be gone:\n" .. text)
+
+    -- Connector Rows: fan-out directly under the merge row, lane turn
+    -- before the first-parent lane continues
+    assert.truthy(text:find("|\\\n", 1, true), "fan-out Connector Row '|\\' must render:\n" .. text)
+    assert.truthy(text:find("|/\n", 1, true), "lane-turn Connector Row '|/' must render:\n" .. text)
 
     -- merged-in side commit carries the other author's initials
     assert.truthy(text:match("%* (%x+) (al) side work\n"), "side commit must show 'al':\n" .. text)
 
     -- rows stay left-aligned: no author/date right-margin text bleeds in
     assert.falsy(text:match("[^\n]*ago"), "no relative dates may render:\n" .. text)
+  end)
+
+  it("connector rows are pure decoration - not items, skipped by item navigation", function()
+    local dir = workdir()
+    config.values.sections.recent.folded = false
+
+    local buf = open_status(dir)
+    buf.buffer:focus()
+
+    local actions = require("neogit.buffers.status.actions")
+
+    -- the merge row is an item
+    vim.fn.search("merge side")
+    local merge_item = buf.buffer.ui:get_item_under_cursor()
+    assert.truthy(merge_item and merge_item.commit, "merge row must be an item")
+
+    -- item-step down: the fan-out Connector Row must not catch the cursor
+    actions.n_down(buf)()
+    local item = buf.buffer.ui:get_item_under_cursor()
+    assert.truthy(item and item.commit, "n_down must skip the Connector Row")
+    assert.equal("side work", item.commit.subject)
+
+    -- stepping back up skips the Connector Row again
+    actions.n_up(buf)()
+    item = buf.buffer.ui:get_item_under_cursor()
+    assert.truthy(item and item.commit, "n_up must skip the Connector Row")
+    assert.equal("merge side", item.commit.subject)
+
+    config.values.sections.recent.folded = true
   end)
 
   it("previews the commit diff when the cursor rests on a recent row", function()

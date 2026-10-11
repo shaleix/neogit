@@ -591,7 +591,7 @@ function M.get_default_values()
     },
     commit_editor = {
       kind = "tab",
-      show_staged_diff = true,
+      show_staged_diff = false,
       staged_diff_split_kind = "split",
       spell_check = true,
     },

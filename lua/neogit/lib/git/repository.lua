@@ -69,7 +69,7 @@ local modules = {
 ---@field items          StashItem[]
 ---
 ---@class NeogitRepoRecent
----@field items          CommitItem[]
+---@field items          table[] CommitItems interleaved with Connector Rows ({ graph = ... } decoration entries)
 ---
 ---@class NeogitRepoSequencer
 ---@field items          SequencerItem[]

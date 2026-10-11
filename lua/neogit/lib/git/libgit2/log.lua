@@ -3,7 +3,6 @@
 -- `update_recent` refresh task.
 local config = require("neogit.config")
 local state = require("neogit.lib.state")
-local util = require("neogit.lib.util")
 local git2 = require("neogit.lib.git2")
 local ffi = require("ffi")
 
@@ -172,64 +171,26 @@ function M.update_recent(repo_state, _filter, ctx)
   local order = state.get({ "NeogitMarginPopup", "-order" }, config.values.commit_order)
 
   git2.run(function()
+    -- Failure contract: prove the libgit2 handle works before mutating
+    -- state, so Repo:tasks can degrade this module to the CLI backend.
     local repo = (ctx and ctx.repo) or git2.open_repo(worktree_root(), true)
     if not repo then
       error(("libgit2: cannot open repository at %q"):format(worktree_root()))
     end
 
-    local git = require("neogit.lib.git")
-
-    local walker = repo:walker()
-    if order == "date" then
-      walker:sort(false, true, false)
-    else
-      walker:sort(true, false, false)
-    end
-    walker:push_head()
-
-    local decorations = decoration_map(repo)
-    local records = {}
-
-    for oid, commit in walker:iter() do
-      if #records >= count then
-        break
-      end
-
-      local hex = oid:tostring(40)
-      local lg2 = git2.binding.libgit2()
-      local sig = lg2.C.git_commit_committer(commit.commit)
-      local committer_time = tonumber(sig.when.time) or 0
-      local author_name = ffi.string(lg2.C.git_commit_author(commit.commit).name)
-
-      -- Parent hashes (space-joined, like %P): the recent-rows graph
-      -- prefixes fan out on merge commits (2+ parents)
-      local parent_count = tonumber(lg2.C.git_commit_parentcount(commit.commit)) or 0
-      local parents = {}
-      for i = 0, parent_count - 1 do
-        parents[#parents + 1] = git2.oid_hex(lg2.C.git_commit_parent_id(commit.commit, i))
-      end
-
-      records[#records + 1] = {
-        oid = hex,
-        abbreviated_commit = hex:sub(1, git.log.abbreviated_size()),
-        subject = commit:summary(),
-        ref_name = table.concat(decorations[hex] or {}, ", "),
-        rel_date = relative_date(committer_time),
-        author_name = author_name,
-        author_date = committer_time,
-        committer_date = committer_time,
-        unix_date = committer_time,
-        parent = table.concat(parents, " "),
-        abbreviated_parent = table.concat(
-          vim.tbl_map(function(p)
-            return p:sub(1, 7)
-          end, parents),
-          " "
-        ),
-      }
+    local args = { "--max-count=" .. tostring(count) }
+    if order and order ~= "" then
+      table.insert(args, "--" .. order .. "-order")
     end
 
-    repo_state.recent = { items = util.filter_map(records, git.log.present_commit) }
+    -- Recent Commits always carry the Commit Graph (Connector Rows
+    -- included), dispatched by graph_style like the Log view. The record
+    -- listing inside still dispatches through git.log.list, which serves
+    -- from this module's revwalk when the query shape is supported: the
+    -- unicode style stays zero-spawn, ascii adds one `git log --graph`.
+    repo_state.recent = {
+      items = require("neogit.lib.git.log").internal.recent_commits(args, true),
+    }
   end)
 end
 

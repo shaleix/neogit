@@ -549,6 +549,25 @@ M.v_worktree_popup = function(_self)
   return popups.open("worktree")
 end
 
+---True when the cursor rests on a Recent Commits Connector Row (the Commit
+---Graph's graph-only decoration rows between commit rows). Connector Rows
+---hold no item, so item-based cursor movement must skip them.
+---@param ui Ui
+---@return boolean
+local function on_connector_row(ui)
+  local node = ui.node_index:find_by_line(vim.api.nvim_win_get_cursor(0)[1])[1]
+
+  while node do
+    if node.options.connector_row then
+      return true
+    end
+
+    node = node.parent
+  end
+
+  return false
+end
+
 ---@param self StatusBuffer
 ---@return fun(): nil
 M.n_down = function(self)
@@ -559,8 +578,18 @@ M.n_down = function(self)
       vim.cmd("norm! j")
     end
 
-    if self.buffer:get_current_line()[1] == "" then
+    -- Land on items (or section headers), never on blank lines or Connector
+    -- Rows. The guard breaks at the buffer edge, where `j` is a no-op.
+    local line = vim.api.nvim_win_get_cursor(0)[1]
+    while self.buffer:get_current_line()[1] == "" or on_connector_row(self.buffer.ui) do
       vim.cmd("norm! j")
+
+      local next_line = vim.api.nvim_win_get_cursor(0)[1]
+      if next_line == line then
+        break
+      end
+
+      line = next_line
     end
   end
 end
@@ -575,8 +604,18 @@ M.n_up = function(self)
       vim.cmd("norm! k")
     end
 
-    if self.buffer:get_current_line()[1] == "" then
+    -- Land on items (or section headers), never on blank lines or Connector
+    -- Rows. The guard breaks at the buffer edge, where `k` is a no-op.
+    local line = vim.api.nvim_win_get_cursor(0)[1]
+    while self.buffer:get_current_line()[1] == "" or on_connector_row(self.buffer.ui) do
       vim.cmd("norm! k")
+
+      local next_line = vim.api.nvim_win_get_cursor(0)[1]
+      if next_line == line then
+        break
+      end
+
+      line = next_line
     end
   end
 end

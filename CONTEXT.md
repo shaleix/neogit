@@ -30,3 +30,25 @@ The message source for AI Commit, in two tiers:
 
 See `docs/adr/0001-builtin-openai-compatible-generator.md` for why the
 built-in client exists alongside the callback tier.
+
+### Commit Graph
+
+The lane-based picture of commit ancestry: a column of connected glyphs
+(continuing lines, forks, merges) rendered beside commit rows, with
+per-lane colors. One Commit Graph spans many rows and is styled by the
+same setting everywhere it appears.
+_Avoid_: graph lines, decoration, fake graph
+
+### Connector Row
+
+A graph-only row between commit rows carrying the Commit Graph's
+continuation and turn glyphs. It holds no commit: it is never selectable,
+never previewed, and navigation skips it.
+_Avoid_: padding row, empty row
+
+### Recent Commits
+
+The status buffer section listing the most recent commits on HEAD, capped
+by `status.recent_commit_count`. Its rows render the same Commit Graph
+styling as the Log view.
+_Avoid_: log section, history section

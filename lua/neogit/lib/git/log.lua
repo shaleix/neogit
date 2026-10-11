@@ -381,6 +381,82 @@ local function graph_rows(options, files, commits, graph_color)
   return {}
 end
 
+-- The kitty graph style renders lanes as terminal graphics, which the status
+-- layout cannot host: Recent Commits degrades to the ascii path instead.
+-- Announced once per session so refresh loops don't spam the user.
+local kitty_fallback_warned = false
+
+local function notify_kitty_fallback()
+  if not kitty_fallback_warned then
+    kitty_fallback_warned = true
+    require("neogit.lib.notification").warn(
+      "kitty graph style is not supported in Recent Commits; falling back to ascii"
+    )
+  end
+end
+
+---Interleave Connector Rows into the Recent Commits item list. Commit
+---entries flow through present_commit unchanged; graph-only entries (the
+---Commit Graph's continuation/turn rows between commit rows) become bare
+---{ graph = ... } decoration entries. They render between the commit rows,
+---but are not items: no preview, no yankable, and navigation skips them.
+---@param entries CommitLogEntry[] parse_log output (commits interleaved with graph-only rows)
+---@return table[] items for state.recent.items
+local function recent_items(entries)
+  local items = {}
+
+  for _, entry in ipairs(entries) do
+    if entry.oid then
+      local item = M.present_commit(entry)
+      if item then
+        table.insert(items, item)
+      end
+    else
+      -- Connector Row: pure decoration, no item semantics
+      table.insert(items, { graph = entry.graph })
+    end
+  end
+
+  return items
+end
+
+---Recent Commits listing with real Commit Graph rows, dispatched by
+---graph_style exactly like graph_rows - except kitty, which has no
+---status-layout renderer and degrades to ascii with a one-time warning.
+---The listing is ordered like the graph (determine_order), so the lanes
+---render exactly like the Log view. Shared by the CLI update_recent and the
+---libgit2 twin.
+---@param args string[] git log arguments (--max-count, optional order flag)
+---@param hidden boolean
+---@return table[] commit items interleaved with Connector Row entries
+local function recent_commits(args, hidden)
+  if config.values.graph_style == "kitty" then
+    notify_kitty_fallback()
+  end
+
+  -- `git log --graph` implies --topo-order: the record listing must use the
+  -- same ordering or the rows won't line up with the graph output.
+  args = determine_order(vim.list_extend({}, args), true)
+
+  local commits = M.list(args, nil, {}, hidden)
+  if vim.tbl_isempty(commits) then
+    return {}
+  end
+
+  local graph
+  if config.values.graph_style == "unicode" then
+    graph = require("neogit.lib.graph.unicode").build(commits)
+  else
+    -- ascii (also serving the kitty fallback): real `git log --graph --color`
+    -- output, parsed per glyph like the Log view
+    local options = vim.list_extend({}, args)
+    util.remove_item_from_table(options, "--show-signature")
+    graph = M.graph(options, {}, nil)
+  end
+
+  return recent_items(parse_log(commits, graph))
+end
+
 local list_cli = util.memoize(function(options, graph, files, hidden, graph_color)
   files = files or {}
 
@@ -469,13 +545,13 @@ function M.register(meta)
 
     if count > 0 then
       local args = { "--max-count=" .. tostring(count) }
-      local graph = nil
       if order and order ~= "" then
         table.insert(args, "--" .. order .. "-order")
-        graph = {}
       end
 
-      repo_state.recent.items = util.filter_map(M.list(args, graph, {}, true), M.present_commit)
+      -- Recent Commits always render the Commit Graph (Connector Rows
+      -- included), dispatched by graph_style like the Log view.
+      repo_state.recent.items = recent_commits(args, true)
     end
   end
 end
@@ -655,6 +731,7 @@ end, { timeout = math.huge })
 M.internal = {
   parse_log = parse_log,
   graph_rows = graph_rows,
+  recent_commits = recent_commits,
 }
 
 function M.decorate(oid)

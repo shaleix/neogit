@@ -16,6 +16,7 @@ local map = util.map
 local EmptyLine = common.EmptyLine
 local List = common.List
 local DiffHunks = common.DiffHunks
+local build_graph = common.build_graph
 
 local M = {}
 
@@ -736,25 +737,34 @@ local SectionItemCommit = Component.new(function(item)
 end)
 
 local SectionItemRecent = Component.new(function(item)
-  -- Git-history-style prefix: a commit point per row, with merge commits
-  -- (2+ parents) fanning out. Everything renders left-aligned - author
-  -- initials follow the hash and the date/author right margin stays off.
-  local parent_count = select(2, (item.commit.parent or ""):gsub("%S+", ""))
-  local graph = parent_count >= 2 and "*─╮ " or "* "
+  -- Connector Row: a graph-only row git emits between commit rows (merge
+  -- fan-out, lane turns). It holds no commit: not an item, never selectable,
+  -- never previewed, and item navigation skips it.
+  if not item.commit then
+    return row(util.merge({ text("  ") }, build_graph(item.graph)), { connector_row = true })
+  end
 
-  return row({
-    text("  "),
-    text.highlight("NeogitGraphOrange")(graph),
-    text.highlight("NeogitObjectId")(item.commit.abbreviated_commit),
-    text(" "),
-    text.highlight("NeogitGraphAuthor")(item.commit.author_name:sub(1, 2)),
-    text(" "),
-    text(item.commit.subject),
-  }, {
-    oid = item.commit.oid,
-    yankable = item.commit.oid,
-    item = item,
-  })
+  -- Commit row: the real Commit Graph prefix (per-glyph highlights, styled
+  -- by graph_style exactly like the Log view), then the current layout -
+  -- hash, author initials, subject. The separator space is explicit: the
+  -- ansi parse of the graph consumes git's own trailing column space.
+  local graph = item.commit.graph and build_graph(item.commit.graph) or { text("") }
+
+  return row(
+    util.merge({ text("  ") }, graph, {
+      text(" "),
+      text.highlight("NeogitObjectId")(item.commit.abbreviated_commit),
+      text(" "),
+      text.highlight("NeogitGraphAuthor")(item.commit.author_name:sub(1, 2)),
+      text(" "),
+      text(item.commit.subject),
+    }),
+    {
+      oid = item.commit.oid,
+      yankable = item.commit.oid,
+      item = item,
+    }
+  )
 end)
 
 local SectionItemRebase = Component.new(function(item)
