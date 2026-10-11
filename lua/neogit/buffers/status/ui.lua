@@ -126,26 +126,30 @@ local HEAD = Component.new(function(props)
   if props.divergence then
     if props.divergence.ahead > 0 then
       divergence[#divergence + 1] =
-        text.highlight("NeogitDivergenceAhead")((" ↑%d"):format(props.divergence.ahead))
+        text.highlight("NeogitDivergenceAhead")(("↑%d"):format(props.divergence.ahead))
     end
     if props.divergence.behind > 0 then
       divergence[#divergence + 1] =
-        text.highlight("NeogitDivergenceBehind")((" ↓%d"):format(props.divergence.behind))
+        text.highlight("NeogitDivergenceBehind")(("↓%d"):format(props.divergence.behind))
     end
   end
 
   -- (built via list_extend: an unpack() mid-table-constructor keeps only
   -- its first value on LuaJIT, which silently dropped the ↓ counter)
-  local content = {
-    text.highlight("NeogitStatusHEAD")(util.pad_right(props.name .. ": ", props.HEAD_padding)),
-  }
-  -- Divergence sits directly behind the line label: it is the first thing
-  -- worth glancing at, before oid/branch/message.
-  vim.list_extend(content, divergence)
+  local content = {}
+  -- Divergence leads the line at the far left, ahead of the label: it is
+  -- the first thing worth glancing at, before oid/branch/message.
+  for i, fragment in ipairs(divergence) do
+    if i > 1 then
+      table.insert(content, text(" "))
+    end
+    table.insert(content, fragment)
+  end
   if #divergence > 0 then
     table.insert(content, text(" "))
   end
   vim.list_extend(content, {
+    text.highlight("NeogitStatusHEAD")(util.pad_right(props.name .. ": ", props.HEAD_padding)),
     text.highlight("NeogitObjectId")(show_oid and oid or ""),
     text(show_oid and " " or ""),
     text.highlight(highlight)(ref),

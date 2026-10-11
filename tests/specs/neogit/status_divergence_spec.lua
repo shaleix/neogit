@@ -86,7 +86,7 @@ describe("status HEAD divergence counters", function()
     local buf = open_status(dir)
     local text = buffer_text(buf)
 
-    local head_line = text:match("Head:[^\n]*")
+    local head_line = text:match("[^\n]*Head:[^\n]*")
     assert.truthy(head_line and head_line:find("↑1", 1, true), "Head line must show ↑1:\n" .. text)
     assert.truthy(head_line and head_line:find("↓1", 1, true), "Head line must show ↓1:\n" .. text)
   end)
@@ -111,7 +111,7 @@ describe("status HEAD divergence counters", function()
     config.values.status.HEAD_folded = false
 
     local text = buffer_text(buf)
-    local head_line = text:match("Head:[^\n]*")
+    local head_line = text:match("[^\n]*Head:[^\n]*")
     assert.truthy(head_line and head_line:find("↑1", 1, true), "folded Head line must show ↑1:\n" .. text)
 
     -- display-level fold: the head block collapses to its first line, and
@@ -130,7 +130,7 @@ describe("status HEAD divergence counters", function()
     local buf = open_status(dir)
     local text = buffer_text(buf)
 
-    local head_line = text:match("Head:[^\n]*")
+    local head_line = text:match("[^\n]*Head:[^\n]*")
     assert.truthy(head_line, "Head line must render:\n" .. text)
     assert.falsy(head_line:find("[↑↓]"), "in-sync Head line must not show counters:\n" .. text)
   end)
