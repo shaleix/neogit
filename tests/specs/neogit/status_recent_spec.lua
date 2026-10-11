@@ -297,36 +297,37 @@ describe("status Recent Commits rows", function()
     config.values.sections.recent.folded = true
   end)
 
-  it("previews the commit diff when the cursor rests on a recent row", function()
+  it("does not open the diff preview on recent rows; <cr> opens the commit view", function()
     local dir = workdir()
     config.values.sections.recent.folded = false
     config.values.status.diff_preview = { enabled = true, kind = "split", debounce = 50 }
 
     local buf = open_status(dir)
     buf.buffer:focus()
-    vim.fn.search("linear two")
+    vim.fn.search(" sh linear two")
+    local hash = vim.api.nvim_get_current_line():match("(%x+)")
 
-    -- drive the preview hook exactly like CursorMoved does
+    -- drive the preview hook exactly like CursorMoved does: a Recent Commits
+    -- row must NOT open the file-diff preview (the hook closes the preview
+    -- instead, like any non-file row)
     buf:_preview_diff_under_cursor()
+    vim.wait(300)
 
     local preview = require("neogit.buffers.diff_preview")
-    local ready = vim.wait(10000, function()
-      local handle = preview.buffer_handle()
-      if not handle then
-        return false
-      end
-      local text = table.concat(vim.api.nvim_buf_get_lines(handle, 0, -1, false), "\n")
-      return text:find("+two", 1, true) ~= nil
-    end, 20)
-    assert.truthy(ready, "preview must show the commit's diff (+two)")
+    assert.falsy(preview.is_open(), "recent rows must not open the diff preview")
+    assert.is_nil(preview.buffer_handle(), "no preview buffer may exist")
 
-    local handle = preview.buffer_handle()
-    local final_text = table.concat(vim.api.nvim_buf_get_lines(handle, 0, -1, false), "\n")
+    -- <cr> on the row still opens the full commit view
+    local actions = require("neogit.buffers.status.actions")
+    actions.n_goto_file(buf)()
+
+    local commit_view = require("neogit.buffers.commit_view")
+    assert.truthy(commit_view.is_open(), "<cr> on a recent row must open the commit view")
     assert.truthy(
-      final_text:find("linear two", 1, true),
-      "preview header must carry the commit subject:\n" .. final_text
+      commit_view.instance.commit_info.oid:sub(1, #hash) == hash,
+      "commit view must show the row's commit"
     )
-    assert.falsy(final_text:find("\27", 1, true), "preview must be free of ANSI color codes")
+    commit_view.instance:close()
 
     config.values.sections.recent.folded = true
     config.values.status.diff_preview = nil

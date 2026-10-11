@@ -11,7 +11,6 @@ local Buffer = require("neogit.lib.buffer")
 local Ui = require("neogit.lib.ui")
 local common = require("neogit.buffers.common")
 local git = require("neogit.lib.git")
-local a = require("neogit.lib.async")
 local config = require("neogit.config")
 local notification = require("neogit.lib.notification")
 local text = Ui.text
@@ -138,20 +137,16 @@ M.internal = {
 ---unless the cursor moved on in the meantime, in which case the stale
 ---result is dropped. Diffs already cached on the item render instantly.
 ---
----`section == "commit"` previews a commit record (Recent Commits rows): the
----window shows that commit's diff (`git show`, async like file diffs).
----
 ---When `status.diff_preview.content` returns a `{ filetype, lines }` table,
 ---it takes over the preview body completely: the lines are rendered as-is
 ---and the buffer filetype is set to the returned value, so external
 ---renderers can hook in via the FileType event (e.g. diffs.nvim with
 ---filetype "diff").
 ---@param _status_buffer Buffer the requesting status buffer (focus target)
----@param section string section name: "untracked"|"unstaged"|"staged"|"commit"
----@param item table StatusItem (file sections) or a present_commit record ("commit")
+---@param section string section name: "untracked"|"unstaged"|"staged"
+---@param item table StatusItem (file item with name/mode)
 function M.show(_status_buffer, section, item)
   local self = current()
-  local is_commit = section == "commit"
 
   -- custom content hook: full takeover when it returns a table
   self.custom = nil
@@ -165,56 +160,31 @@ function M.show(_status_buffer, section, item)
     end
   end
 
-  if is_commit then
-    -- Same-commit no-op: cursor movement within one commit row must not
-    -- re-fetch the diff. Failed loads don't count, so returning retries.
-    if
-      self.commit == item
-      and self.buffer
-      and self.buffer:is_visible()
-      and (self.task ~= nil or self.commit_lines ~= nil)
-    then
-      return
-    end
-
-    self:_cancel_load()
-    self.commit = item
-    self.commit_lines = nil
-    self.commit_error = nil
-    self.item = nil
-    self.section = nil
-    self.shown = { commit = item, custom = self.custom ~= nil }
-    self.error = nil
-  else
-    -- Showing the item whose built-in diff is already rendered (or whose load
-    -- is in flight) is a no-op: cursor movement within one file item must not
-    -- re-render the, potentially large, diff. Failed loads don't count, so
-    -- moving back onto an item retries it. `rawget` checks the cache without
-    -- triggering the lazy (blocking) metatable that `git.diff.build` attaches
-    -- to status items.
-    if
-      not self.custom
-      and self.shown
-      and not self.shown.custom
-      and self.shown.section == section
-      and self.shown.item == item
-      and (self.task ~= nil or rawget(item, "diff") ~= nil)
-    then
-      return
-    end
-
-    -- A new item: drop the load in flight for the old one (kills its git
-    -- process; its result would be discarded as stale anyway).
-    self:_cancel_load()
-
-    self.section = section
-    self.item = item
-    self.commit = nil
-    self.commit_lines = nil
-    self.commit_error = nil
-    self.shown = { section = section, item = item, custom = self.custom ~= nil }
-    self.error = nil
+  -- Showing the item whose built-in diff is already rendered (or whose load
+  -- is in flight) is a no-op: cursor movement within one file item must not
+  -- re-render the, potentially large, diff. Failed loads don't count, so
+  -- moving back onto an item retries it. `rawget` checks the cache without
+  -- triggering the lazy (blocking) metatable that `git.diff.build` attaches
+  -- to status items.
+  if
+    not self.custom
+    and self.shown
+    and not self.shown.custom
+    and self.shown.section == section
+    and self.shown.item == item
+    and (self.task ~= nil or rawget(item, "diff") ~= nil)
+  then
+    return
   end
+
+  -- A new item: drop the load in flight for the old one (kills its git
+  -- process; its result would be discarded as stale anyway).
+  self:_cancel_load()
+
+  self.section = section
+  self.item = item
+  self.shown = { section = section, item = item, custom = self.custom ~= nil }
+  self.error = nil
 
   if self.buffer and self.buffer:is_visible() then
     self:refresh_content()
@@ -307,7 +277,7 @@ function M.show(_status_buffer, section, item)
         -- custom content is written synchronously from here; built-in
         -- content was already rendered by `render` above (placeholder or
         -- cached diff) and the async load replaces it when the diff arrives
-        if self.custom or self.commit then
+        if self.custom then
           self:refresh_content(buffer)
         end
 
@@ -320,38 +290,7 @@ function M.show(_status_buffer, section, item)
     }
   end
 
-  if is_commit then
-    -- Built-in commit preview: fetch `git show` off-thread, same
-    -- cancellable-task contract as file diffs.
-    if not self.custom then
-      self.task = a.run(function()
-        local ok, out = pcall(function()
-          return git.cli.show
-            .format("").no_ext_diff
-            .args("--no-color", item.commit.oid)
-            .call({ hidden = true }).stdout
-        end)
-
-        vim.schedule(function()
-          -- stale: the cursor moved off this commit before the diff arrived
-          if self.commit ~= item then
-            return
-          end
-
-          self.task = nil
-          if ok then
-            self.commit_lines = out or {}
-          else
-            self.commit_error = tostring(out)
-          end
-
-          if self.buffer and self.buffer.handle then
-            self:refresh_content()
-          end
-        end)
-      end)
-    end
-  elseif not self.custom and not rawget(item, "diff") then
+  if not self.custom and not rawget(item, "diff") then
     -- Built-in content for a diff that has not been loaded yet: kick the
     -- async fetch. The placeholder is already on screen, so the status
     -- buffer stays responsive while git runs.
@@ -410,22 +349,6 @@ function M:refresh_content(buffer)
     vim.bo[buffer.handle].filetype = self.custom.filetype or "diff"
     vim.api.nvim_buf_set_lines(buffer.handle, 0, -1, false, self.custom.lines)
     buffer:lock()
-  elseif self.commit then
-    -- commit body: plain `git show` diff lines behind a one-line header,
-    -- filetype "diff" so highlighters/renderers hook in via FileType
-    local c = self.commit.commit
-    local lines = { ("%s %s %s"):format(c.abbreviated_commit, c.author_name:sub(1, 2), c.subject or "") }
-    if self.commit_lines then
-      vim.list_extend(lines, self.commit_lines)
-    else
-      lines[#lines + 1] = ""
-      lines[#lines + 1] = "Loading commit diff..."
-    end
-
-    buffer:unlock()
-    vim.bo[buffer.handle].filetype = "diff"
-    vim.api.nvim_buf_set_lines(buffer.handle, 0, -1, false, lines)
-    buffer:lock()
   else
     if vim.bo[buffer.handle].filetype ~= "NeogitDiffPreview" then
       vim.bo[buffer.handle].filetype = "NeogitDiffPreview"
@@ -436,27 +359,6 @@ end
 
 function M:layout()
   local item = self.item
-  -- Commit preview (Recent Commits rows): the body arrives as plain
-  -- diff lines through refresh_content; the layout only ever renders the
-  -- placeholder (loading/failed) before they land.
-  if self.commit then
-    local c = self.commit.commit
-    return {
-      col {
-        row {
-          text.highlight("NeogitFilePath")(c.abbreviated_commit),
-          text(" "),
-          text.highlight("NeogitGraphAuthor")(c.author_name:sub(1, 2)),
-          text(" "),
-          text(c.subject or ""),
-        },
-        EmptyLine(),
-        text.highlight("NeogitSubtleText")(
-          self.commit_error and ("Failed to load commit: " .. self.commit_error) or "Loading commit diff..."
-        ),
-      },
-    }
-  end
 
   if not item then
     return { text("(no diff)") }
