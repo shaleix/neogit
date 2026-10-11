@@ -2,6 +2,7 @@ local a = require("neogit.lib.async")
 local git = require("neogit.lib.git")
 local logger = require("neogit.logger")
 local notification = require("neogit.lib.notification")
+local loading = require("neogit.lib.loading")
 local event = require("neogit.lib.event")
 
 local FuzzyFinderBuffer = require("neogit.buffers.fuzzy_finder")
@@ -21,18 +22,21 @@ local function pull_from(args, remote, branch, opts)
 
   local name = remote .. "/" .. branch
 
-  notification.info("Pulling from " .. name)
   logger.debug("Pulling from " .. name)
+  loading.show("Pulling from " .. name)
 
   local res = git.pull.pull_interactive(remote, branch, args)
 
   if res and res:success() then
+    -- settle the banner before yielding: a.util.scheduler can suspend for
+    -- the rest of the turn in some async contexts
+    loading.done("Pulled from " .. name, vim.log.levels.INFO)
     a.util.scheduler()
-    notification.info("Pulled from " .. name, { dismiss = true })
     logger.debug("Pulled from " .. name)
     event.send("PullComplete")
   else
     logger.error("Failed to pull from " .. name)
+    loading.done("Failed to pull from " .. name, vim.log.levels.ERROR)
     notification.error("Failed to pull from " .. name, { dismiss = true })
     if res.code == 128 then
       notification.info(table.concat(res.stdout, "\n"))
