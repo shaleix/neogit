@@ -146,6 +146,157 @@ describe("status Recent Commits rows", function()
     config.values.sections.recent.folded = true
   end)
 
+  it("renders the kitty Commit Graph natively - colored glyphs, no degrade warning", function()
+    local dir = workdir()
+    config.values.graph_style = "kitty"
+    config.values.sections.recent.folded = false
+
+    -- the kitty style renders natively: no degrade warning may fire, across
+    -- repeat refreshes either
+    local warns = {}
+    local notification = require("neogit.lib.notification")
+    local original_warn = notification.warn
+    notification.warn = function(message)
+      warns[#warns + 1] = tostring(message)
+    end
+
+    local buf = open_status(dir)
+
+    local fired = false
+    vim.api.nvim_create_autocmd("User", {
+      pattern = "NeogitStatusRefreshed",
+      once = true,
+      callback = function()
+        fired = true
+      end,
+    })
+    buf:dispatch_refresh()
+    assert.truthy(
+      vim.wait(10000, function()
+        return fired
+      end, 10),
+      "refresh did not complete"
+    )
+    vim.wait(50)
+
+    local warn_count = #warns
+    notification.warn = original_warn
+    assert.equal(0, warn_count, "kitty style must not warn: " .. table.concat(warns, " | "))
+
+    -- commit rows keep hash + initials after the glyph graph prefix (the
+    -- initials distinguish the row from the "Head: ... main merge side"
+    -- header line, which carries the branch name instead)
+    local lines = vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false)
+    local merge_idx
+    for i, line in ipairs(lines) do
+      if line:find(" sh merge side", 1, true) then
+        merge_idx = i
+        break
+      end
+    end
+    assert.truthy(merge_idx, "merge row must render:\n" .. table.concat(lines, "\n"))
+
+    local merge_line = lines[merge_idx]
+    assert.truthy(
+      merge_line:match("%x+ sh merge side"),
+      "hash and initials must follow the graph:\n" .. merge_line
+    )
+
+    -- kitty glyphs are nerd-font (multibyte); an ascii fallback would show
+    -- an asterisk lane instead
+    assert.truthy(
+      merge_line:match("[^\x01-\x7f]"),
+      "merge row must carry a nerd-font graph glyph:\n" .. merge_line
+    )
+    assert.falsy(
+      merge_line:find("*", 1, true),
+      "kitty rows must not fall back to ascii lanes:\n" .. merge_line
+    )
+
+    -- commit rows interleave with Connector Rows: the row directly under the
+    -- merge is graph-only (glyphs, no commit)
+    local connector = lines[merge_idx + 1]
+    assert.truthy(connector, "Connector Row must render under the merge row")
+    assert.falsy(connector:match("%x"), "Connector Row must not carry a commit:\n" .. connector)
+    assert.truthy(connector:match("[^\x01-\x7f]"), "Connector Row must carry graph glyphs:\n" .. connector)
+
+    -- graph glyphs carry NeogitGraph* highlights from the kitty palette:
+    -- anything but Purple proves the native kitty builder (an ascii fallback
+    -- can only ever produce the Purple recolor)
+    local recent_component
+    local function find_section(node)
+      if node.options and node.options.section == "recent" then
+        recent_component = node
+        return true
+      end
+      for _, child in ipairs(node.children or {}) do
+        if find_section(child) then
+          return true
+        end
+      end
+      return false
+    end
+    find_section(buf.buffer.ui.layout)
+    assert.truthy(recent_component, "Recent Commits section must render")
+
+    local palette = { Red = true, Yellow = true, Blue = true, Cyan = true }
+    local highlights = {}
+    local function collect(node)
+      if node.options and node.options.highlight then
+        highlights[node.options.highlight] = true
+      end
+      for _, child in ipairs(node.children or {}) do
+        collect(child)
+      end
+    end
+    collect(recent_component)
+
+    local colored = {}
+    for hl in pairs(highlights) do
+      local name = hl:match("^NeogitGraphBold?([%a]+)$")
+      if name and palette[name] then
+        colored[#colored + 1] = hl
+      end
+    end
+    table.sort(colored)
+    assert.truthy(
+      #colored > 0,
+      "kitty graph glyphs must carry NeogitGraph{Red,Yellow,Blue,Cyan} highlights, got: "
+        .. table.concat(vim.tbl_keys(highlights), ", ")
+    )
+
+    -- data layer: every Commit Graph cell uses the kitty palette (short
+    -- suffixes, rendered as NeogitGraph<color>), commits interleave with
+    -- Connector Rows
+    local git = require("neogit.lib.git")
+    local items = git.log.internal.recent_commits({ "--max-count=10" }, true)
+    local commits, connectors = 0, 0
+    for _, item in ipairs(items) do
+      if item.commit then
+        commits = commits + 1
+        for _, cell in ipairs(item.commit.graph or {}) do
+          -- cells the kitty builder leaves unhighlighted carry nil (rendered
+          -- uncolored, same as the Log view); the rest are short palette
+          -- suffixes rendered as NeogitGraph<color>
+          if cell.color ~= nil then
+            local color = tostring(cell.color):gsub("^Bold", "")
+            assert.truthy(
+              vim.tbl_contains({ "Red", "Yellow", "Blue", "Purple", "Cyan" }, color),
+              "kitty cell color must be a short palette suffix, got: " .. tostring(cell.color)
+            )
+          end
+        end
+      else
+        connectors = connectors + 1
+      end
+    end
+    assert.equal(5, commits)
+    assert.truthy(connectors > 0, "the merge must produce Connector Rows")
+
+    config.values.graph_style = "ascii"
+    config.values.sections.recent.folded = true
+  end)
+
   it("previews the commit diff when the cursor rests on a recent row", function()
     local dir = workdir()
     config.values.sections.recent.folded = false

@@ -381,20 +381,6 @@ local function graph_rows(options, files, commits, graph_color)
   return {}
 end
 
--- The kitty graph style renders lanes as terminal graphics, which the status
--- layout cannot host: Recent Commits degrades to the ascii path instead.
--- Announced once per session so refresh loops don't spam the user.
-local kitty_fallback_warned = false
-
-local function notify_kitty_fallback()
-  if not kitty_fallback_warned then
-    kitty_fallback_warned = true
-    require("neogit.lib.notification").warn(
-      "kitty graph style is not supported in Recent Commits; falling back to ascii"
-    )
-  end
-end
-
 ---Interleave Connector Rows into the Recent Commits item list. Commit
 ---entries flow through present_commit unchanged; graph-only entries (the
 ---Commit Graph's continuation/turn rows between commit rows) become bare
@@ -421,19 +407,13 @@ local function recent_items(entries)
 end
 
 ---Recent Commits listing with real Commit Graph rows, dispatched by
----graph_style exactly like graph_rows - except kitty, which has no
----status-layout renderer and degrades to ascii with a one-time warning.
----The listing is ordered like the graph (determine_order), so the lanes
----render exactly like the Log view. Shared by the CLI update_recent and the
----libgit2 twin.
+---graph_style exactly like graph_rows. The listing is ordered like the
+---graph (determine_order), so the lanes render exactly like the Log view.
+---Shared by the CLI update_recent and the libgit2 twin.
 ---@param args string[] git log arguments (--max-count, optional order flag)
 ---@param hidden boolean
 ---@return table[] commit items interleaved with Connector Row entries
 local function recent_commits(args, hidden)
-  if config.values.graph_style == "kitty" then
-    notify_kitty_fallback()
-  end
-
   -- `git log --graph` implies --topo-order: the record listing must use the
   -- same ordering or the rows won't line up with the graph output.
   args = determine_order(vim.list_extend({}, args), true)
@@ -446,9 +426,12 @@ local function recent_commits(args, hidden)
   local graph
   if config.values.graph_style == "unicode" then
     graph = require("neogit.lib.graph.unicode").build(commits)
+  elseif config.values.graph_style == "kitty" then
+    -- per-lane colors, matching the Log view default where color is on
+    graph = require("neogit.lib.graph.kitty").build(commits, true)
   else
-    -- ascii (also serving the kitty fallback): real `git log --graph --color`
-    -- output, parsed per glyph like the Log view
+    -- ascii: real `git log --graph --color` output, parsed per glyph like
+    -- the Log view
     local options = vim.list_extend({}, args)
     util.remove_item_from_table(options, "--show-signature")
     graph = M.graph(options, {}, nil)
