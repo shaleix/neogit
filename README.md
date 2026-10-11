@@ -516,13 +516,13 @@ neogit.setup {
     },
     unpulled_upstream = {
       folded = true,
-      hidden = false,
+      hidden = true,
     },
     -- (no unmerged_upstream section: the "Unmerged into" list is gone; the
     -- Head line's ↑N ↓M counters and its <cr> range diff replaced it)
     unpulled_pushRemote = {
       folded = true,
-      hidden = false,
+      hidden = true,
     },
     unmerged_pushRemote = {
       folded = false,

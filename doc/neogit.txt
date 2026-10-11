@@ -466,7 +466,7 @@ to Neovim users.
         },
         unpulled_upstream = {
         folded = true,
-        hidden = false,
+        hidden = true,
         },
         unmerged_upstream = {
         folded = false,
@@ -474,7 +474,7 @@ to Neovim users.
         },
         unpulled_pushRemote = {
         folded = true,
-        hidden = false,
+        hidden = true,
         },
         unmerged_pushRemote = {
         folded = false,

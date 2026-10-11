@@ -123,12 +123,19 @@ describe("section header icons and colors", function()
 
   it("renders the download icon on remote sections; Unmerged into is gone", function()
     local dir = workdir_diverged()
+    -- The unpulled sections are hidden by default; this spec pins icon
+    -- rendering, so opt them back in for the duration of the test.
+    config.values.sections.unpulled_upstream.hidden = false
+    config.values.sections.unpulled_pushRemote.hidden = false
     local buf = open_status(dir)
     local text = buffer_text(buf)
 
     local icons = config.values.icons.sections
     assert.truthy(text:find(icons.unpulled .. " Unpulled from", 1, true), "unpulled (download) icon missing")
     assert.falsy(text:find("Unmerged into", 1, true), "the Unmerged into section must not render")
+
+    config.values.sections.unpulled_upstream.hidden = true
+    config.values.sections.unpulled_pushRemote.hidden = true
   end)
 
   it("renders the single-letter mode column with file-type icons", function()

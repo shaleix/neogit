@@ -722,11 +722,11 @@ function M.get_default_values()
       },
       unpulled_upstream = {
         folded = true,
-        hidden = false,
+        hidden = true,
       },
       unpulled_pushRemote = {
         folded = true,
-        hidden = false,
+        hidden = true,
       },
       unmerged_pushRemote = {
         folded = false,
