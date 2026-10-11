@@ -120,8 +120,9 @@ local HEAD = Component.new(function(props)
 
   -- Divergence against the remote ref this line names: `↑N` local commits
   -- not on the remote, `↓M` remote commits not local. Only non-zero
-  -- directions render, so an in-sync line stays clean. `props.divergence`
-  -- carries the ref so `<cr>` on the line can open the range diff.
+  -- directions render; fully in sync shows a single `✓` in their place, so
+  -- the line still reads at a glance. `props.divergence` carries the ref so
+  -- `<cr>` on the line can open the range diff.
   local divergence = {}
   if props.divergence then
     if props.divergence.ahead > 0 then
@@ -131,6 +132,9 @@ local HEAD = Component.new(function(props)
     if props.divergence.behind > 0 then
       divergence[#divergence + 1] =
         text.highlight("NeogitDivergenceBehind")(("↓%d"):format(props.divergence.behind))
+    end
+    if #divergence == 0 then
+      divergence[#divergence + 1] = text.highlight("NeogitDivergenceOk")("✓")
     end
   end
 

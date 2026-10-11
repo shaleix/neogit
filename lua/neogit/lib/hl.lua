@@ -198,9 +198,11 @@ function M.setup(config)
     NeogitSignatureGoodExpiredKey  = { link = "NeogitGraphYellow" },
     NeogitSignatureGoodRevokedKey  = { link = "NeogitGraphRed" },
     -- Upstream divergence counters on the status HEAD lines: ahead = local
-    -- commits not pushed yet, behind = remote commits not pulled yet.
+    -- commits not pushed yet, behind = remote commits not pulled yet. The
+    -- check mark replaces both when the branch is fully in sync.
     NeogitDivergenceAhead          = { link = "NeogitGraphGreen" },
     NeogitDivergenceBehind         = { link = "NeogitGraphRed" },
+    NeogitDivergenceOk             = { fg = ok_green, ctermfg = 2 },
     NeogitNormal                   = { link = "Normal" },
     NeogitNormalFloat              = { link = "NeogitNormal" },
     NeogitFloatBorder              = { link = "NeogitNormalFloat" },
