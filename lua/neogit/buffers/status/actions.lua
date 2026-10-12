@@ -119,23 +119,6 @@ local function cleanup_items(items)
   end
 end
 
----@param self StatusBuffer
----@param item StatusItem
----@return integer[]|nil
-local function translate_cursor_location(self, item)
-  if rawget(item, "diff") then
-    local line = self.buffer:cursor_line()
-
-    for _, hunk in ipairs(item.diff.hunks) do
-      if line >= hunk.first and line <= hunk.last then
-        local offset = line - hunk.first
-        local row = jump.adjust_row(hunk.disk_from, offset, hunk.lines, "-")
-        return { row, 0 }
-      end
-    end
-  end
-end
-
 local function open(type, path, cursor)
   jump.open(type, path, cursor, "[Status - Open]")
 end
@@ -159,10 +142,8 @@ M.v_discard = function(self)
     local selection = self.buffer.ui:get_selection()
 
     local discard_message = "Discard selection?"
-    local hunk_count = 0
     local file_count = 0
 
-    local patches = {}
     local invalidated_diffs = {}
     local untracked_files = {}
     local unstaged_files = {}
@@ -175,49 +156,23 @@ M.v_discard = function(self)
         file_count = file_count + #section.items
 
         for _, item in ipairs(section.items) do
-          local hunks = self.buffer.ui:item_hunks(item, selection.first_line, selection.last_line, true)
+          discard_message = ("Discard %s files?"):format(file_count)
+          logger.debug(("Discarding in section %s %s"):format(section.name, item.name))
+          table.insert(invalidated_diffs, "*:" .. item.name)
 
-          if #hunks > 0 then
-            logger.debug(("Discarding %d hunks from %q"):format(#hunks, item.name))
-
-            hunk_count = hunk_count + #hunks
-            if hunk_count > 1 then
-              discard_message = ("Discard %s hunks?"):format(hunk_count)
+          if section.name == "untracked" then
+            table.insert(untracked_files, item)
+          elseif section.name == "unstaged" then
+            if item.mode == "A" then
+              table.insert(new_files, item)
+            else
+              table.insert(unstaged_files, item)
             end
-
-            for _, hunk in ipairs(hunks) do
-              table.insert(invalidated_diffs, "*:" .. item.name)
-              table.insert(patches, function()
-                local patch =
-                  git.index.generate_patch(hunk, { from = hunk.from, to = hunk.to, reverse = true })
-
-                logger.debug(("Discarding Patch: %s"):format(patch))
-
-                git.index.apply(patch, {
-                  index = section.name == "staged",
-                  reverse = true,
-                })
-              end)
-            end
-          else
-            discard_message = ("Discard %s files?"):format(file_count)
-            logger.debug(("Discarding in section %s %s"):format(section.name, item.name))
-            table.insert(invalidated_diffs, "*:" .. item.name)
-
-            if section.name == "untracked" then
-              table.insert(untracked_files, item)
-            elseif section.name == "unstaged" then
-              if item.mode == "A" then
-                table.insert(new_files, item)
-              else
-                table.insert(unstaged_files, item)
-              end
-            elseif section.name == "staged" then
-              if item.mode == "N" or item.mode == "A" then
-                table.insert(new_files, item)
-              else
-                table.insert(staged_files_modified, item)
-              end
+          elseif section.name == "staged" then
+            if item.mode == "N" or item.mode == "A" then
+              table.insert(new_files, item)
+            else
+              table.insert(staged_files_modified, item)
             end
           end
         end
@@ -234,12 +189,6 @@ M.v_discard = function(self)
     end
 
     if input.get_permission(discard_message) then
-      if #patches > 0 then
-        for _, patch in ipairs(patches) do
-          patch()
-        end
-      end
-
       if #untracked_files > 0 then
         cleanup_items(untracked_files)
       end
@@ -285,7 +234,6 @@ M.v_stage = function(self)
 
     local untracked_files = {}
     local unstaged_files = {}
-    local patches = {}
     local invalidated_diffs = {}
 
     for _, section in ipairs(selection.sections) do
@@ -296,19 +244,12 @@ M.v_stage = function(self)
             return
           end
 
-          local hunks = self.buffer.ui:item_hunks(item, selection.first_line, selection.last_line, true)
           table.insert(invalidated_diffs, "*:" .. item.name)
 
-          if #hunks > 0 then
-            for _, hunk in ipairs(hunks) do
-              table.insert(patches, git.index.generate_patch(hunk.hunk, { from = hunk.from, to = hunk.to }))
-            end
+          if section.name == "unstaged" then
+            table.insert(unstaged_files, item.escaped_path)
           else
-            if section.name == "unstaged" then
-              table.insert(unstaged_files, item.escaped_path)
-            else
-              table.insert(untracked_files, item.escaped_path)
-            end
+            table.insert(untracked_files, item.escaped_path)
           end
         end
       end
@@ -322,13 +263,7 @@ M.v_stage = function(self)
       git.status.stage(unstaged_files)
     end
 
-    if #patches > 0 then
-      for _, patch in ipairs(patches) do
-        git.index.apply(patch, { cached = true })
-      end
-    end
-
-    if #untracked_files > 0 or #unstaged_files > 0 or #patches > 0 then
+    if #untracked_files > 0 or #unstaged_files > 0 then
       self:dispatch_refresh({ update_diffs = invalidated_diffs }, "n_stage")
     end
   end)
@@ -341,40 +276,19 @@ M.v_unstage = function(self)
     local selection = self.buffer.ui:get_selection()
 
     local files = {}
-    local patches = {}
     local invalidated_diffs = {}
 
     for _, section in ipairs(selection.sections) do
       if section.name == "staged" then
         for _, item in ipairs(section.items) do
-          local hunks = self.buffer.ui:item_hunks(item, selection.first_line, selection.last_line, true)
           table.insert(invalidated_diffs, "*:" .. item.name)
-
-          if #hunks > 0 then
-            for _, hunk in ipairs(hunks) do
-              table.insert(
-                patches,
-                git.index.generate_patch(hunk, { from = hunk.from, to = hunk.to, reverse = true })
-              )
-            end
-          else
-            table.insert(files, item.escaped_path)
-          end
+          table.insert(files, item.escaped_path)
         end
       end
     end
 
     if #files > 0 then
       git.status.unstage(files)
-    end
-
-    if #patches > 0 then
-      for _, patch in ipairs(patches) do
-        git.index.apply(patch, { cached = true, reverse = true })
-      end
-    end
-
-    if #files > 0 or #patches > 0 then
       self:dispatch_refresh({ update_diffs = invalidated_diffs }, "v_unstage")
     end
   end)
@@ -999,36 +913,6 @@ M.n_discard = function(self)
         end
         refresh = {}
       end
-    elseif selection.item then -- Discard Hunk
-      if git.status.is_unmerged(selection.item.mode) then
-        notification.warn("Resolve conflicts in file before discarding hunks.")
-        return
-      end
-
-      local hunk =
-        self.buffer.ui:item_hunks(selection.item, selection.first_line, selection.last_line, false)[1]
-
-      local patch = git.index.generate_patch(hunk, { reverse = true })
-
-      if section == "untracked" then
-        message = "Discard hunk?"
-        action = function()
-          git.index.apply(patch, { reverse = true })
-        end
-        refresh = { update_diffs = { "untracked:" .. selection.item.name } }
-      elseif section == "unstaged" then
-        message = "Discard hunk?"
-        action = function()
-          git.index.apply(patch, { reverse = true })
-        end
-        refresh = { update_diffs = { "unstaged:" .. selection.item.name } }
-      elseif section == "staged" then
-        message = "Discard hunk?"
-        action = function()
-          git.index.apply(patch, { index = true, reverse = true })
-        end
-        refresh = { update_diffs = { "staged:" .. selection.item.name } }
-      end
     else -- Discard Section
       if section == "untracked" then
         message = ("Discard %s files?"):format(#selection.section.items)
@@ -1500,9 +1384,10 @@ M.n_goto_file = function(self)
         return
       end
 
-      local cursor = translate_cursor_location(self, item)
+      -- No inline hunks in the status buffer: nothing to translate the
+      -- cursor position onto in the opened file.
       self:close()
-      vim.schedule_wrap(open)("edit", item.absolute_path, cursor)
+      vim.schedule_wrap(open)("edit", item.absolute_path, nil)
       return
     end
 
@@ -1535,7 +1420,7 @@ local function open_item(self, type)
     local item = self.buffer.ui:get_item_under_cursor()
 
     if item and item.absolute_path then
-      open(type, item.absolute_path, translate_cursor_location(self, item))
+      open(type, item.absolute_path, nil)
     end
   end
 end
@@ -1698,15 +1583,6 @@ M.n_reverse = function(self)
         end
       end
       refresh = { update_diffs = { "staged:" .. selection.item.name } }
-    elseif selection.item then -- Reverse Hunk
-      local hunk =
-        self.buffer.ui:item_hunks(selection.item, selection.first_line, selection.last_line, false)[1]
-      message = "Reverse hunk?"
-      action = function()
-        local patch = git.index.generate_patch(hunk, { reverse = true })
-        git.index.apply(patch, { reverse = true })
-      end
-      refresh = { update_diffs = { "staged:" .. selection.item.name } }
     else -- Reverse Section
       message = ("Reverse %s files?"):format(#selection.section.items)
       action = function()
@@ -1744,14 +1620,12 @@ M.v_reverse = function(self)
 
       if section.name == "staged" then
         for _, item in ipairs(section.items) do
-          local hunks = self.buffer.ui:item_hunks(item, selection.first_line, selection.last_line, true)
           table.insert(invalidated_diffs, "*:" .. item.name)
 
-          for _, hunk in ipairs(hunks) do
-            table.insert(
-              patches,
-              git.index.generate_patch(hunk, { from = hunk.from, to = hunk.to, reverse = true })
-            )
+          -- Whole-file reversal (the visual analogue of "Reverse File"):
+          -- with no inline hunks there is no line-level selection to apply.
+          for _, hunk in ipairs(item.diff and item.diff.hunks or {}) do
+            table.insert(patches, git.index.generate_patch(hunk, { reverse = true }))
           end
         end
       end

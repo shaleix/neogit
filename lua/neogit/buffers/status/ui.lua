@@ -3,8 +3,6 @@ local Component = require("neogit.lib.ui.component")
 local util = require("neogit.lib.util")
 local common = require("neogit.buffers.common")
 local config = require("neogit.config")
-local a = require("neogit.lib.async")
-local event = require("neogit.lib.event")
 
 local col = Ui.col
 local row = Ui.row
@@ -14,7 +12,6 @@ local map = util.map
 
 local EmptyLine = common.EmptyLine
 local List = common.List
-local DiffHunks = common.DiffHunks
 local build_graph = common.build_graph
 
 local M = {}
@@ -202,16 +199,11 @@ local Section = Component.new(function(props)
     count = { text(" ("), text.highlight("NeogitSectionHeaderCount")(#props.items), text(")") }
   end
 
-  local body
-  if props.file_tree then
-    body = FileTree(props.name, props.config)(props.items)
-  else
-    body = col(map(props.items, props.render))
-  end
-
+  -- File sections always render as a directory tree; diff content lives in
+  -- the diff_preview split, never inline in the status buffer.
   return col.tag("Section")({
     row(util.merge(props.title, count or {})),
-    body,
+    FileTree(props.name, props.config)(props.items),
     EmptyLine(),
   }, {
     foldable = true,
@@ -222,8 +214,13 @@ local Section = Component.new(function(props)
 end)
 
 local SequencerSection = Component.new(function(props)
+  local count
+  if props.count then
+    count = { text(" ("), text.highlight("NeogitSectionHeaderCount")(#props.items), text(")") }
+  end
+
   return col.tag("Section")({
-    row(util.merge(props.title)),
+    row(util.merge(props.title, count or {})),
     col(map(props.items, props.render)),
     EmptyLine(),
   }, {
@@ -257,73 +254,6 @@ local SectionItemFile = function(section, config, depth)
   depth = depth or 0
   local indent = ("  "):rep(depth + 1)
   return Component.new(function(item)
-    local load_diff = function(item)
-      ---@param this Component
-      ---@param ui Ui
-      ---@param prefix string|nil
-      return a.void(function(this, ui, prefix)
-        this.options.on_open = nil
-        this.options.folded = false
-
-        local row, _ = this:row_range_abs()
-        row = row + 1 -- Filename row
-
-        local diff = item.diff
-        for _, hunk in ipairs(diff.hunks) do
-          hunk.first = row
-          hunk.last = row + hunk.length
-          row = hunk.last + 1
-
-          -- Set fold state when called from ui:update()
-          if prefix then
-            local key = ("%s--%s"):format(prefix, hunk.hash)
-            if ui._node_fold_state and ui._node_fold_state[key] then
-              hunk._folded = ui._node_fold_state[key].folded
-            end
-          end
-        end
-
-        ui.buf:with_locked_viewport(function()
-          this:append(DiffHunks(diff))
-          ui:update()
-        end)
-
-        event.send("DiffLoaded", {
-          item = {
-            absolute_path = item.absolute_path,
-            relative_path = item.escaped_path,
-            row_start = item.first,
-            row_end = item.last,
-            mode = item.mode,
-          },
-          diff = {
-            kind = diff.kind,
-            lines = diff.lines,
-            hunks = util.map(diff.hunks, function(hunk)
-              local original_lines = util.filter_map(hunk.lines, function(line)
-                if not (vim.startswith(line, "+") or vim.startswith(line, "-")) then
-                  return line
-                end
-              end)
-
-              local modified_lines = util.map(hunk.lines, function(line)
-                return line:gsub("^[+-]", " ")
-              end)
-
-              return {
-                lines = hunk.lines,
-                original_lines = original_lines,
-                modified_lines = modified_lines,
-                row_start = hunk.first,
-                row_end = hunk.last,
-                header = hunk.line,
-              }
-            end),
-          },
-        })
-      end)
-    end
-
     local mode = config.status.mode_text[item.mode]
     local mode_text
     if mode == "" then
@@ -414,11 +344,9 @@ local SectionItemFile = function(section, config, depth)
       submodule = text.highlight("NeogitTagName")(submodule_text)
     end
 
-    -- With status.diff_preview enabled the diff renders in a separate
-    -- preview window that follows the cursor (see status/init.lua); the
-    -- item is not foldable and hunks never render inline.
-    local preview_mode = config.status.diff_preview and config.status.diff_preview.enabled
-
+    -- The diff renders in the separate preview window that follows the
+    -- cursor (see status/init.lua): file rows are never foldable and hunks
+    -- never render inline in the status buffer.
     return col.tag("Item")({
       row {
         text(indent),
@@ -430,9 +358,8 @@ local SectionItemFile = function(section, config, depth)
         submodule,
       },
     }, {
-      foldable = not preview_mode,
+      foldable = false,
       folded = true,
-      on_open = (not preview_mode) and load_diff(item) or nil,
       context = true,
       id = ("%s--%s"):format(section, item.name),
       yankable = item.name,
@@ -814,42 +741,35 @@ function M.Status(state, config)
         show_untracked and Section {
           title = SectionTitle { title = "Untracked files", highlight = "NeogitUntrackedfiles", icon = section_icons.untracked },
           count = true,
-          render = SectionItemFile("untracked", config),
           items = state.untracked.items,
           folded = config.sections.untracked.folded,
           name = "untracked",
-          file_tree = config.status.file_tree,
           config = config,
         },
         show_unstaged and Section {
           title = SectionTitle { title = "Unstaged changes", highlight = "NeogitUnstagedchanges", icon = section_icons.unstaged },
           count = true,
-          render = SectionItemFile("unstaged", config),
           items = state.unstaged.items,
           folded = config.sections.unstaged.folded,
           name = "unstaged",
-          file_tree = config.status.file_tree,
           config = config,
         },
         show_staged and Section {
           title = SectionTitle { title = "Staged changes", highlight = "NeogitStagedchanges", icon = section_icons.staged },
           count = true,
-          render = SectionItemFile("staged", config),
           items = state.staged.items,
           folded = config.sections.staged.folded,
           name = "staged",
-          file_tree = config.status.file_tree,
           config = config,
         },
-        show_recent and Section {
+        show_recent and SequencerSection {
           title = SectionTitle { title = "Recent Commits", highlight = "NeogitRecentcommits", icon = section_icons.recent },
-          count = false,
           render = SectionItemRecent,
           items = state.recent.items,
           folded = config.sections.recent.folded,
           name = "recent",
         },
-        show_stashes and Section {
+        show_stashes and SequencerSection {
           title = SectionTitle { title = "Stashes", highlight = "NeogitStashes", icon = section_icons.stashes },
           count = true,
           render = SectionItemStash,

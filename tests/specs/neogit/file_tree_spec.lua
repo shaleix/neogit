@@ -1,4 +1,5 @@
--- status.file_tree: diffview-style directory tree for the file sections.
+-- File sections in the status buffer always render as a diffview-style
+-- directory tree (foldable directory rows, indented basename file rows).
 local neogit = require("neogit")
 local config = require("neogit.config")
 local Repo = require("neogit.lib.git.repository")
@@ -64,13 +65,9 @@ end
 
 neogit.setup { filewatcher = { enabled = false }, disable_context_highlighting = true }
 
-describe("status file_tree", function()
-  after_each(function()
-    config.values.status.file_tree = false
-  end)
-
-  it("renders nested directory rows with counts and basename file rows", function()
-    config.values.status.file_tree = true
+describe("status file tree", function()
+  it("renders nested directory rows with indented basename file rows by default", function()
+    -- DEFAULT config: no overrides. The tree is unconditional.
     local dir = workdir()
     local buf = open_status(dir)
     local text = buffer_text(buf)
@@ -81,23 +78,27 @@ describe("status file_tree", function()
     assert.truthy(text:find("main%.lua", 1, false), "basename file row missing")
     assert.is_nil(text:find("src/lib/deep/util%.lua", 1, false), "full paths must not render in tree mode")
     assert.is_nil(text:find("src/%s", 1, false), "directory rows must not carry a trailing slash")
-  end)
 
-  it("renders flat file paths when disabled", function()
-    config.values.status.file_tree = false
-    local dir = workdir()
-    local buf = open_status(dir)
-    local text = buffer_text(buf)
+    -- The basename file row sits indented one level deeper than its
+    -- directory row.
+    local lines = vim.split(text, "\n")
+    local dir_indent, file_indent
+    for _, line in ipairs(lines) do
+      if not dir_indent and line:match("󰉋 src") then
+        dir_indent = line:match("^%s*"):len()
+      elseif not file_indent and line:match("util%.lua") then
+        file_indent = line:match("^%s*"):len()
+      end
+    end
 
-    assert.truthy(text:find("src/lib/deep/util%.lua", 1, false), "flat mode must keep full paths")
-    assert.is_nil(text:find("src %(2%)", 1, true), "directory rows must not render in flat mode")
-  end)
-
-  it("validates the config shape", function()
-    config.values.status.file_tree = "yes"
-    assert.truthy(vim.tbl_count(config.validate_config()) > 0, "file_tree must be a boolean")
-
-    config.values.status.file_tree = true
-    assert.equal(0, vim.tbl_count(config.validate_config()))
+    assert.truthy(dir_indent, "directory row not found")
+    assert.truthy(file_indent, "file row not found")
+    assert.truthy(
+      file_indent > dir_indent,
+      ("file row (indent %d) must be indented deeper than its directory row (indent %d)"):format(
+        file_indent,
+        dir_indent
+      )
+    )
   end)
 end)

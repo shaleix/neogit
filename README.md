@@ -289,14 +289,15 @@ neogit.setup {
       UU = "UU",
       ["?"] = "?",
     },
-    -- Show file diffs in a separate window instead of expanding hunks
-    -- inline in the status buffer. The preview follows the cursor: moving
-    -- onto a file item renders its diff automatically; leaving the file
-    -- items hides it. C-d/C-u scroll the preview from the status buffer.
-    -- Diffs load asynchronously (a cancellable git process with a loading
+    -- Show file diffs in a separate preview window that follows the
+    -- cursor: moving onto a file item renders its diff in the split
+    -- automatically; leaving the file items hides it. C-d/C-u scroll the
+    -- preview from the status buffer. This is the standard - and only -
+    -- diff view for the status buffer: hunks never render inline. Diffs
+    -- load asynchronously (a cancellable git process with a loading
     -- placeholder), so a slow diff never blocks cursor movement.
     diff_preview = {
-      enabled = false,
+      enabled = true,
       kind = "vsplit", -- "split" | "vsplit" | "tab" (float is not supported)
       debounce = 200, -- ms to wait after cursor movement before updating
       -- Custom content source: return { filetype = "diff", lines = {...} }
@@ -310,11 +311,6 @@ neogit.setup {
       -- 120 columns, else 50%)
       width = nil,
     },
-    -- Render file sections as a directory tree (diffview-style): foldable
-    -- directory rows with a subtree file count, file rows indented and
-    -- showing only their basename. Flat list when false. Staging/unstaging
-    -- on a directory row applies to the subtree's files, not the section.
-    file_tree = false,
   },
   -- Background `git fetch` when the status buffer opens, so the Head line's
   -- ↓N behind counter stays current without a manual fetch. A fetch that

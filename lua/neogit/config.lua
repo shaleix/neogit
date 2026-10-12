@@ -321,8 +321,7 @@ end
 ---@field mode_padding? integer The amount of padding to add to the right of the mode column
 ---@field mode_text? { [string]: string } The text to display for each mode
 ---@field show_no_changes? boolean Show a "No changes" placeholder when the worktree has no file changes (default true)
----@field diff_preview? NeogitConfigDiffPreview Render file diffs in a separate window instead of inline
----@field file_tree? boolean Render file sections as a directory tree (foldable dir rows, indented basename rows)
+---@field diff_preview? NeogitConfigDiffPreview Render file diffs in the preview split - the standard and only diff view for the status buffer
 
 ---@class NeogitConfigDiffPreview
 ---@field enabled? boolean Show diffs in a preview window instead of expanding inline in the status buffer
@@ -540,24 +539,20 @@ function M.get_default_values()
         UU = "UU",
         ["?"] = "?",
       },
-      -- Show file diffs in a separate window instead of expanding hunks
-      -- inline in the status buffer. The preview follows the cursor: moving
-      -- onto a file item renders its diff in the split automatically.
-      -- Diffs load asynchronously (cancellable git process + loading
-      -- placeholder), so slow diffs never block cursor movement.
+      -- Show file diffs in a separate preview window that follows the
+      -- cursor: moving onto a file item renders its diff in the split
+      -- automatically. This is the standard - and only - diff view for the
+      -- status buffer: hunks never render inline. Diffs load
+      -- asynchronously (cancellable git process + loading placeholder), so
+      -- slow diffs never block cursor movement.
       diff_preview = {
-        enabled = false,
+        enabled = true,
         kind = "vsplit", -- "split" | "vsplit" | "tab" (float is not supported)
         debounce = 200, -- ms to wait after cursor movement before updating
         content = nil, -- fun(item, section): { filetype: string, lines: string[] } | nil
         width = nil, -- number | fun(columns: number): number | nil (vsplit only;
         --   default: 60% when the editor is over 120 columns, else 50%)
       },
-      -- Render file sections as a directory tree (diffview-style): foldable
-      -- directory rows with a subtree file count, file rows indented and
-      -- showing only their basename. Flat list when false. Staging/unstaging
-      -- on a directory row applies to the subtree's files, not the section.
-      file_tree = false,
     },
     -- Fetch from the remote in the background when the status buffer opens,
     -- so the Head line's ↓N behind counter stays current without a manual
@@ -1223,7 +1218,6 @@ function M.validate_config()
         validate_type(config.status.diff_preview.content, "diff_preview.content", { "function", "nil" })
         validate_type(config.status.diff_preview.width, "diff_preview.width", { "number", "function", "nil" })
       end
-      validate_type(config.status.file_tree, "status.file_tree", { "boolean", "nil" })
     end
     if validate_type(config.auto_fetch, "auto_fetch", "table") then
       validate_type(config.auto_fetch.enabled, "auto_fetch.enabled", "boolean")

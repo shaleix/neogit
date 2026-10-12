@@ -1,5 +1,6 @@
--- status.file_tree: pressing stage/unstage on a directory row must only
--- affect the files under that directory, not the entire section.
+-- File sections always render as a directory tree: pressing stage/unstage
+-- on a directory row must only affect the files under that directory, not
+-- the entire section.
 local neogit = require("neogit")
 local config = require("neogit.config")
 local Repo = require("neogit.lib.git.repository")
@@ -106,13 +107,8 @@ end
 
 neogit.setup { filewatcher = { enabled = false }, disable_context_highlighting = true }
 
-describe("status file_tree stage/unstage on directory rows", function()
-  after_each(function()
-    config.values.status.file_tree = false
-  end)
-
+describe("status file tree stage/unstage on directory rows", function()
   it("stages only the files under the cursor's directory (unstaged)", function()
-    config.values.status.file_tree = true
     local dir, write = workdir()
     write("src/main.lua", "a\nb\n")
     write("other/deep/x.lua", "b\nb\n")
@@ -131,7 +127,6 @@ describe("status file_tree stage/unstage on directory rows", function()
   end)
 
   it("stages mass deletions under the cursor's directory", function()
-    config.values.status.file_tree = true
     local dir, write = workdir()
     for i = 1, 500 do
       write(("src/gen/f%03d.lua"):format(i), ("x%d\n"):format(i))
@@ -166,7 +161,6 @@ describe("status file_tree stage/unstage on directory rows", function()
   end)
 
   it("stages only the files under the cursor's directory (untracked)", function()
-    config.values.status.file_tree = true
     local dir, write = workdir()
     write("new/a.txt", "a\n")
     write("new/sub/b.txt", "b\n")
@@ -185,7 +179,6 @@ describe("status file_tree stage/unstage on directory rows", function()
   end)
 
   it("stages in the requesting buffer's repo, not the last-opened one", function()
-    config.values.status.file_tree = true
     local dir_a, write_a = workdir()
     local dir_b, write_b = workdir()
     write_a("src/main.lua", "a\nb\n")
@@ -210,7 +203,6 @@ describe("status file_tree stage/unstage on directory rows", function()
   end)
 
   it("unstages only the files under the cursor's directory", function()
-    config.values.status.file_tree = true
     local dir, write = workdir()
     write("src/main.lua", "a\nb\n")
     write("other/deep/x.lua", "b\nb\n")

@@ -307,11 +307,12 @@ diffs. The buffer is a snapshot - it never refreshes; close it with `q` or
         UU = "UU",
         ["?"] = "?",
         },
-        -- Show file diffs in a separate window instead of expanding hunks
-        -- inline in the status buffer. The preview follows the cursor:
-        -- moving onto a file item renders its diff automatically.
+        -- Show file diffs in a separate preview window that follows the
+        -- cursor: moving onto a file item renders its diff in the split
+        -- automatically. This is the standard - and only - diff view for
+        -- the status buffer: hunks never render inline.
         diff_preview = {
-            enabled = false,
+            enabled = true,
             kind = "vsplit", -- "split" | "vsplit" | "tab" (float is not supported)
             debounce = 200, -- ms to wait after cursor movement before updating
             -- Custom content source: return { filetype = "diff", lines = {...} }
@@ -325,12 +326,6 @@ diffs. The buffer is a snapshot - it never refreshes; close it with `q` or
             -- over 120 columns, else 50%)
             width = nil,
         },
-        -- Render file sections as a directory tree (diffview-style):
-        -- foldable directory rows with a subtree file count, file rows
-        -- indented and showing only their basename. Flat list when false.
-        -- Staging/unstaging on a directory row applies to the files under
-        -- that directory (the subtree), not the entire section.
-        file_tree = false,
     },
     -- Background `git fetch` when the status buffer opens, so the Head
     -- line's ↓N behind counter stays current without a manual fetch. A
@@ -433,7 +428,8 @@ diffs. The buffer is a snapshot - it never refreshes; close it with `q` or
         -- If enabled, use telescope for menu selection rather than vim.ui.select.
         -- Allows multi-select and some things that vim.ui.select doesn't.
         telescope = nil,
-        -- Neogit only provides inline diffs. If you want a more traditional way to look at diffs, you can use `diffview`.
+        -- File diffs render in a preview window. If you want a more
+        -- traditional way to look at diffs, you can use `diffview`.
         -- The diffview integration enables the diff popup.
         --
         -- Requires you to have `sindrets/diffview.nvim` installed.
@@ -801,32 +797,7 @@ The following events are emitted by Neogit:
       copy_if_present: function(filename: string, callback: function|nil)
     }
 <
-• `NeogitDiffLoaded`
-  When: A hunk is lazy loaded in the status buffer
-  Data: >
-    {
-        item = {
-            absolute_path: string,
-            relative_path: string,
-            row_start: int (First row in buffer the hunk occupies),
-            row_end: int (last row in buffer the hunk occupies),
-            mode: string (file mode)
-        },
-        diff = {
-            kind: str,
-            lines: string[],
-            hunks: Hunk[]
-        }
-    }
 
-    Hunk:
-        lines: str[]
-        original_lines: str[] (lines from diff not prefixed with +/-)
-        modified_lines: str[] (lines from diff, but with +/- prefix removed)
-        row_start: int (first line of hunk in the buffer)
-        row_end: int (last line of hunk in the buffer)
-        header: string (diff header)
-<
 ==============================================================================
 5. Highlights                                                *neogit_highlights*
 
