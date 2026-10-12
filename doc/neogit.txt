@@ -898,21 +898,8 @@ NeogitBisecting             ^
 NeogitSectionHeaderCount    The number, for sections with a number.
 
 STATUS BUFFER FILE
-Applied to the label on the left of filenames. These highlight groups are not
-used directly, but linked to by other groups:
-
-NeogitChangeModified
-NeogitChangeAdded
-NeogitChangeDeleted
-NeogitChangeRenamed
-NeogitChangeUpdated
-NeogitChangeCopied
-NeogitChangeNewFile
-NeogitChangeUnmerged
-
-Styling one of the above groups will apply to all sections, and is generally
-whats recommended. However, if you want to control the style on a per-section
-basis, the _actual_ highlight groups on the labels follow this pattern:
+Applied to the label on the left of filenames. The highlight groups on the
+labels follow this pattern:
     `NeogitChange<mode><section>`
 
 Where `<mode>` is one of: (corresponding to the git mode)
@@ -923,6 +910,7 @@ Where `<mode>` is one of: (corresponding to the git mode)
   C
   U
   R
+  T
   DD
   UU
   AA
@@ -930,14 +918,17 @@ Where `<mode>` is one of: (corresponding to the git mode)
   UD
   AU
   UA
+  Untracked
 
 And `<section>` is one of:
   untracked
   unstaged
   staged
 
-So, a modified and staged change would use the `NeogitChangeMstaged` highlight
-group, which is linked to `NeogitChangeModified` by default.
+Not every combination exists: untracked files always use the `Untracked` mode,
+and the conflict modes (DD, UU, AA, DU, UD, AU, UA) only appear in the
+unstaged section. So, a modified and staged change would use the
+`NeogitChangeMstaged` highlight group.
 
 SIGNS FOR LINE HIGHLIGHTING
 Used to highlight different sections of the status buffer or commit buffer.

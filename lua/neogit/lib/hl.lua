@@ -210,8 +210,6 @@ function M.setup(config)
     NeogitCursorLine               = { link = "CursorLine" },
     NeogitCursorLineNr             = { link = "CursorLineNr" },
     NeogitHunkMergeHeader          = { fg = palette.bg2, bg = palette.grey, bold = palette.bold, ctermfg = 4 },
-    NeogitHunkMergeHeaderHighlight = { fg = palette.bg0, bg = palette.bg_cyan, bold = palette.bold, ctermfg = 4 },
-    NeogitHunkMergeHeaderCursor    = { fg = palette.bg0, bg = palette.bg_cyan, bold = palette.bold, ctermfg = 4 },
     NeogitHunkHeader               = { fg = palette.bg0, bg = palette.grey, bold = palette.bold, ctermfg = 3 },
     NeogitHunkHeaderHighlight      = { fg = palette.bg0, bg = palette.md_purple, bold = palette.bold, ctermfg = 3 },
     NeogitHunkHeaderCursor         = { fg = palette.bg0, bg = palette.md_purple, bold = palette.bold, ctermfg = 3 },
@@ -260,67 +258,6 @@ function M.setup(config)
     NeogitFold                     = { fg = "None", bg = "None" },
     NeogitFoldColumn               = { fg = "None", bg = "None" },
     NeogitWinSeparator             = { link = "WinSeparator" },
-    -- Unstaged/untracked sections: lazygit-style uniform red for the mode
-    -- letter (color encodes the change state, not the file type - the letter
-    -- itself carries the type). Staged sections above are uniform green.
-    NeogitChangeMuntracked         = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeAuntracked         = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeNuntracked         = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeDuntracked         = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeCuntracked         = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeUuntracked         = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeRuntracked         = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeDDuntracked        = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeUUuntracked        = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeAAuntracked        = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeDUuntracked        = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeUDuntracked        = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeAUuntracked        = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeUAuntracked        = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeUntrackeduntracked = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeMunstaged          = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeAunstaged          = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeNunstaged          = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeDunstaged          = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeCunstaged          = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeUunstaged          = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeRunstaged          = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeTunstaged          = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeDDunstaged         = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeUUunstaged         = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeAAunstaged         = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeDUunstaged         = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeUDunstaged         = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeAUunstaged         = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeUAunstaged         = { fg = palette.red, ctermfg = 1 },
-    NeogitChangeUntrackedunstaged  = { fg = palette.red, ctermfg = 1 },
-    -- Staged section: one uniform "success" green ("ready to commit"), no
-    -- bold - the whole section reads as a block, unlike the per-type
-    -- unstaged colors.
-    NeogitChangeMstaged            = { fg = ok_green, ctermfg = 2 },
-    NeogitChangeAstaged            = { fg = ok_green, ctermfg = 2 },
-    NeogitChangeNstaged            = { fg = ok_green, ctermfg = 2 },
-    NeogitChangeDstaged            = { fg = ok_green, ctermfg = 2 },
-    NeogitChangeCstaged            = { fg = ok_green, ctermfg = 2 },
-    NeogitChangeUstaged            = { fg = ok_green, ctermfg = 2 }, -- typos: ignore
-    NeogitChangeRstaged            = { fg = ok_green, ctermfg = 2 },
-    NeogitChangeTstaged            = { fg = ok_green, ctermfg = 2 },
-    NeogitChangeDDstaged           = { fg = ok_green, ctermfg = 2 },
-    NeogitChangeUUstaged           = { fg = ok_green, ctermfg = 2 }, -- typos: ignore
-    NeogitChangeAAstaged           = { fg = ok_green, ctermfg = 2 },
-    NeogitChangeDUstaged           = { fg = ok_green, ctermfg = 2 }, -- typos: ignore
-    NeogitChangeUDstaged           = { fg = ok_green, ctermfg = 2 },
-    NeogitChangeAUstaged           = { fg = ok_green, ctermfg = 2 }, -- typos: ignore
-    NeogitChangeUAstaged           = { fg = ok_green, ctermfg = 2 },
-    NeogitChangeUntrackedstaged    = { fg = palette.red, ctermfg = 1 }, -- dead group: "?" never stages; kept red like the other "?" groups
-    NeogitChangeModified           = { fg = palette.green, bold = palette.bold, italic = palette.italic, ctermfg = 2 },
-    NeogitChangeAdded              = { fg = palette.bg_green, bold = palette.bold, italic = palette.italic, ctermfg = 2 },
-    NeogitChangeDeleted            = { fg = palette.bg_red, bold = palette.bold, italic = palette.italic, ctermfg = 1 },
-    NeogitChangeRenamed            = { fg = palette.bg_purple, bold = palette.bold, italic = palette.italic, ctermfg = 5 },
-    NeogitChangeUpdated            = { fg = palette.bg_orange, bold = palette.bold, italic = palette.italic, ctermfg = 3 },
-    NeogitChangeCopied             = { fg = palette.bg_cyan, bold = palette.bold, italic = palette.italic, ctermfg = 6 },
-    NeogitChangeUnmerged           = { fg = palette.bg_yellow, bold = palette.bold, italic = palette.italic, ctermfg = 3 },
-    NeogitChangeNewFile            = { fg = palette.bg_green, bold = palette.bold, italic = palette.italic, ctermfg = 2 },
     NeogitSectionHeader            = { fg = palette.bg_purple, bold = palette.bold, ctermfg = 5 },
     NeogitSectionHeaderCount       = {},
     -- Bottom-center loading indicator (lib/loading.lua): full-width banner.
@@ -348,6 +285,30 @@ function M.setup(config)
     NeogitFloatHeaderHighlight     = { bg = palette.bg2, fg = palette.cyan, bold = palette.bold, ctermfg = 5 },
     NeogitActiveItem               = { bg = palette.bg_orange, fg = palette.bg0, bold = palette.bold, ctermfg = 5 },
   }
+
+  -- Change-label highlights are composed at render time as
+  -- "NeogitChange<mode><section>" (buffers/status/ui.lua), so the definitions
+  -- reduce to a modes x sections loop with one color per section. The status
+  -- parsers constrain which combinations are reachable: untracked entries
+  -- always carry mode "?" (rendered "Untracked"), and the conflict modes
+  -- (DD, UU, AA, DU, UD, AU, UA) only ever land in the unstaged section, so
+  -- staged entries only ever carry single-letter modes. Staged uses the
+  -- uniform "success" green ("ready to commit", no bold - the whole section
+  -- reads as a block); unstaged and untracked use the state red (color
+  -- encodes the change state, not the file type - the letter itself carries
+  -- the type).
+  -- stylua: ignore
+  for _, mode in ipairs { "M", "A", "N", "D", "C", "U", "R", "T", "DD", "UU", "AA", "DU", "UD", "AU", "UA", "Untracked" } do
+    hl_store["NeogitChange" .. mode .. "unstaged"] = { fg = palette.red, ctermfg = 1 }
+
+    if #mode == 1 then
+      hl_store["NeogitChange" .. mode .. "staged"] = { fg = ok_green, ctermfg = 2 }
+    end
+
+    if mode == "Untracked" then
+      hl_store["NeogitChangeUntrackeduntracked"] = { fg = palette.red, ctermfg = 1 }
+    end
+  end
 
   for group, hl in pairs(hl_store) do
     if not is_set(group) then

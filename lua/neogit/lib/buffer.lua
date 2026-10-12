@@ -64,11 +64,6 @@ function Buffer:is_focused()
   return api.nvim_win_get_buf(0) == self.handle
 end
 
----@return number
-function Buffer:get_changedtick()
-  return api.nvim_buf_get_changedtick(self.handle)
-end
-
 function Buffer:lock()
   self:set_buffer_option("readonly", true)
   self:set_buffer_option("modifiable", false)
@@ -188,10 +183,6 @@ function Buffer:set_folds(folds)
     self:create_fold(unpack(fold))
     self:set_fold_state(unpack(fold))
   end
-end
-
-function Buffer:set_text(first_line, last_line, first_col, last_col, lines)
-  api.nvim_buf_set_text(self.handle, first_line, first_col, last_line, last_col, lines)
 end
 
 ---@param line nil|integer|integer[]
@@ -460,12 +451,6 @@ function Buffer:get_option(name)
   end
 end
 
-function Buffer:get_window_option(name)
-  if self.win_handle ~= nil then
-    return api.nvim_get_option_value(name, { win = self.win_handle })
-  end
-end
-
 function Buffer:set_buffer_option(name, value)
   if self.handle ~= nil then
     -- TODO: Remove this at some point. Nvim 0.10 throws an error if using both buf and scope
@@ -481,10 +466,6 @@ function Buffer:set_window_option(name, value)
   if self.win_handle ~= nil then
     api.nvim_set_option_value(name, value, { scope = "local", win = self.win_handle })
   end
-end
-
-function Buffer:set_name(name)
-  api.nvim_buf_set_name(self.handle, name)
 end
 
 function Buffer:replace_content_with(lines)
@@ -621,10 +602,6 @@ function Buffer:set_decorations(namespace, opts)
   if ns_id then
     return api.nvim_set_decoration_provider(ns_id, opts)
   end
-end
-
-function Buffer:line_count()
-  return api.nvim_buf_line_count(self.handle)
 end
 
 function Buffer:resize_header()

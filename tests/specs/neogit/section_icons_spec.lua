@@ -241,30 +241,47 @@ describe("section header icons and colors", function()
     )
   end)
 
-  it("shows modified and new files in green tones", function()
-    local function channels(name)
+  it("keeps the change families uniform per section", function()
+    local function fg_of(name)
       local def = vim.api.nvim_get_hl(0, { name = name, link = false })
       assert.truthy(def.fg, name .. " must define its own fg")
-      local r = math.floor(def.fg / 65536) % 256
-      local g = math.floor(def.fg / 256) % 256
-      local b = def.fg % 256
-      return r, g, b
+      return def.fg
     end
 
-    -- the base groups stay green (compat reference for user overrides)
-    for _, name in ipairs {
-      "NeogitChangeModified",
-      "NeogitChangeNewFile",
-      "NeogitChangeMstaged",
-    } do
-      local r, g, b = channels(name)
+    local function channels(fg)
+      return math.floor(fg / 65536) % 256, math.floor(fg / 256) % 256, fg % 256
+    end
+
+    local staged = { "M", "A", "N", "D", "C", "U", "R", "T" }
+    local unstaged = { "M", "A", "N", "D", "C", "U", "R", "T", "DD", "UU", "AA", "DU", "UD", "AU", "UA" }
+
+    -- staged: the whole single-letter family shares the success green
+    local staged_green
+    for _, m in ipairs(staged) do
+      local name = "NeogitChange" .. m .. "staged"
+      local fg = fg_of(name)
+      local r, g, b = channels(fg)
       assert.truthy(g > r and g > b, name .. " must be green-dominant")
+      staged_green = staged_green or fg
+      assert.equal(staged_green, fg, name .. " must share the staged green")
     end
 
-    -- same family, still distinguishable
-    local mod = vim.api.nvim_get_hl(0, { name = "NeogitChangeModified", link = false }).fg
-    local new = vim.api.nvim_get_hl(0, { name = "NeogitChangeNewFile", link = false }).fg
-    assert.is_not.equal(mod, new)
+    -- unstaged: letters and conflict modes share the state red
+    local unstaged_red
+    for _, m in ipairs(unstaged) do
+      local name = "NeogitChange" .. m .. "unstaged"
+      local fg = fg_of(name)
+      local r, g, b = channels(fg)
+      assert.truthy(r > g and r > b, name .. " must be red-dominant")
+      unstaged_red = unstaged_red or fg
+      assert.equal(unstaged_red, fg, name .. " must share the unstaged red")
+    end
+
+    -- untracked letters share the state red with unstaged
+    assert.equal(unstaged_red, fg_of("NeogitChangeUntrackeduntracked"), "untracked shares the state red")
+
+    -- the section colors stay distinguishable
+    assert.is_not.equal(staged_green, unstaged_red)
   end)
 
   it("gives each section its own highlight color", function()

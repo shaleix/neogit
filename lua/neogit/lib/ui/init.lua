@@ -26,8 +26,6 @@ Selection.__index = Selection
 ---@field options table Component props or arguments
 ---@field children UiComponent[]
 
----@class FindOptions
-
 ---@class Ui
 ---@field buf Buffer
 ---@field layout table
@@ -42,31 +40,6 @@ function Ui.new(buf)
     layout = {},
     statuscolumn = { foldmarkers = {} },
   }, Ui)
-end
-
----@return Component|nil
-function Ui._find_component(components, f, options)
-  for _, c in ipairs(components) do
-    if c.tag == "col" or c.tag == "row" then
-      local res = Ui._find_component(c.children, f, options)
-
-      if res then
-        return res
-      end
-    end
-
-    if f(c) then
-      return c
-    end
-  end
-
-  return nil
-end
-
----@param f fun(c: UiComponent): boolean
----@param options FindOptions|nil
-function Ui:find_component(f, options)
-  return Ui._find_component(self.layout, f, options or {})
 end
 
 ---@param fn? fun(c: Component): boolean
