@@ -54,10 +54,6 @@ function M.move(commits, src, dst, args, start, checkout_dst)
 
   if not git.branch.exists(dst) then
     git.cli.branch.args(start or "", dst).call { hidden = true }
-    local upstream = git.branch.upstream(start)
-    if upstream then
-      git.branch.set_upstream(upstream, dst)
-    end
   end
 
   if dst ~= current then
