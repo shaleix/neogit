@@ -3,6 +3,7 @@ local Component = require("neogit.lib.ui.component")
 local util = require("neogit.lib.util")
 local common = require("neogit.buffers.common")
 local config = require("neogit.config")
+local hl = require("neogit.lib.hl")
 
 local col = Ui.col
 local row = Ui.row
@@ -91,6 +92,63 @@ local HINT = Component.new(function(props)
     text.highlight("NeogitSubtleText")(" | "),
     entry("HelpPopup", "help"),
   }
+end)
+
+-- Big title banner at the top of the status buffer, mcphub.nvim-style:
+-- three lines of box-drawing lettering reading "NEOGIT", centered on the
+-- window, above a subtle full-width divider. The `width` prop is the
+-- visible width of the status window; when nil (e.g. the cold-open render
+-- before a window exists) it falls back to the editor width and recenters
+-- on the first redraw.
+local BANNER = Component.new(function(props)
+  local width = props.width or vim.o.columns
+
+  local logo = {
+    "╔══╗ ╔═╗ ╔═╗ ╔═╗ ╦ ╔╦╗",
+    "║╔╗║ ╠═  ║ ║ ║ ╦ ║  ║",
+    "╚╝╚╝ ╚═╝ ╚═╝ ╚═╝ ╩  ╩",
+  }
+
+  -- Letterforms carry trimmed trailing blanks, so rows differ in length by
+  -- a cell or two. Center against the widest row so every row shares the
+  -- same left grid: per-row centering would shear the verticals by 1.
+  local banner_width = 0
+  for _, line in ipairs(logo) do
+    banner_width = math.max(banner_width, vim.fn.strdisplaywidth(line))
+  end
+
+  local steps = hl.STATUS_BANNER_GRADIENT_STEPS
+
+  local items = {}
+
+  for _, line in ipairs(logo) do
+    local padding = math.max(0, math.floor((width - banner_width) / 2))
+
+    -- One text segment per column, each mapped to a gradient step, so the
+    -- title fades left-to-right (dashboard-style). strcharpart iterates
+    -- UTF-8 characters: sub() would split the multi-byte box glyphs.
+    local segments = {}
+
+    if padding > 0 then
+      segments[#segments + 1] = text((" "):rep(padding))
+    end
+
+    for idx = 0, vim.fn.strchars(line) - 1 do
+      local step = math.min(steps, 1 + math.floor(idx / (banner_width - 1) * (steps - 1) + 0.5))
+      segments[#segments + 1] =
+        text.highlight(("NeogitStatusBanner%d"):format(step))(vim.fn.strcharpart(line, idx, 1))
+    end
+
+    items[#items + 1] = row(segments)
+  end
+
+  -- Divider: spans the window minus the sign/fold gutter and a small
+  -- margin, so it never overflows into wrapping.
+  items[#items + 1] = row {
+    text.highlight("NeogitSubtleText")(("─"):rep(math.max(24, width - 6))),
+  }
+
+  return col(items)
 end)
 
 local HEAD = Component.new(function(props)
@@ -599,9 +657,29 @@ local BisectDetailsSection = Component.new(function(props)
   })
 end)
 
-function M.Status(state, config)
+---@param state NeogitRepoState
+---@param config NeogitConfig
+---@param loading boolean? True while the first refresh wave is still in
+---flight (cold open): renders a placeholder line instead of an empty buffer.
+---The first redraw — the refresh completion callback — replaces it.
+---@param width integer? Visible width of the status window, used to center
+---the title banner.
+function M.Status(state, config, loading, width)
+  if loading then
+    return {
+      List {
+        items = {
+          row {
+            text.highlight("NeogitSubtleText")("Loading repository state…"),
+          },
+        },
+      },
+    }
+  end
+
   -- stylua: ignore start
   local show_hint = not config.disable_hint
+  local show_banner = config.status.show_banner ~= false
   local section_icons = (config.icons and config.icons.sections) or {}
 
   local show_merge = state.merge.head
@@ -660,6 +738,8 @@ function M.Status(state, config)
   return {
     List {
       items = {
+        show_banner and BANNER { width = width },
+        show_banner and EmptyLine(),
         show_hint and HINT { config = config },
         show_hint and EmptyLine(),
         -- The Head Line: `<sync> <repo> <branch>`. The divergence overview

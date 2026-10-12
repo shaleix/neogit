@@ -50,6 +50,47 @@ local function preview_width(columns, conf)
   return math.max(math.min(width or 0, columns - 10), 10)
 end
 
+-- Rows the status banner occupies (3 logo rows + divider + trailing blank
+-- line); keep in sync with the BANNER component in buffers/status/ui.lua.
+local BANNER_ROWS = 5
+
+-- Effective window kind for the preview. With the status banner shown the
+-- preview floats instead of vsplitting: a vsplit halves the status window,
+-- and the centered banner (padded for the full window width) shears out of
+-- view. The float overlays the right side only, so the status window - and
+-- its banner - keep their layout.
+---@return string
+local function effective_kind()
+  if config.values.status.show_banner ~= false then
+    return "float"
+  end
+
+  return config.values.status.diff_preview.kind
+end
+
+-- Right-anchored float geometry: same width resolution as the vsplit kind,
+-- placed below the banner rows so the title is never covered, filling the
+-- rest of the screen height minus a one-line bottom margin. No border is
+-- drawn here: nvim drops an isolated west-only border segment, so the left
+-- separator is rendered as the window's statuscolumn instead (set in the
+-- buffer `after` callback) - a solid line in NeogitSubtleText, the same
+-- color as the divider under the banner.
+---@return table
+local function float_geometry()
+  local width = preview_width(vim.o.columns)
+  local row = BANNER_ROWS + 1
+
+  return {
+    relative = "editor",
+    border = "none",
+    style = "minimal",
+    width = width,
+    height = math.max(vim.o.lines - 2 - row, 5),
+    col = vim.o.columns - width,
+    row = row,
+  }
+end
+
 ---@class DiffPreviewBuffer
 ---@field buffer Buffer|nil
 ---@field item table|nil StatusItem currently displayed
@@ -218,10 +259,13 @@ function M.show(_status_buffer, section, item)
       end
     end
 
+    local kind = effective_kind()
+
     self.buffer = Buffer.create {
       name = "NeogitDiffPreview",
       filetype = "NeogitDiffPreview",
-      kind = config.values.status.diff_preview.kind,
+      kind = kind == "float" and "floating" or kind,
+      floating = kind == "float" and float_geometry() or nil,
       bufhidden = "hide",
       status_column = not config.values.disable_signs and "" or nil,
       context_highlight = not config.values.disable_context_highlighting and config.values.log_pager == nil,
@@ -269,8 +313,17 @@ function M.show(_status_buffer, section, item)
           vim.wo[buffer.win_handle].foldcolumn = "0"
         end
 
-        -- custom width only applies to vertical splits
-        if config.values.status.diff_preview.kind == "vsplit" and buffer.win_handle then
+        -- Float left separator: a border array with only the west segment
+        -- set is dropped by nvim, so the divider line is drawn as the
+        -- window's statuscolumn instead - NeogitSubtleText, matching the
+        -- horizontal rule under the banner.
+        if kind == "float" and buffer.win_handle then
+          vim.wo[buffer.win_handle].statuscolumn = "%#NeogitSubtleText#│"
+        end
+
+        -- custom width only applies to vertical splits (the float geometry
+        -- already resolves it)
+        if kind == "vsplit" and buffer.win_handle then
           vim.api.nvim_win_set_width(buffer.win_handle, preview_width(vim.o.columns))
         end
 

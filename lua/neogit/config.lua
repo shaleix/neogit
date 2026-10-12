@@ -319,12 +319,13 @@ end
 ---@field recent_commit_count? integer The number of recent commits to display
 ---@field mode_padding? integer The amount of padding to add to the right of the mode column
 ---@field mode_text? { [string]: string } The text to display for each mode
+---@field show_banner? boolean Show a large ASCII-art title at the top of the status buffer (default true)
 ---@field show_no_changes? boolean Show a "No changes" placeholder when the worktree has no file changes (default true)
 ---@field diff_preview? NeogitConfigDiffPreview Render file diffs in the preview split - the standard and only diff view for the status buffer
 
 ---@class NeogitConfigDiffPreview
 ---@field enabled? boolean Show diffs in a preview window instead of expanding inline in the status buffer
----@field kind? "split"|"vsplit"|"tab" How to open the preview window (float is not supported)
+---@field kind? "split"|"vsplit"|"tab"|"float" How to open the preview window ("float" overlays the right side below the banner; it is forced while `status.show_banner` is on)
 ---@field debounce? integer ms to wait after cursor movement before updating the preview
 ---@field content? fun(item: table, section: string): table|nil Custom content source: return { filetype = "diff", lines = {...} } to take over the preview body (external renderers can hook in via the FileType event); return nil to use the built-in renderer
 ---@field width? number|fun(columns: number): number Preview window width in columns, or a function receiving the editor width (applies to vsplit; default: 60% over 120 columns, else 50%)
@@ -513,6 +514,9 @@ function M.get_default_values()
     auto_close_console = true,
     notification_icon = "󰊢",
     status = {
+      -- Large ASCII-art "NEOGIT" title centered at the top of the status
+      -- buffer (mcphub.nvim-style header).
+      show_banner = true,
       -- Show a subtle "No changes" placeholder in place of the file sections
       -- when the worktree is clean, instead of them silently vanishing.
       show_no_changes = true,
@@ -546,7 +550,7 @@ function M.get_default_values()
       -- slow diffs never block cursor movement.
       diff_preview = {
         enabled = true,
-        kind = "vsplit", -- "split" | "vsplit" | "tab" (float is not supported)
+        kind = "vsplit", -- "split" | "vsplit" | "tab" | "float" (the banner forces float)
         debounce = 200, -- ms to wait after cursor movement before updating
         content = nil, -- fun(item, section): { filetype: string, lines: string[] } | nil
         width = nil, -- number | fun(columns: number): number | nil (vsplit only;
@@ -1192,6 +1196,7 @@ function M.validate_config()
     validate_type(config.auto_show_console_on, "auto_show_console_on", "string")
     validate_type(config.auto_close_console, "auto_close_console", "boolean")
     if validate_type(config.status, "status", "table") then
+      validate_type(config.status.show_banner, "status.show_banner", { "boolean", "nil" })
       validate_type(config.status.show_no_changes, "status.show_no_changes", { "boolean", "nil" })
       validate_type(config.status.recent_commit_count, "status.recent_commit_count", "number")
       validate_type(config.status.mode_padding, "status.mode_padding", "number")
@@ -1201,12 +1206,12 @@ function M.validate_config()
         local kind = config.status.diff_preview.kind
         if
           validate_type(kind, "diff_preview.kind", "string")
-          and not vim.tbl_contains({ "split", "vsplit", "tab" }, kind)
+          and not vim.tbl_contains({ "split", "vsplit", "tab", "float" }, kind)
         then
           err(
             "diff_preview.kind",
             string.format(
-              "Expected `diff_preview.kind` to be one of 'split', 'vsplit' or 'tab' (float is not supported), got '%s'",
+              "Expected `diff_preview.kind` to be one of 'split', 'vsplit', 'tab' or 'float', got '%s'",
               kind
             )
           )

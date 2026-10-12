@@ -328,7 +328,13 @@ function M:open(kind)
       vim.o.autochdir = false
     end,
     render = function()
-      return ui.Status(git.repo.state, self.config)
+      -- Cold open: the first refresh wave (which fetches status, HEAD commit
+      -- info, recent commits, ...) is still in flight and state is empty, so
+      -- render the loading placeholder. The refresh completion callback's
+      -- redraw replaces it with real content. Warm re-opens of an already
+      -- refreshed repo render the existing state directly.
+      local repo = Repo.instance(self.cwd)
+      return ui.Status(repo.state, self.config, not repo._refreshed)
     end,
     ---@param buffer Buffer
     ---@param _win any
@@ -453,7 +459,14 @@ function M:redraw(cursor, view, fold_state)
   end
 
   logger.debug("[STATUS] Rendering UI")
-  self.buffer.ui:render(unpack(ui.Status(Repo.instance(self.cwd).state, self.config)))
+  -- Visible window width, for centering the title banner. Guarded: redraw
+  -- can run from a watcher callback after the window is gone.
+  local width = nil
+  if self.buffer.win_handle and vim.api.nvim_win_is_valid(self.buffer.win_handle) then
+    width = vim.api.nvim_win_get_width(self.buffer.win_handle)
+  end
+
+  self.buffer.ui:render(unpack(ui.Status(Repo.instance(self.cwd).state, self.config, nil, width)))
 
   if fold_state then
     logger.debug("[STATUS] Restoring explicit fold state")

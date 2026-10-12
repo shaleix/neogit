@@ -287,6 +287,9 @@ diffs. The buffer is a snapshot - it never refreshes; close it with `q` or
     auto_close_console = true,
     notification_icon = "󰊢",
     status = {
+        -- Show a large ASCII-art "NEOGIT" title centered at the top of the
+        -- status buffer (mcphub.nvim-style header)
+        show_banner = true,
         recent_commit_count = 10,
         mode_padding = 1,
         mode_text = {
@@ -311,9 +314,12 @@ diffs. The buffer is a snapshot - it never refreshes; close it with `q` or
         -- cursor: moving onto a file item renders its diff in the split
         -- automatically. This is the standard - and only - diff view for
         -- the status buffer: hunks never render inline.
+        -- While the status banner is shown (status.show_banner) the preview
+        -- floats on the right side below the banner instead of splitting,
+        -- so the centered title keeps the full window width.
         diff_preview = {
             enabled = true,
-            kind = "vsplit", -- "split" | "vsplit" | "tab" (float is not supported)
+            kind = "vsplit", -- "split" | "vsplit" | "tab" | "float"
             debounce = 200, -- ms to wait after cursor movement before updating
             -- Custom content source: return { filetype = "diff", lines = {...} }
             -- to take over the preview body completely (the buffer filetype is

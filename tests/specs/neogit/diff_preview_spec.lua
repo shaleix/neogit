@@ -47,6 +47,9 @@ end
 
 local function open_status(dir)
   vim.cmd.cd(dir)
+  -- The vsplit preview tests below pin the banner off: with the banner
+  -- shown (the default) the preview floats instead of vsplitting.
+  config.values.status.show_banner = false
   Repo.instance(dir, { autorefresh = false })
   local buf = status_buf.new(config.values, Repo.instance(dir).worktree_root, dir)
   buf:open("split")
@@ -128,12 +131,16 @@ describe("status diff_preview", function()
   after_each(function()
     require("neogit.buffers.diff_preview").close()
     config.values.status.diff_preview = { enabled = false, kind = "vsplit", debounce = 200 }
+    config.values.status.show_banner = true
     config.values.git_executable = original_git
   end)
 
   it("validates the config shape", function()
-    config.values.status.diff_preview = { enabled = true, kind = "floating", debounce = 100 }
-    assert.truthy(vim.tbl_count(config.validate_config()) > 0, "float kind must be rejected")
+    config.values.status.diff_preview = { enabled = true, kind = "sideways", debounce = 100 }
+    assert.truthy(vim.tbl_count(config.validate_config()) > 0, "unknown kinds must be rejected")
+
+    config.values.status.diff_preview = { enabled = true, kind = "float", debounce = 100 }
+    assert.equal(0, vim.tbl_count(config.validate_config()), "float kind must be accepted")
 
     config.values.status.diff_preview = { enabled = "yes", debounce = "soon" }
     assert.truthy(vim.tbl_count(config.validate_config()) > 0, "types must be checked")
@@ -165,6 +172,50 @@ describe("status diff_preview", function()
     assert.truthy(wait_for_content(preview, "+two"), "diff content must render")
     local text = buffer_text(preview.buffer_handle())
     assert.truthy(text:find("tracked.txt", 1, true), "preview must show the file name")
+
+    -- focus stays in the status buffer
+    assert.equal(buf.buffer.handle, vim.api.nvim_get_current_buf())
+  end)
+
+  it("floats the preview below the banner when the banner is shown", function()
+    config.values.status.diff_preview = { enabled = true, kind = "vsplit", debounce = 50 }
+    local dir = workdir()
+    local buf = open_status(dir)
+    config.values.status.show_banner = true
+
+    cursor_onto(buf, "tracked.txt")
+
+    local preview = require("neogit.buffers.diff_preview")
+    assert.truthy(
+      vim.wait(5000, function()
+        return preview.is_open()
+      end),
+      "preview window must open"
+    )
+
+    local win = vim.fn.bufwinid(preview.buffer_handle())
+    assert.truthy(win ~= -1, "preview window must be visible")
+
+    local win_config = vim.api.nvim_win_get_config(win)
+    assert.equal("editor", win_config.relative, "the banner forces a floating preview")
+
+    -- anchored below the banner rows, so the title is never covered
+    assert.truthy(win_config.row >= 5, "the float must start below the banner")
+
+    -- no floating-window border: the left separator is the window's
+    -- statuscolumn, in the banner divider's color
+    assert.equal("none", win_config.border, "no float border is drawn")
+    assert.equal(
+      "%#NeogitSubtleText#│",
+      vim.wo[win].statuscolumn,
+      "left separator matches the banner divider color"
+    )
+
+    -- one-line bottom margin
+    assert.truthy(
+      win_config.row + win_config.height <= vim.o.lines - 2,
+      "the float must leave a blank line at the bottom"
+    )
 
     -- focus stays in the status buffer
     assert.equal(buf.buffer.handle, vim.api.nvim_get_current_buf())

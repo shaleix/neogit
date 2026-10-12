@@ -239,6 +239,11 @@ function Repo.new(dir)
     git_dir = info.git_dir,
     refresh_callbacks = {},
     _refresh_task = nil,
+    -- False until the first refresh wave completes: lets the status buffer
+    -- render a loading placeholder instead of an empty buffer at cold open
+    -- (the first content render is gated on the whole wave, which includes
+    -- fetching the HEAD commit info).
+    _refreshed = false,
     tmp_state = util.weak_table("v"),
   }
 
@@ -460,6 +465,7 @@ function Repo:refresh(opts)
 
     logger.debug("[REPO]: (" .. start .. ") Refreshes complete in " .. timestamp() - start .. " ms")
     self:set_state(start)
+    self._refreshed = true
     self:run_callbacks(start)
   end)
 end

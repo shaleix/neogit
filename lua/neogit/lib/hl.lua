@@ -18,6 +18,12 @@ local Color = require("neogit.lib.color").Color
 local hl_store
 local M = {}
 
+-- Status banner gradient: the title fades left-to-right between the theme's
+-- purple and blue across this many steps ("NeogitStatusBanner1" .. "N").
+-- Exported so the status UI's per-column mapping cannot drift from the
+-- highlight definitions.
+M.STATUS_BANNER_GRADIENT_STEPS = 16
+
 ---@param dec number
 ---@return string
 local function to_hex(dec)
@@ -307,6 +313,31 @@ function M.setup(config)
     if mode == "Untracked" then
       hl_store["NeogitChangeUntrackeduntracked"] = { fg = palette.red, ctermfg = 1 }
     end
+  end
+
+  -- Status banner gradient: the big ASCII title fades left-to-right across
+  -- the theme's purple and blue (dashboard-style), one highlight group per
+  -- step; the status UI maps each banner column to a step. Themes routinely
+  -- link Include and Macro (the purple/blue sources) to the same group,
+  -- which would flatten the fade to a single color - when the anchors
+  -- collide, fade toward a shaded variant of the first instead so the
+  -- title always keeps a visible sweep.
+  local grad_from = Color.from_hex(palette.purple)
+  local grad_to = Color.from_hex(palette.blue)
+
+  if palette.purple == palette.blue then
+    grad_to = grad_from:shade(vim.o.bg == "dark" and 0.35 or -0.35)
+  end
+  for i = 1, M.STATUS_BANNER_GRADIENT_STEPS do
+    local t = (i - 1) / (M.STATUS_BANNER_GRADIENT_STEPS - 1)
+    hl_store["NeogitStatusBanner" .. i] = {
+      fg = Color(
+        grad_from.red + (grad_to.red - grad_from.red) * t,
+        grad_from.green + (grad_to.green - grad_from.green) * t,
+        grad_from.blue + (grad_to.blue - grad_from.blue) * t
+      ):to_css(),
+      bold = palette.bold,
+    }
   end
 
   for group, hl in pairs(hl_store) do

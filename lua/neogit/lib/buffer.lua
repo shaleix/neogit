@@ -345,8 +345,9 @@ function Buffer:show()
     elseif self.kind == "vsplit_left" then
       win = api.nvim_open_win(self.handle, true, { split = "left", vertical = true })
     elseif self.kind == "floating" then
-      local width = config.values.floating.width
-      local height = config.values.floating.height
+      local f = self.floating or {}
+      local width = f.width or config.values.floating.width
+      local height = f.height or config.values.floating.height
       local vim_height = vim.o.lines
       local vim_width = vim.o.columns
       width = width > 1 and width or math.floor(vim_width * width)
@@ -355,11 +356,11 @@ function Buffer:show()
       local content_window = api.nvim_open_win(self.handle, true, {
         width = width,
         height = height,
-        relative = config.values.floating.relative,
-        border = config.values.floating.border,
-        style = config.values.floating.style,
-        col = config.values.floating.col or (vim_width - width) / 2,
-        row = config.values.floating.row or (vim_height - height) / 2,
+        relative = f.relative or config.values.floating.relative,
+        border = f.border or config.values.floating.border,
+        style = f.style or config.values.floating.style,
+        col = f.col or config.values.floating.col or (vim_width - width) / 2,
+        row = f.row or config.values.floating.row or (vim_height - height) / 2,
         focusable = true,
       })
 
@@ -712,6 +713,9 @@ function Buffer.create(config)
 
   buffer.name = config.name
   buffer.kind = config.kind or "split"
+  -- Per-buffer float geometry override: merged over config.values.floating
+  -- by the "floating" kind (width/height/row/col/relative/border/style).
+  buffer.floating = config.floating
 
   if config.load then
     logger.debug("[BUFFER:" .. buffer.handle .. "] Loading content from file: " .. config.name)
