@@ -327,10 +327,7 @@ end
 ---@class NeogitConfigStatusOptions
 ---@field recent_commit_count? integer The number of recent commits to display
 ---@field mode_padding? integer The amount of padding to add to the right of the mode column
----@field HEAD_padding? integer The amount of padding to add to the right of the HEAD label
----@field HEAD_folded? boolean Whether or not this section should be open or closed by default
 ---@field mode_text? { [string]: string } The text to display for each mode
----@field show_head_commit_hash? boolean Show the commit hash for HEADs in the status buffer
 ---@field show_no_changes? boolean Show a "No changes" placeholder when the worktree has no file changes (default true)
 ---@field diff_preview? NeogitConfigDiffPreview Render file diffs in a separate window instead of inline
 ---@field file_tree? boolean Render file sections as a directory tree (foldable dir rows, indented basename rows)
@@ -525,13 +522,10 @@ function M.get_default_values()
     auto_close_console = true,
     notification_icon = "󰊢",
     status = {
-      show_head_commit_hash = true,
       -- Show a subtle "No changes" placeholder in place of the file sections
       -- when the worktree is clean, instead of them silently vanishing.
       show_no_changes = true,
       recent_commit_count = 10,
-      HEAD_padding = 10,
-      HEAD_folded = false,
       mode_padding = 1,
       -- Single-letter mode column: each mode shows its porcelain code
       -- letter; conflict codes stay two-letter. ["?"] marks untracked files.
@@ -1393,11 +1387,9 @@ function M.validate_config()
     validate_type(config.auto_show_console_on, "auto_show_console_on", "string")
     validate_type(config.auto_close_console, "auto_close_console", "boolean")
     if validate_type(config.status, "status", "table") then
-      validate_type(config.status.show_head_commit_hash, "status.show_head_commit_hash", "boolean")
       validate_type(config.status.show_no_changes, "status.show_no_changes", { "boolean", "nil" })
       validate_type(config.status.recent_commit_count, "status.recent_commit_count", "number")
       validate_type(config.status.mode_padding, "status.mode_padding", "number")
-      validate_type(config.status.HEAD_padding, "status.HEAD_padding", "number")
       validate_type(config.status.mode_text, "status.mode_text", "table")
       if validate_type(config.status.diff_preview, "status.diff_preview", "table") then
         validate_type(config.status.diff_preview.enabled, "diff_preview.enabled", "boolean")

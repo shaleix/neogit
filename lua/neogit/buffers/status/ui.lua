@@ -97,34 +97,14 @@ local HINT = Component.new(function(props)
 end)
 
 local HEAD = Component.new(function(props)
-  local show_oid = props.show_oid
-  local highlight, ref
-  if props.branch == "(detached)" then
-    highlight = "NeogitBranch"
-    ref = props.branch
-    show_oid = true
-  elseif props.remote then
-    highlight = "NeogitRemote"
-    ref = ("%s/%s"):format(props.remote, props.branch)
-  else
-    highlight = "NeogitBranch"
-    ref = props.branch
-  end
-
-  local oid = props.yankable
-  if not oid or oid == "(initial)" then
-    oid = "0000000"
-  else
-    oid = oid:sub(1, 7)
-  end
-
-  -- Divergence against the remote ref this line names: `↑N` local commits
-  -- not on the remote, `↓M` remote commits not local. Only non-zero
-  -- directions render; fully in sync shows a single `✓` in their place, so
-  -- the line still reads at a glance. `props.divergence` carries the ref so
-  -- `<cr>` on the line can open the range diff.
+  -- Divergence against the upstream ref: `↑N` local commits not on the
+  -- remote, `↓M` remote commits not local. Only non-zero directions render;
+  -- fully in sync shows a single `✓` in their place, so the line still reads
+  -- at a glance. Without an upstream nothing renders at all. The option is
+  -- always present on the row (its ref is nil without an upstream) so
+  -- `<cr>` can open the Repository Details buffer everywhere.
   local divergence = {}
-  if props.divergence then
+  if props.divergence and props.divergence.ref then
     if props.divergence.ahead > 0 then
       divergence[#divergence + 1] =
         text.highlight("NeogitDivergenceAhead")(("↑%d"):format(props.divergence.ahead))
@@ -138,11 +118,21 @@ local HEAD = Component.new(function(props)
     end
   end
 
+  -- Detached HEAD: the abbreviated oid stands in for the branch name.
+  local branch, branch_highlight
+  if props.branch == nil or props.branch == "(detached)" then
+    branch = props.abbrev or (props.oid and props.oid:sub(1, 7)) or "(detached)"
+    branch_highlight = "NeogitObjectId"
+  else
+    branch = props.branch
+    branch_highlight = "NeogitBranch"
+  end
+
   -- (built via list_extend: an unpack() mid-table-constructor keeps only
   -- its first value on LuaJIT, which silently dropped the ↓ counter)
   local content = {}
-  -- Divergence leads the line at the far left, ahead of the label: it is
-  -- the first thing worth glancing at, before oid/branch/message.
+  -- Divergence leads the line at the far left: it is the first thing worth
+  -- glancing at. `<cr>` on the line opens the Repository Details buffer.
   for i, fragment in ipairs(divergence) do
     if i > 1 then
       table.insert(content, text(" "))
@@ -153,35 +143,15 @@ local HEAD = Component.new(function(props)
     table.insert(content, text(" "))
   end
   vim.list_extend(content, {
-    text.highlight("NeogitStatusHEAD")(util.pad_right(props.name .. ": ", props.HEAD_padding)),
-    text.highlight("NeogitObjectId")(show_oid and oid or ""),
-    text(show_oid and " " or ""),
-    text.highlight(highlight)(ref),
+    text.highlight("NeogitBranch")(props.repo or ""),
+    text.highlight("NeogitSubtleText")(" → "),
+    text.highlight(branch_highlight)(branch),
   })
-  table.insert(content, text(" "))
-  table.insert(content, text(props.msg or "(no commits)"))
 
   return row(content, {
     yankable = props.yankable,
     divergence = props.divergence,
   })
-end)
-
-local Tag = Component.new(function(props)
-  if props.distance then
-    return row({
-      text.highlight("NeogitStatusHEAD")(util.pad_right("Tag: ", props.HEAD_padding)),
-      text.highlight("NeogitTagName")(props.name),
-      text(" ("),
-      text.highlight("NeogitTagDistance")(props.distance),
-      text(")"),
-    }, { yankable = props.yankable })
-  else
-    return row({
-      text(util.pad_right("Tag: ", props.HEAD_padding)),
-      text.highlight("NeogitTagName")(props.name),
-    }, { yankable = props.yankable })
-  end
 end)
 
 local function section_icon(icon)
@@ -707,17 +677,6 @@ function M.Status(state, config)
   local show_hint = not config.disable_hint
   local section_icons = (config.icons and config.icons.sections) or {}
 
-  local show_upstream = state.upstream.ref
-    and not state.head.detached
-
-  local show_pushRemote = state.pushRemote.ref
-    and not state.head.detached
-
-  local show_tag = state.head.tag.name
-
-  local show_tag_distance = state.head.tag.name
-    and not state.head.detached
-
   local show_merge = state.merge.head
     and not config.sections.sequencer.hidden
 
@@ -757,9 +716,10 @@ function M.Status(state, config)
     )
 
   -- The "Unpulled from"/"Unmerged into"/"Unpushed to" lists no longer render
-  -- as sections: the Head line's ↑N ↓M counters carry the divergence overview
-  -- and <cr> there opens the range diff. The unpulled/unmerged items stay in
-  -- state (counter data).
+  -- as sections: the Head Line's ↑N ↓M counters carry the divergence overview
+  -- and <cr> there opens the Repository Details buffer (with the ahead/behind
+  -- diffs embedded). The unpulled/unmerged items stay in state (counter
+  -- data).
 
   local show_stashes = #state.stashes.items > 0
     and not config.sections.stashes.hidden
@@ -775,55 +735,23 @@ function M.Status(state, config)
       items = {
         show_hint and HINT { config = config },
         show_hint and EmptyLine(),
-        col.tag("Section")({
-          HEAD {
-            name = "Head",
-            branch = state.head.branch,
-            oid = state.head.abbrev,
-            msg = state.head.commit_message,
-            yankable = state.head.oid,
-            show_oid = config.status.show_head_commit_hash,
-            HEAD_padding = config.status.HEAD_padding,
-            -- Divergence lives on the FIRST head line so it stays visible
-            -- when the head block is folded (a folded block keeps only
-            -- this line). Counts the upstream; `<cr>` on the line opens
-            -- the range diff.
-            divergence = state.upstream.ref and {
-              ref = state.upstream.ref,
-              ahead = #state.upstream.unmerged.items,
-              behind = #state.upstream.unpulled.items,
-            } or nil,
+        -- The Head Line: `<sync> <repo> <branch>`. The divergence overview
+        -- leads the line; `<cr>` opens the Repository Details buffer, which
+        -- carries the Merge/Push/Tag info the old head block rows showed.
+        -- The divergence option always marks the row (nil ref without an
+        -- upstream) so `<cr>` opens the details everywhere.
+        HEAD {
+          repo = vim.fs.basename(state.worktree_root or ""),
+          branch = state.head.branch,
+          abbrev = state.head.abbrev,
+          oid = state.head.oid,
+          yankable = state.head.oid,
+          divergence = {
+            ref = state.upstream.ref,
+            ahead = state.upstream.ref and #state.upstream.unmerged.items or 0,
+            behind = state.upstream.ref and #state.upstream.unpulled.items or 0,
           },
-          show_upstream and HEAD {
-            name = "Merge",
-            branch = state.upstream.branch,
-            remote = state.upstream.remote,
-            msg = state.upstream.commit_message,
-            yankable = state.upstream.oid,
-            show_oid = config.status.show_head_commit_hash,
-            HEAD_padding = config.status.HEAD_padding,
-          },
-          show_pushRemote and HEAD {
-            name = "Push",
-            branch = state.pushRemote.branch,
-            remote = state.pushRemote.remote,
-            msg = state.pushRemote.commit_message,
-            yankable = state.pushRemote.oid,
-            show_oid = config.status.show_head_commit_hash,
-            HEAD_padding = config.status.HEAD_padding,
-            divergence = state.pushRemote.ref and state.pushRemote.ref ~= state.upstream.ref and {
-              ref = state.pushRemote.ref,
-              ahead = #state.pushRemote.unmerged.items,
-              behind = #state.pushRemote.unpulled.items,
-            } or nil,
-          },
-          show_tag and Tag {
-            name = state.head.tag.name,
-            distance = show_tag_distance and state.head.tag.distance,
-            yankable = state.head.tag.oid,
-            HEAD_padding = config.status.HEAD_padding,
-          },
-        }, { foldable = true, folded = config.status.HEAD_folded }),
+        },
         EmptyLine(),
         show_merge and SequencerSection {
           title = SectionTitleMerge { icon = section_icons.merge,

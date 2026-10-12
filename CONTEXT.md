@@ -52,3 +52,17 @@ The status buffer section listing the most recent commits on HEAD, capped
 by `status.recent_commit_count`. Its rows render the same Commit Graph
 styling as the Log view.
 _Avoid_: log section, history section
+
+### Head Line
+
+The status buffer's single header row for the checked-out worktree: sync
+status (divergence counters or the in-sync ✓), repository name, and branch
+name — nothing else. `<cr>` on it opens the Repository Details.
+_Avoid_: head block, HEAD section
+
+### Repository Details
+
+The right-side split opened by `<cr>` on the Head Line: a snapshot of the
+repository's reference positions (Head, Merge, Push, Tag, divergence) with
+the ahead/behind range diffs rendered inline, commit-view style.
+_Avoid_: head popup, status details

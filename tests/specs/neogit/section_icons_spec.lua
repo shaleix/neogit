@@ -129,7 +129,7 @@ describe("section header icons and colors", function()
 
     -- The unpulled/unmerged/unpushed lists no longer render as sections; the
     -- Head line's ↑N ↓M counters carry the divergence overview and <cr> there
-    -- opens the range diff.
+    -- opens the Repository Details buffer.
     assert.is_nil(text:find("Unpulled from", 1, true), "the Unpulled from section must not render")
     assert.is_nil(text:find("Unmerged into", 1, true), "the Unmerged into section must not render")
     assert.is_nil(text:find("Unpushed to", 1, true), "the Unpushed to section must not render")
@@ -137,7 +137,7 @@ describe("section header icons and colors", function()
     -- the divergence is still visible: the Head line shows ↑N ↓N
     local head_line
     for line in text:gmatch("[^\n]+") do
-      if line:find("Head:", 1, true) then
+      if line:find("↓1", 1, true) then
         head_line = line
         break
       end

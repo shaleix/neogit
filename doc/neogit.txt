@@ -44,6 +44,7 @@ CONTENTS                                                       *neogit_contents*
        • Worktree                                        |neogit_worktree_popup|
     9. Buffers                                                  *neogit_buffers*
        • Status                                           |neogit_status_buffer|
+       • Repository Details                  |neogit_repository_details_buffer|
        • Editor                                           |neogit_editor_buffer|
        • Log                                                 |neogit_log_buffer|
        • Reflog                                           |neogit_reflog_buffer|
@@ -80,6 +81,20 @@ Git beginners and experts alike."
 
 Though not yet feature complete, our goal is to bring the Magit git experience
 to Neovim users.
+
+==============================================================================
+STATUS BUFFER HEAD LINE        *neogit_head_line* *neogit_repository_details_buffer*
+
+The top of the status buffer shows the Head Line: `<sync> <repo> → <branch>` -
+the divergence counters (`↑N` ahead, `↓M` behind, `✓` in sync) lead the
+line, followed by the repository name and the current branch (the
+abbreviated oid when HEAD is detached).
+
+Pressing `<cr>` on the Head Line opens the Repository Details buffer in a
+right-side split: the Head, upstream (Merge), pushRemote (Push), Tag and
+Divergence info, with the unpushed and incoming changes embedded as rendered
+diffs. The buffer is a snapshot - it never refreshes; close it with `q` or
+`<esc>`.
 
 ==============================================================================
 2. Plugin Setup                                            *neogit_setup_plugin*
@@ -272,10 +287,7 @@ to Neovim users.
     auto_close_console = true,
     notification_icon = "󰊢",
     status = {
-        show_head_commit_hash = true,
         recent_commit_count = 10,
-        HEAD_padding = 10,
-        HEAD_folded = false,
         mode_padding = 1,
         mode_text = {
         M = "M",
@@ -870,8 +882,6 @@ NeogitFoldColumn            Column where folds are displayed
 NeogitSignColumn            Column where signs are displayed
 NeogitRebaseDone            Current position within rebase
 NeogitTagName               Closest Tag name
-NeogitTagDistance           Number of commits between the tag and HEAD
-NeogitStatusHEAD            The left text in the HEAD section
 
 STATUS BUFFER SECTION HEADERS
 NeogitSectionHeader

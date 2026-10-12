@@ -184,7 +184,7 @@ describe("status Recent Commits rows", function()
     assert.equal(0, warn_count, "kitty style must not warn: " .. table.concat(warns, " | "))
 
     -- commit rows keep hash + initials after the glyph graph prefix (the
-    -- initials distinguish the row from the "Head: ... main merge side"
+    -- initials distinguish the row from the Head Line ("... main merge side")
     -- header line, which carries the branch name instead)
     local lines = vim.api.nvim_buf_get_lines(buf.buffer.handle, 0, -1, false)
     local merge_idx

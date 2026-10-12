@@ -264,13 +264,10 @@ neogit.setup {
   auto_close_console = true,
   notification_icon = "󰊢",
   status = {
-    show_head_commit_hash = true,
     -- Show a subtle "No changes" placeholder in place of the file sections
     -- when the worktree is clean, instead of them silently vanishing.
     show_no_changes = true,
     recent_commit_count = 10,
-    HEAD_padding = 10,
-    HEAD_folded = false,
     mode_padding = 1,
     -- Single-letter mode column: each mode shows its porcelain code letter;
     -- conflict codes stay two-letter. ["?"] marks untracked files.
@@ -654,6 +651,19 @@ neogit.setup {
 }
 ```
 </details>
+
+### Status buffer Head Line
+
+The top of the status buffer shows the Head Line: `<sync> <repo> → <branch>` -
+the divergence counters (`↑N` ahead, `↓M` behind, `✓` in sync) lead the line,
+followed by the repository name and the current branch (the abbreviated oid
+when HEAD is detached).
+
+Pressing `<cr>` on the Head Line opens **Repository Details** in a
+right-side split: the Head, upstream (Merge), pushRemote (Push), Tag and
+Divergence info, with the unpushed and incoming changes embedded as rendered
+diffs. The buffer is a snapshot - it never refreshes; close it with `q` or
+`<esc>`.
 
 ### File diff preview
 

@@ -195,7 +195,7 @@ describe("background auto-fetch", function()
       "in-flight flag must clear after a failed fetch"
     )
     assert.truthy(
-      buffer_text(buf):find("Head:", 1, true),
+      buffer_text(buf):find("main", 1, true),
       "status must render normally:\n" .. buffer_text(buf)
     )
   end)
@@ -225,7 +225,7 @@ describe("background auto-fetch", function()
     )
     assert.equal(before, fetch_count(), "no fetch may run without a remote")
     assert.truthy(
-      buffer_text(buf):find("Head:", 1, true),
+      buffer_text(buf):find("main", 1, true),
       "status must render normally:\n" .. buffer_text(buf)
     )
   end)
