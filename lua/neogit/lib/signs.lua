@@ -14,7 +14,7 @@ end
 function M.setup(config)
   if not config.disable_signs then
     for key, val in pairs(config.signs) do
-      if key == "hunk" or key == "item" or key == "section" then
+      if key == "item" or key == "section" then
         signs["NeogitClosed" .. key] = val[1]
         signs["NeogitOpen" .. key] = val[2]
       end

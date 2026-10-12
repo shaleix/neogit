@@ -114,7 +114,6 @@ end
 ---@alias NeogitConfigSignsIcon { [1]: string, [2]: string }
 
 ---@class NeogitConfigSigns
----@field hunk NeogitConfigSignsIcon The icons to use for open and closed hunks
 ---@field item NeogitConfigSignsIcon The icons to use for open and closed items
 ---@field section NeogitConfigSignsIcon The icons to use for open and closed sections
 
@@ -621,7 +620,6 @@ function M.get_default_values()
       kind = "tab",
     },
     signs = {
-      hunk = { "", "" },
       item = { ">", "v" },
       section = { ">", "v" },
     },
@@ -968,7 +966,6 @@ function M.validate_config()
       end
     end
 
-    validate_signs_table("hunk", config.signs.hunk)
     validate_signs_table("item", config.signs.item)
     validate_signs_table("section", config.signs.section)
   end

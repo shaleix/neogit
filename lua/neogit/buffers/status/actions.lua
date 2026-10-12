@@ -1010,23 +1010,13 @@ end
 M.n_go_to_next_hunk_header = function(self)
   return function()
     local c = self.buffer.ui:get_component_under_cursor(function(c)
-      return c.options.tag == "Diff" or c.options.tag == "Hunk" or c.options.tag == "Item"
+      return c.options.tag == "Item"
     end)
     local section = self.buffer.ui:get_current_section()
 
     if c and section then
       local _, section_last = section:row_range_abs()
-      local next_location
-
-      if c.options.tag == "Diff" then
-        next_location = fn.line(".") + 1
-      elseif c.options.tag == "Item" then
-        vim.cmd("normal! zo")
-        next_location = fn.line(".") + 1
-      elseif c.options.tag == "Hunk" then
-        local _, last = c:row_range_abs()
-        next_location = last + 1
-      end
+      local next_location = fn.line(".") + 1
 
       if next_location < section_last then
         self.buffer:move_cursor(next_location)
@@ -1041,22 +1031,22 @@ end
 ---@return fun(): nil
 M.n_go_to_previous_hunk_header = function(self)
   return function()
-    local function previous_hunk_header(self, line)
+    local function previous_item_header(self, line)
       local c = self.buffer.ui:get_component_on_line(line, function(c)
-        return c.options.tag == "Diff" or c.options.tag == "Hunk" or c.options.tag == "Item"
+        return c.options.tag == "Item"
       end)
 
       if c then
         local first, _ = c:row_range_abs()
         if fn.line(".") == first then
-          first = previous_hunk_header(self, line - 1)
+          first = previous_item_header(self, line - 1)
         end
 
         return first
       end
     end
 
-    local previous_header = previous_hunk_header(self, fn.line("."))
+    local previous_header = previous_item_header(self, fn.line("."))
     if previous_header then
       self.buffer:move_cursor(previous_header)
       vim.cmd("normal! zt")

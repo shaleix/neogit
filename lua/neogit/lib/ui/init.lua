@@ -337,16 +337,14 @@ end
 ---@field last number
 ---@field section {index: number, name: string}|nil
 ---@field file {index: number, name: string}|nil
----@field hunk {index: number, name: string, index_from: number}|nil
 ---@field section_offset number|nil
----@field hunk_offset number|nil
 
 ---Encode the cursor location into a table
 ---@param line number?
 ---@return CursorLocation
 function Ui:get_cursor_location(line)
   line = line or vim.api.nvim_win_get_cursor(0)[1]
-  local section_loc, section_offset, file_loc, hunk_loc, first, last, hunk_offset
+  local section_loc, section_offset, file_loc, first, last
 
   for li, loc in ipairs(self.item_index) do
     if line == loc.first then
@@ -364,23 +362,6 @@ function Ui:get_cursor_location(line)
             first, last = file.first, file.last
 
             break
-          elseif line >= file.first and line <= file.last then
-            file_loc = { index = fi, name = file.name }
-
-            for hi, hunk in ipairs(file.diff.hunks) do
-              if line >= hunk.first and line <= hunk.last then
-                hunk_loc = { index = hi, name = hunk.hash, index_from = hunk.index_from }
-                first, last = hunk.first, hunk.last
-
-                if line > hunk.first then
-                  hunk_offset = line - hunk.first
-                end
-
-                break
-              end
-            end
-
-            break
           end
         end
       else
@@ -394,11 +375,9 @@ function Ui:get_cursor_location(line)
   return {
     section = section_loc,
     file = file_loc,
-    hunk = hunk_loc,
     first = first,
     last = last,
     section_offset = section_offset,
-    hunk_offset = hunk_offset,
   }
 end
 
@@ -423,7 +402,6 @@ function Ui:resolve_cursor_location(cursor)
     logger.debug("[UI] No Section Found '" .. cursor.section.name .. "'")
 
     cursor.file = nil
-    cursor.hunk = nil
     section = self.item_index[math.min(cursor.section.index, #self.item_index)]
   end
 
@@ -444,26 +422,10 @@ function Ui:resolve_cursor_location(cursor)
   if not file then
     logger.debug(("[UI] No file found %q"):format(cursor.file.name))
 
-    cursor.hunk = nil
     file = section.items[math.min(cursor.file.index, #section.items)]
   end
 
-  if not cursor.hunk or not file.diff.hunks or #file.diff.hunks == 0 then
-    logger.debug("[UI] No hunk - using file.first")
-    return file.first
-  end
-
-  local hunk = Collection.new(file.diff.hunks):find(function(h)
-    return h.hash == cursor.hunk.name
-  end) or file.diff.hunks[math.min(cursor.hunk.index, #file.diff.hunks)]
-
-  if cursor.hunk.index_from == hunk.index_from then
-    logger.debug(("[UI] Using hunk.first with offset %q"):format(cursor.hunk.name))
-    return hunk.first + (cursor.hunk_offset or 0) - (cursor.last - hunk.last)
-  else
-    logger.debug(("[UI] Using hunk.first %q"):format(cursor.hunk.name))
-    return hunk.first
-  end
+  return file.first
 end
 
 ---@return table|nil

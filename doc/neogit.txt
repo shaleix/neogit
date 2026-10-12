@@ -111,7 +111,7 @@ diffs. The buffer is a snapshot - it never refreshes; close it with `q` or
     disable_hint = false,
     -- Disables changing the buffer highlights based on where the cursor is.
     disable_context_highlighting = false,
-    -- Disables signs for sections/items/hunks
+    -- Disables signs for sections/items
     disable_signs = false,
     -- Path to git executable. Defaults to "git". Can be used to specify a custom git binary or wrapper script.
     git_executable = "git",
@@ -419,7 +419,6 @@ diffs. The buffer is a snapshot - it never refreshes; close it with `q` or
     },
     signs = {
         -- { CLOSED, OPENED }
-        hunk = { "", "" },
         item = { ">", "v" },
         section = { ">", "v" },
     },

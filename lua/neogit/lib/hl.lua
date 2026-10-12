@@ -255,7 +255,6 @@ function M.setup(config)
     NeogitObjectId                 = { link = "NeogitSubtleText" },
     NeogitStash                    = { link = "NeogitSubtleText" },
     NeogitRebaseDone               = { link = "NeogitSubtleText" },
-    NeogitFold                     = { fg = "None", bg = "None" },
     NeogitFoldColumn               = { fg = "None", bg = "None" },
     NeogitWinSeparator             = { link = "WinSeparator" },
     NeogitSectionHeader            = { fg = palette.bg_purple, bold = palette.bold, ctermfg = 5 },

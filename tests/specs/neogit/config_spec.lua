@@ -251,27 +251,6 @@ describe("Neogit config", function()
         assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
       end)
 
-      it("should return invalid when signs.hunk isn't valid", function()
-        config.values.signs.hunk = "not a table"
-        assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
-      end)
-
-      it("should return invalid when signs.hunk is not of size 2", function()
-        config.values.signs.hunk = { "" }
-        assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
-      end)
-
-      it("should return invalid when signs.hunk elements aren't strings", function()
-        config.values.signs.hunk = { false, "" }
-        assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
-
-        config.values.signs.hunk = { "", false }
-        assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
-
-        config.values.signs.hunk = { false, false }
-        assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
-      end)
-
       it("should return invalid when signs.item isn't valid", function()
         config.values.signs.item = "not a table"
         assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
