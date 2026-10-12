@@ -11,8 +11,8 @@ describe("Neogit config", function()
         assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
       end)
 
-      it("should return invalid when disable_hint isn't a boolean", function()
-        config.values.disable_hint = "not a boolean"
+      it("should return invalid when auto_show_console isn't a boolean", function()
+        config.values.auto_show_console = "not a boolean"
         assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
       end)
 

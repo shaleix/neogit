@@ -144,7 +144,6 @@ neogit.setup {
   -- Apply word-diff highlights to diff hunks
   word_diff_highlight = true,
   -- Hides the hints at the top of the status buffer
-  disable_hint = false,
   -- Disables changing the buffer highlights based on where the cursor is.
   disable_context_highlighting = false,
   -- Disables signs for sections/items

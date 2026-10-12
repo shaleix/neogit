@@ -355,7 +355,6 @@ end
 ---@field commit_date_format? string Commit date format
 ---@field log_date_format? string Log date format
 ---@field log_pager? [string] Log pager
----@field disable_hint? boolean Remove the top hint in the Status buffer
 ---@field disable_context_highlighting? boolean Disable context highlights based on cursor position
 ---@field disable_signs? boolean Special signs to draw for sections etc. in Neogit
 ---@field prompt_force_push? boolean Offer to force push when branches diverge
@@ -437,7 +436,6 @@ M.GIT_BACKENDS = { "auto", "libgit2", "cli" }
 function M.get_default_values()
   return {
     use_default_keymaps = true,
-    disable_hint = false,
     disable_context_highlighting = false,
     disable_signs = false,
     treesitter_diff_highlight = false,
@@ -1159,7 +1157,6 @@ function M.validate_config()
   end
 
   if validate_type(config, "base config", "table") then
-    validate_type(config.disable_hint, "disable_hint", "boolean")
     validate_type(config.disable_context_highlighting, "disable_context_highlighting", "boolean")
     validate_type(config.disable_signs, "disable_signs", "boolean")
     validate_type(config.git_executable, "git_executable", "string")

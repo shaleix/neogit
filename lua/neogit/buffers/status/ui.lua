@@ -40,60 +40,6 @@ function M.reset_devicons_cache()
   devicons_resolved = false
 end
 
-local HINT = Component.new(function(props)
-  ---@return table<string, string[]>
-  local function reversed_lookup(tbl)
-    local result = {}
-    for k, v in pairs(tbl) do
-      if v then
-        local current = result[v]
-        if current then
-          table.insert(current, k)
-        else
-          result[v] = { k }
-        end
-      end
-    end
-
-    return result
-  end
-
-  local reversed_status_map = reversed_lookup(props.config.mappings.status)
-  local reversed_popup_map = reversed_lookup(props.config.mappings.popup)
-
-  local entry = function(name, hint)
-    local keys = reversed_status_map[name] or reversed_popup_map[name]
-    local key_hint
-
-    if keys and #keys > 0 then
-      key_hint = table.concat(keys, " ")
-    else
-      key_hint = "<unmapped>"
-    end
-
-    return row {
-      text.highlight("NeogitPopupActionKey")(key_hint),
-      text(" "),
-      text(hint),
-    }
-  end
-
-  return row {
-    text.highlight("NeogitSubtleText")("Hint: "),
-    entry("Toggle", "toggle"),
-    text.highlight("NeogitSubtleText")(" | "),
-    entry("Stage", "stage"),
-    text.highlight("NeogitSubtleText")(" | "),
-    entry("Unstage", "unstage"),
-    text.highlight("NeogitSubtleText")(" | "),
-    entry("Discard", "discard"),
-    text.highlight("NeogitSubtleText")(" | "),
-    entry("CommitPopup", "commit"),
-    text.highlight("NeogitSubtleText")(" | "),
-    entry("HelpPopup", "help"),
-  }
-end)
-
 -- Big title banner at the top of the status buffer, mcphub.nvim-style:
 -- three lines of box-drawing lettering reading "NEOGIT", centered on the
 -- window, above a subtle full-width divider. The `width` prop is the
@@ -678,7 +624,6 @@ function M.Status(state, config, loading, width)
   end
 
   -- stylua: ignore start
-  local show_hint = not config.disable_hint
   local show_banner = config.status.show_banner ~= false
   local section_icons = (config.icons and config.icons.sections) or {}
 
@@ -740,8 +685,6 @@ function M.Status(state, config, loading, width)
       items = {
         show_banner and BANNER { width = width },
         show_banner and EmptyLine(),
-        show_hint and HINT { config = config },
-        show_hint and EmptyLine(),
         -- The Head Line: `<sync> <repo> <branch>`. The divergence overview
         -- leads the line; `<cr>` opens the Repository Details buffer, which
         -- carries the Merge/Push/Tag info the old head block rows showed.
