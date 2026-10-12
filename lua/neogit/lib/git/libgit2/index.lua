@@ -134,14 +134,6 @@ function M.stage(files)
   end)
 end
 
----@param paths string[] tracked paths with worktree changes (git add -u)
----@return GitResult?
-function M.stage_paths_modified(paths)
-  return with_index(function(repo, index)
-    return stage_paths(repo, index, paths)
-  end)
-end
-
 ---`git add -u`
 ---@return GitResult?
 function M.stage_modified()

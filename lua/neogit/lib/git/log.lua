@@ -146,7 +146,7 @@ function M.parse(raw)
       if not line or vim.startswith(line, "diff") then
         -- There was a previous diff, parse it
         if in_diff then
-          table.insert(commit.diffs, git.diff.parse(current_diff, {}))
+          table.insert(commit.diffs, git.diff.parse(current_diff))
           current_diff = {}
         end
 
@@ -154,7 +154,7 @@ function M.parse(raw)
       elseif line == "" then -- A blank line signifies end of diffs
         -- Parse the last diff, consume the blankline, and exit
         if in_diff then
-          table.insert(commit.diffs, git.diff.parse(current_diff, {}))
+          table.insert(commit.diffs, git.diff.parse(current_diff))
           current_diff = {}
         end
 

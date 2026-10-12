@@ -65,7 +65,6 @@ end
 ---@field stat self
 ---@field shortstat self
 ---@field oneline self
----@field no_patch self
 ---@field format fun(string): self
 ---@field file fun(name: string, rev: string|nil): self
 
@@ -93,9 +92,7 @@ end
 ---@class GitCommandMove: GitCommandBuilder
 
 ---@class GitCommandStatus: GitCommandBuilder
----@field short self
 ---@field branch self
----@field verbose self
 ---@field null_separated self
 ---@field porcelain fun(string): self
 
@@ -103,18 +100,14 @@ end
 
 ---@class GitCommandLog: GitCommandBuilder
 ---@field oneline self
----@field branches self
 ---@field remotes self
----@field all self
 ---@field graph self
 ---@field color self
----@field pretty fun(string): self
 ---@field max_count fun(string): self
 ---@field format fun(string): self
 
 ---@class GitCommandConfig: GitCommandBuilder
 ---@field _local self
----@field global self
 ---@field list self
 ---@field _get self PRIVATE - use alias
 ---@field _add self PRIVATE - use alias
@@ -132,8 +125,6 @@ end
 ---@class GitCommandDiff: GitCommandBuilder
 ---@field cached self
 ---@field stat self
----@field shortstat self
----@field patch self
 ---@field name_only self
 ---@field no_ext_diff self
 ---@field no_index self
@@ -192,8 +183,6 @@ end
 ---@field rev fun(rev: string): self
 ---@field branch fun(branch: string): self
 ---@field commit fun(commit: string): self
----@field new_branch fun(new_branch: string): self
----@field new_branch_with_start_point fun(branch: string, start_point: string): self
 
 ---@class GitCommandRemote: GitCommandBuilder
 ---@field push self
@@ -231,7 +220,6 @@ end
 ---@field no_verify self
 ---@field amend self
 ---@field only self
----@field dry_run self
 ---@field no_edit self
 ---@field edit self
 ---@field allow_empty self
@@ -239,9 +227,7 @@ end
 ---@field message fun(message: string): self Passes message via CLI
 
 ---@class GitCommandPush: GitCommandBuilder
----@field delete self
 ---@field remote fun(remote: string): self
----@field to fun(to: string): self
 
 ---@class GitCommandPull: GitCommandBuilder
 ---@field no_commit self
@@ -250,13 +236,11 @@ end
 ---@field verbose self
 
 ---@class GitCommandBranch: GitCommandBuilder
----@field all self
 ---@field delete self
 ---@field remotes self
 ---@field force self
 ---@field current self
 ---@field edit_description self
----@field very_verbose self
 ---@field move self
 ---@field sort fun(sort: string): self
 ---@field set_upstream_to fun(name: string): self
@@ -270,27 +254,6 @@ end
 ---@class GitCommandReadTree: GitCommandBuilder
 ---@field merge self
 ---@field index_output fun(path: string): self
----@field tree fun(tree: string): self
-
----@class GitCommandWriteTree: GitCommandBuilder
-
----@class GitCommandCommitTree: GitCommandBuilder
----@field no_gpg_sign self
----@field parent fun(parent: string): self
----@field message fun(message: string): self
----@field parents fun(...): self
----@field tree fun(tree: string): self
-
----@class GitCommandUpdateIndex: GitCommandBuilder
----@field add self
----@field remove self
----@field refresh self
-
----@class GitCommandShowRef: GitCommandBuilder
----@field verify self
-
----@class GitCommandShowBranch: GitCommandBuilder
----@field all self
 
 ---@class GitCommandReflog: GitCommandBuilder
 ---@field show self
@@ -298,7 +261,6 @@ end
 ---@field date fun(mode: string): self
 
 ---@class GitCommandUpdateRef: GitCommandBuilder
----@field create_reflog self
 ---@field message fun(text: string): self
 
 ---@class GitCommandLsFiles: GitCommandBuilder
@@ -334,11 +296,6 @@ end
 ---@field verify self
 ---@field quiet self
 ---@field short self
----@field revs_only self
----@field no_revs self
----@field flags self
----@field no_flags self
----@field symbolic self
 ---@field symbolic_full_name self
 ---@field show_superproject_working_tree self
 ---@field abbrev_ref self
@@ -364,7 +321,6 @@ end
 ---@field cherry         GitCommandCherry
 ---@field cherry-pick    GitCommandCherryPick
 ---@field commit         GitCommandCommit
----@field commit-tree    GitCommandCommitTree
 ---@field config         GitCommandConfig
 ---@field describe       GitCommandDescribe
 ---@field diff           GitCommandDiff
@@ -390,17 +346,13 @@ end
 ---@field rev-parse      GitCommandRevParse
 ---@field rm             GitCommandRm
 ---@field show           GitCommandShow
----@field show-branch    GitCommandShowBranch
----@field show-ref       GitCommandShowRef
 ---@field stash          GitCommandStash
 ---@field status         GitCommandStatus
 ---@field submodule      GitCommandSubmodule
 ---@field tag            GitCommandTag
----@field update-index   GitCommandUpdateIndex
 ---@field update-ref     GitCommandUpdateRef
 ---@field verify-commit  GitCommandVerifyCommit
 ---@field worktree       GitCommandWorktree
----@field write-tree     GitCommandWriteTree
 ---@field mv             GitCommandMove
 ---@field worktree_root fun(dir: string):string
 ---@field git_dir fun(dir: string):string
@@ -428,7 +380,6 @@ local configurations = {
       stat = "--stat",
       shortstat = "--shortstat",
       oneline = "--oneline",
-      no_patch = "--no-patch",
       no_ext_diff = "--no-ext-diff",
     },
     options = {
@@ -480,9 +431,7 @@ local configurations = {
 
   status = config {
     flags = {
-      short = "-s",
       branch = "-b",
-      verbose = "-v",
       null_separated = "-z",
     },
     options = {
@@ -496,14 +445,11 @@ local configurations = {
   log = config {
     flags = {
       oneline = "--oneline",
-      branches = "--branches",
       remotes = "--remotes",
-      all = "--all",
       graph = "--graph",
       color = "--color",
     },
     options = {
-      pretty = "--pretty",
       max_count = "--max-count",
       format = "--format",
     },
@@ -512,7 +458,6 @@ local configurations = {
   config = config {
     flags = {
       _local = "--local",
-      global = "--global",
       list = "--list",
       _get = "--get",
       _get_all = "--get-all",
@@ -555,8 +500,6 @@ local configurations = {
     flags = {
       cached = "--cached",
       stat = "--stat",
-      shortstat = "--shortstat",
-      patch = "--patch",
       name_only = "--name-only",
       no_ext_diff = "--no-ext-diff",
       no_index = "--no-index",
@@ -692,16 +635,6 @@ local configurations = {
           return tbl.args(commit)
         end
       end,
-      new_branch = function(tbl)
-        return function(branch)
-          return tbl.b(branch)
-        end
-      end,
-      new_branch_with_start_point = function(tbl)
-        return function(branch, start_point)
-          return tbl.args(branch, start_point).b()
-        end
-      end,
     },
   },
 
@@ -763,7 +696,6 @@ local configurations = {
       no_verify = "--no-verify",
       amend = "--amend",
       only = "--only",
-      dry_run = "--dry-run",
       no_edit = "--no-edit",
       edit = "--edit",
       allow_empty = "--allow-empty",
@@ -783,18 +715,10 @@ local configurations = {
   },
 
   push = config {
-    flags = {
-      delete = "--delete",
-    },
     aliases = {
       remote = function(tbl)
         return function(remote)
           return tbl.prefix(remote)
-        end
-      end,
-      to = function(tbl)
-        return function(to)
-          return tbl.args(to)
         end
       end,
     },
@@ -814,13 +738,11 @@ local configurations = {
 
   branch = config {
     flags = {
-      all = "-a",
       delete = "-d",
       remotes = "-r",
       force = "--force",
       current = "--show-current",
       edit_description = "--edit-description",
-      very_verbose = "-vv",
       move = "-m",
     },
     options = {
@@ -853,60 +775,6 @@ local configurations = {
     options = {
       index_output = "--index-output",
     },
-    aliases = {
-      tree = function(tbl)
-        return function(tree)
-          return tbl.args(tree)
-        end
-      end,
-    },
-  },
-
-  ["write-tree"] = config {},
-
-  ["commit-tree"] = config {
-    flags = {
-      no_gpg_sign = "--no-gpg-sign",
-    },
-    short_opts = {
-      parent = "-p",
-      message = "-m",
-    },
-    aliases = {
-      parents = function(tbl)
-        return function(...)
-          for _, p in ipairs { ... } do
-            tbl.parent(p)
-          end
-          return tbl
-        end
-      end,
-      tree = function(tbl)
-        return function(tree)
-          return tbl.args(tree)
-        end
-      end,
-    },
-  },
-
-  ["update-index"] = config {
-    flags = {
-      add = "--add",
-      remove = "--remove",
-      refresh = "--refresh",
-    },
-  },
-
-  ["show-ref"] = config {
-    flags = {
-      verify = "--verify",
-    },
-  },
-
-  ["show-branch"] = config {
-    flags = {
-      all = "--all",
-    },
   },
 
   reflog = config {
@@ -926,9 +794,6 @@ local configurations = {
   },
 
   ["update-ref"] = config {
-    flags = {
-      create_reflog = "--create-reflog",
-    },
     aliases = {
       message = function(tbl)
         return function(text)
@@ -997,11 +862,6 @@ local configurations = {
       verify = "--verify",
       quiet = "--quiet",
       short = "--short",
-      revs_only = "--revs-only",
-      no_revs = "--no-revs",
-      flags = "--flags",
-      no_flags = "--no-flags",
-      symbolic = "--symbolic",
       symbolic_full_name = "--symbolic-full-name",
       show_superproject_working_tree = "--show-superproject-working-tree",
       abbrev_ref = "--abbrev-ref",

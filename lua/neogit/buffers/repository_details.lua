@@ -46,7 +46,7 @@ local function range_diffs(range)
       return nil
     end
 
-    return git.diff.parse(chunk, {})
+    return git.diff.parse(chunk)
   end)
 end
 

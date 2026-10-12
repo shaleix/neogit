@@ -229,9 +229,8 @@ local function build_pager_contents(diff_header, lines, hunks)
 end
 
 ---@param raw_diff string[]
----@param raw_stats string[]
 ---@return Diff
-local function parse_diff(raw_diff, raw_stats)
+local function parse_diff(raw_diff)
   local header, start_idx = build_diff_header(raw_diff)
   local lines = build_lines(raw_diff, start_idx)
   local hunks = build_hunks(lines)
@@ -241,8 +240,7 @@ local function parse_diff(raw_diff, raw_stats)
 
   -- Stats derive from the diff body itself: counting +/- hunk lines makes
   -- the dedicated `--shortstat` spawn per file redundant (its only consumer
-  -- was the diffview integration's per-file additions/deletions). raw_stats
-  -- stays in the signature for compatibility but is no longer queried.
+  -- was the diffview integration's per-file additions/deletions).
   local stats = { additions = 0, deletions = 0 }
   for _, hunk in ipairs(hunks) do
     for _, line in ipairs(hunk.lines or {}) do
@@ -293,9 +291,8 @@ local function raw_untracked(name)
     local diff = git.cli.diff.no_ext_diff.no_index
       .files("/dev/null", name)
       .call({ hidden = true, ignore_error = true }).stdout
-    local stats = {}
 
-    return { diff, stats }
+    return { diff }
   end
 end
 

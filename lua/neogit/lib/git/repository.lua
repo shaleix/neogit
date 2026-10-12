@@ -163,7 +163,6 @@ local function empty_state()
       finished = false,
       current = {},
     },
-    refs = {},
   }
 end
 
