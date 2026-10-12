@@ -70,11 +70,15 @@ end
 
 -- Right-anchored float geometry: same width resolution as the vsplit kind,
 -- placed below the banner rows so the title is never covered, filling the
--- rest of the screen height minus a one-line bottom margin. No border is
--- drawn here: nvim drops an isolated west-only border segment, so the left
--- separator is rendered as the window's statuscolumn instead (set in the
--- buffer `after` callback) - a solid line in NeogitSubtleText, the same
--- color as the divider under the banner.
+-- rest of the screen height minus a one-line bottom margin. The only drawn
+-- border is the west edge in NeogitSubtleText - the same color as the
+-- divider under the banner - so the preview reads as a pane of the status
+-- view. NOTE: the border array is clockwise from the top-left, so the west
+-- edge lives in slot 8 and the east edge in slot 4; the west edge renders
+-- for the window's full height, filler rows included. The east border is a
+-- blank cell (slot 4 = " ") and the statuscolumn a single space (set in
+-- the `after` callback), together providing one column of padding on each
+-- side of the content.
 ---@return table
 local function float_geometry()
   local width = preview_width(vim.o.columns)
@@ -82,11 +86,12 @@ local function float_geometry()
 
   return {
     relative = "editor",
-    border = "none",
+    --              TL  T  TR  R   BR  B  BL  W
+    border = { "", "", "", " ", "", "", "", { "│", "NeogitSubtleText" } },
     style = "minimal",
     width = width,
     height = math.max(vim.o.lines - 2 - row, 5),
-    col = vim.o.columns - width,
+    col = math.max(vim.o.columns - width - 2, 0),
     row = row,
   }
 end
@@ -313,12 +318,11 @@ function M.show(_status_buffer, section, item)
           vim.wo[buffer.win_handle].foldcolumn = "0"
         end
 
-        -- Float left separator: a border array with only the west segment
-        -- set is dropped by nvim, so the divider line is drawn as the
-        -- window's statuscolumn instead - NeogitSubtleText, matching the
-        -- horizontal rule under the banner.
+        -- Float left padding: one blank column between the west separator
+        -- and the content (the right side is padded by the blank east
+        -- border cell in float_geometry).
         if kind == "float" and buffer.win_handle then
-          vim.wo[buffer.win_handle].statuscolumn = "%#NeogitSubtleText#│"
+          vim.wo[buffer.win_handle].statuscolumn = " "
         end
 
         -- custom width only applies to vertical splits (the float geometry

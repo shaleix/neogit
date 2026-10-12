@@ -202,14 +202,18 @@ describe("status diff_preview", function()
     -- anchored below the banner rows, so the title is never covered
     assert.truthy(win_config.row >= 5, "the float must start below the banner")
 
-    -- no floating-window border: the left separator is the window's
-    -- statuscolumn, in the banner divider's color
-    assert.equal("none", win_config.border, "no float border is drawn")
+    -- west-only separator border in the banner divider's color, blank east
+    -- border cell as right padding, and a statuscolumn space as left
+    -- padding (border array is clockwise from the top-left: slot 4 = east,
+    -- slot 8 = west)
+    assert.equal("│", win_config.border[8][1], "a left separator is drawn")
     assert.equal(
-      "%#NeogitSubtleText#│",
-      vim.wo[win].statuscolumn,
+      "NeogitSubtleText",
+      win_config.border[8][2],
       "left separator matches the banner divider color"
     )
+    assert.equal(" ", win_config.border[4], "the east border is a blank padding cell")
+    assert.equal(" ", vim.wo[win].statuscolumn, "one padding column before the content")
 
     -- one-line bottom margin
     assert.truthy(
