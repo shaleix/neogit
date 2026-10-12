@@ -349,7 +349,7 @@ local context = {
   end,
   ["ignore-normal"] = function(self)
     local path = self.buffer.ui:get_hunk_or_filename_under_cursor()
-    return { paths = { path and path.escaped_path }, worktree_root = git.repo.worktree_root }
+    return { paths = { path and path.filename }, worktree_root = git.repo.worktree_root }
   end,
   margin = function(self)
     return { buffer = self }
@@ -387,7 +387,7 @@ local context = {
         item = { name = item },
       },
       ignore = {
-        paths = { path and path.escaped_path },
+        paths = { path and path.filename },
         worktree_root = git.repo.worktree_root,
       },
       remote = {},
@@ -1208,13 +1208,6 @@ M.n_stage = function(self)
       elseif selection.item and section.options.section == "untracked" then
         git.index.add { selection.item.name }
         self:dispatch_refresh({ update_diffs = { "*:" .. selection.item.name } }, "n_stage")
-      elseif stagable.hunk then
-        local item = self.buffer.ui:get_item_under_cursor()
-        assert(item, "Item cannot be nil")
-
-        local patch = git.index.generate_patch(stagable.hunk)
-        git.index.apply(patch, { cached = true })
-        self:dispatch_refresh({ update_diffs = { "*:" .. item.name } }, "n_stage")
       elseif stagable.filename and section.options.section == "unstaged" then
         git.status.stage { stagable.filename }
         self:dispatch_refresh({ update_diffs = { "*:" .. stagable.filename } }, "n_stage")
@@ -1314,16 +1307,6 @@ M.n_unstage = function(self)
       if selection.item and (selection.item.mode == "N" or selection.item.mode == "A") then
         git.status.unstage { selection.item.name }
         self:dispatch_refresh({ update_diffs = { "*:" .. selection.item.name } }, "n_unstage")
-      elseif unstagable.hunk then
-        local item = self.buffer.ui:get_item_under_cursor()
-        assert(item, "Item cannot be nil")
-        local patch = git.index.generate_patch(
-          unstagable.hunk,
-          { from = unstagable.hunk.from, to = unstagable.hunk.to, reverse = true }
-        )
-
-        git.index.apply(patch, { cached = true, reverse = true })
-        self:dispatch_refresh({ update_diffs = { "*:" .. item.name } }, "n_unstage")
       elseif unstagable.filename then
         git.status.unstage { unstagable.filename }
         self:dispatch_refresh({ update_diffs = { "*:" .. unstagable.filename } }, "n_unstage")

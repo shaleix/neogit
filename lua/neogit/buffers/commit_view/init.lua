@@ -389,7 +389,7 @@ function M:open(kind)
         [popups.mapping_for("IgnorePopup")] = popups.open("ignore", function(p)
           local path = self.buffer.ui:get_hunk_or_filename_under_cursor()
           p {
-            paths = { path and path.escaped_path },
+            paths = { path and (path.hunk and path.hunk.file or path.filename) },
             worktree_root = git.repo.worktree_root,
           }
         end),
