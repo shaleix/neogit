@@ -29,9 +29,7 @@ end
 ---Default status commands that have no wiring in the status buffer yet.
 ---Every entry needs a reason; entries are removed as their wiring lands.
 local known_unwired = {
-  PeekUp = "wiring lands in a later approved wave (shared peek helper)",
-  PeekDown = "wiring lands in a later approved wave (shared peek helper)",
-  PeekFile = "unwired today: <s-cr> has no binding in the status buffer; expected to land with the shared peek helper wave",
+  PeekFile = "does not map to status rows: the views' PeekFile opens a commit view and refocuses the list, but status file rows open editor windows after closing the status buffer itself, so there is no list left to refocus",
 }
 
 local function is_default(defaults, command)

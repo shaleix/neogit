@@ -248,6 +248,8 @@ function M:open(kind)
       [mappings["Close"]] = self:_action("n_close"),
       [mappings["OpenOrScrollDown"]] = self:_action("n_open_or_scroll_down"),
       [mappings["OpenOrScrollUp"]] = self:_action("n_open_or_scroll_up"),
+      [mappings["PeekUp"]] = self:_action("n_peek_up"),
+      [mappings["PeekDown"]] = self:_action("n_peek_down"),
       [mappings["RefreshBuffer"]] = self:_action("n_refresh_buffer"),
       [mappings["Depth1"]] = self:_action("n_depth1"),
       [mappings["Depth2"]] = self:_action("n_depth2"),

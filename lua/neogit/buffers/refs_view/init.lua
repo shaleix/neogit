@@ -9,6 +9,7 @@ local logger = require("neogit.logger")
 local a = require("neogit.lib.async")
 local git = require("neogit.lib.git")
 local event = require("neogit.lib.event")
+local helpers = require("neogit.lib.ui.helpers")
 
 ---@class RefsViewBuffer
 ---@field buffer Buffer
@@ -225,47 +226,17 @@ function M:open()
             CommitViewBuffer.new(commit):open()
           end
         end,
-        [status_maps["PeekFile"]] = function()
-          local commit = self.buffer.ui:get_commit_under_cursor()
-          if commit then
-            CommitViewBuffer.new(commit):open()
-            self.buffer:focus()
-          end
-        end,
-        [status_maps["OpenOrScrollDown"]] = function()
-          local commit = self.buffer.ui:get_commit_under_cursor()
-          if commit then
-            CommitViewBuffer.open_or_scroll_down(commit, self.files)
-          end
-        end,
-        [status_maps["OpenOrScrollUp"]] = function()
-          local commit = self.buffer.ui:get_commit_under_cursor()
-          if commit then
-            CommitViewBuffer.open_or_scroll_up(commit, self.files)
-          end
-        end,
-        [status_maps["PeekUp"]] = function()
-          vim.cmd("normal! k")
-          local commit = self.buffer.ui:get_commit_under_cursor()
-          if commit then
-            if CommitViewBuffer.is_open() then
-              CommitViewBuffer.instance:update(commit)
-            else
-              CommitViewBuffer.new(commit):open()
-            end
-          end
-        end,
-        [status_maps["PeekDown"]] = function()
-          vim.cmd("normal! j")
-          local commit = self.buffer.ui:get_commit_under_cursor()
-          if commit then
-            if CommitViewBuffer.is_open() then
-              CommitViewBuffer.instance:update(commit)
-            else
-              CommitViewBuffer.new(commit):open()
-            end
-          end
-        end,
+        [status_maps["PeekFile"]] = helpers.peek_commit(self, "file"),
+        [status_maps["OpenOrScrollDown"]] = helpers.peek_commit(self, "scroll", "down", self.files),
+        [status_maps["OpenOrScrollUp"]] = helpers.peek_commit(self, "scroll", "up", self.files),
+        [status_maps["PeekUp"]] = helpers.peek_commit(self, "peek", "up", nil, { open_when_absent = true }),
+        [status_maps["PeekDown"]] = helpers.peek_commit(
+          self,
+          "peek",
+          "down",
+          nil,
+          { open_when_absent = true }
+        ),
         -- ["{"] = function()
         --   pcall(vim.cmd, "normal! zc")
         --

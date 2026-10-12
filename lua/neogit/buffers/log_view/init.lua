@@ -8,6 +8,7 @@ local util = require("neogit.lib.util")
 local a = require("neogit.lib.async")
 local notification = require("neogit.lib.notification")
 local git = require("neogit.lib.git")
+local helpers = require("neogit.lib.ui.helpers")
 
 ---@class LogViewBuffer
 ---@field commits CommitLogEntry[]
@@ -207,72 +208,17 @@ function M:open()
             CommitViewBuffer.new(commit, self.files):open()
           end
         end,
-        [status_maps["PeekFile"]] = function()
-          local commit = self.buffer.ui:get_commit_under_cursor()
-          if commit then
-            local buffer = CommitViewBuffer.new(commit, self.files):open()
-            buffer.buffer:win_call(vim.cmd, "normal! gg")
-
-            self.buffer:focus()
-          end
-        end,
-        [status_maps["OpenOrScrollDown"]] = function()
-          local commit = self.buffer.ui:get_commit_under_cursor()
-          if commit then
-            CommitViewBuffer.open_or_scroll_down(commit, self.files)
-          end
-        end,
-        [status_maps["OpenOrScrollUp"]] = function()
-          local commit = self.buffer.ui:get_commit_under_cursor()
-          if commit then
-            CommitViewBuffer.open_or_scroll_up(commit, self.files)
-          end
-        end,
-        [status_maps["PeekUp"]] = function()
-          -- Open prev fold
-          pcall(vim.cmd, "normal! zc")
-
-          vim.cmd("normal! k")
-          for _ = vim.fn.line("."), 0, -1 do
-            if vim.fn.foldlevel(".") > 0 then
-              break
-            end
-
-            vim.cmd("normal! k")
-          end
-
-          if CommitViewBuffer.is_open() then
-            local commit = self.buffer.ui:get_commit_under_cursor()
-            if commit then
-              CommitViewBuffer.instance:update(commit, self.files)
-            end
-          else
-            pcall(vim.cmd, "normal! zo")
-            vim.cmd("normal! zz")
-          end
-        end,
-        [status_maps["PeekDown"]] = function()
-          pcall(vim.cmd, "normal! zc")
-
-          vim.cmd("normal! j")
-          for _ = vim.fn.line("."), vim.fn.line("$"), 1 do
-            if vim.fn.foldlevel(".") > 0 then
-              break
-            end
-
-            vim.cmd("normal! j")
-          end
-
-          if CommitViewBuffer.is_open() then
-            local commit = self.buffer.ui:get_commit_under_cursor()
-            if commit then
-              CommitViewBuffer.instance:update(commit, self.files)
-            end
-          else
-            pcall(vim.cmd, "normal! zo")
-            vim.cmd("normal! zz")
-          end
-        end,
+        [status_maps["PeekFile"]] = helpers.peek_commit(self, "file", nil, self.files, { rewind = true }),
+        [status_maps["OpenOrScrollDown"]] = helpers.peek_commit(self, "scroll", "down", self.files),
+        [status_maps["OpenOrScrollUp"]] = helpers.peek_commit(self, "scroll", "up", self.files),
+        [status_maps["PeekUp"]] = helpers.peek_commit(self, "peek", "up", self.files, { skip_folds = true }),
+        [status_maps["PeekDown"]] = helpers.peek_commit(
+          self,
+          "peek",
+          "down",
+          self.files,
+          { skip_folds = true }
+        ),
         ["+"] = a.void(function()
           local permit = self.refresh_lock:acquire()
 

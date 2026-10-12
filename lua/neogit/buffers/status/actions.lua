@@ -586,21 +586,24 @@ local function on_connector_row(ui)
   return false
 end
 
+---Shared body of n_down/n_up: one count-aware `key` step, then keep stepping
+---while the cursor rests on a blank line or Connector Row, so it lands on
+---items (or section headers). The guard breaks at the buffer edge, where the
+---step is a no-op.
 ---@param self StatusBuffer
+---@param key string "j" or "k"
 ---@return fun(): nil
-M.n_down = function(self)
+local function move_to_item(self, key)
   return function()
     if vim.v.count > 0 then
-      vim.cmd("norm! " .. vim.v.count .. "j")
+      vim.cmd("norm! " .. vim.v.count .. key)
     else
-      vim.cmd("norm! j")
+      vim.cmd("norm! " .. key)
     end
 
-    -- Land on items (or section headers), never on blank lines or Connector
-    -- Rows. The guard breaks at the buffer edge, where `j` is a no-op.
     local line = vim.api.nvim_win_get_cursor(0)[1]
     while self.buffer:get_current_line()[1] == "" or on_connector_row(self.buffer.ui) do
-      vim.cmd("norm! j")
+      vim.cmd("norm! " .. key)
 
       local next_line = vim.api.nvim_win_get_cursor(0)[1]
       if next_line == line then
@@ -614,28 +617,14 @@ end
 
 ---@param self StatusBuffer
 ---@return fun(): nil
+M.n_down = function(self)
+  return move_to_item(self, "j")
+end
+
+---@param self StatusBuffer
+---@return fun(): nil
 M.n_up = function(self)
-  return function()
-    if vim.v.count > 0 then
-      vim.cmd("norm! " .. vim.v.count .. "k")
-    else
-      vim.cmd("norm! k")
-    end
-
-    -- Land on items (or section headers), never on blank lines or Connector
-    -- Rows. The guard breaks at the buffer edge, where `k` is a no-op.
-    local line = vim.api.nvim_win_get_cursor(0)[1]
-    while self.buffer:get_current_line()[1] == "" or on_connector_row(self.buffer.ui) do
-      vim.cmd("norm! k")
-
-      local next_line = vim.api.nvim_win_get_cursor(0)[1]
-      if next_line == line then
-        break
-      end
-
-      line = next_line
-    end
-  end
+  return move_to_item(self, "k")
 end
 
 ---@param self StatusBuffer
@@ -700,26 +689,83 @@ M.n_close = function(self)
   return require("neogit.lib.ui.helpers").close_topmost(self)
 end
 
+---Shared body of n_open_or_scroll_up / n_open_or_scroll_down: scroll the open
+---commit view (or open one) to the commit under the cursor.
 ---@param self StatusBuffer
+---@param method string "open_or_scroll_up" or "open_or_scroll_down"
 ---@return fun(): nil
-M.n_open_or_scroll_down = function(self)
+local function open_or_scroll(self, method)
   return function()
     local commit = self.buffer.ui:get_commit_under_cursor()
     if commit then
-      require("neogit.buffers.commit_view").open_or_scroll_down(commit)
+      require("neogit.buffers.commit_view")[method](commit)
     end
   end
 end
 
 ---@param self StatusBuffer
 ---@return fun(): nil
+M.n_open_or_scroll_down = function(self)
+  return open_or_scroll(self, "open_or_scroll_down")
+end
+
+---@param self StatusBuffer
+---@return fun(): nil
 M.n_open_or_scroll_up = function(self)
+  return open_or_scroll(self, "open_or_scroll_up")
+end
+
+---PeekUp/PeekDown body: render the diff preview for the file item one row
+---above/below the cursor WITHOUT moving the cursor. Per-row semantics match
+---the cursor-following preview exactly (only file rows in the
+---untracked/unstaged/staged sections preview), just evaluated one row away:
+---Head Lines, Connector Rows, section headers, Recent Commits rows and every
+---other non-previewable row are no-ops. The cursor never moves - that is what
+---distinguishes peek from plain navigation.
+---@param self StatusBuffer
+---@param direction integer -1 peeks the row above, 1 the row below
+---@return fun(): nil
+local function peek_row(self, direction)
   return function()
-    local commit = self.buffer.ui:get_commit_under_cursor()
-    if commit then
-      require("neogit.buffers.commit_view").open_or_scroll_up(commit)
+    local preview_config = self.config.status.diff_preview
+    if not preview_config or not preview_config.enabled then
+      return
+    end
+
+    local line = vim.api.nvim_win_get_cursor(0)[1] + direction
+    if line < 1 then
+      return
+    end
+
+    local component = self.buffer.ui:get_component_on_line(line, function(node)
+      return node.options.item ~= nil
+    end)
+    local item = component and component.options.item
+
+    local section = self.buffer.ui:get_current_section(line)
+    local section_name = section and section.options.section
+
+    if
+      item
+      and item.name
+      and item.mode
+      and vim.tbl_contains({ "untracked", "unstaged", "staged" }, section_name)
+    then
+      require("neogit.buffers.diff_preview").show(self.buffer, section_name, item)
     end
   end
+end
+
+---@param self StatusBuffer
+---@return fun(): nil
+M.n_peek_up = function(self)
+  return peek_row(self, -1)
+end
+
+---@param self StatusBuffer
+---@return fun(): nil
+M.n_peek_down = function(self)
+  return peek_row(self, 1)
 end
 
 ---@param self StatusBuffer
@@ -730,11 +776,20 @@ M.n_refresh_buffer = function(self)
   end)
 end
 
+---Shared body of n_depth1..4: close every fold in the cursor's section, then
+---re-open `open_depth` levels (nil keeps everything closed), and restore the
+---cursor to the row it started on, resolved by `context` (captured before the
+---move, like the originals).
 ---@param self StatusBuffer
+---@param open_depth nil|integer levels passed to open_all_folds
+---@param double boolean repeat the close/open cycle (Depth3's historical quirk)
+---@param context nil|fun(ui: Ui): Component? resolves the cursor-restore target
 ---@return fun(): nil
-M.n_depth1 = function(self)
+local function set_fold_depth(self, open_depth, double, context)
   return function()
     local section = self.buffer.ui:get_current_section()
+    local restore = context and context(self.buffer.ui) or nil
+
     if section then
       local start, last = section:row_range_abs()
       if self.buffer:cursor_line() < start or self.buffer:cursor_line() >= last then
@@ -742,96 +797,58 @@ M.n_depth1 = function(self)
       end
 
       self.buffer:move_cursor(start)
+
       section:close_all_folds(self.buffer.ui)
+      if open_depth then
+        section:open_all_folds(self.buffer.ui, open_depth)
+      end
+
+      -- NOTE: Depth3's second close/open cycle is undocumented behavior kept
+      -- verbatim from the original hand-written mapping (a doubled
+      -- open_all_folds(2)); deliberately not "fixed".
+      if double then
+        section:close_all_folds(self.buffer.ui)
+        section:open_all_folds(self.buffer.ui, open_depth)
+      end
 
       self.buffer.ui:update()
+
+      if restore then
+        local start, _ = restore:row_range_abs()
+        self.buffer:move_cursor(start)
+      end
     end
   end
+end
+
+---@param self StatusBuffer
+---@return fun(): nil
+M.n_depth1 = function(self)
+  return set_fold_depth(self, nil, false, nil)
 end
 
 ---@param self StatusBuffer
 ---@return fun(): nil
 M.n_depth2 = function(self)
-  return function()
-    local section = self.buffer.ui:get_current_section()
-    local row = self.buffer.ui:get_component_under_cursor()
-
-    if section then
-      local start, last = section:row_range_abs()
-      if self.buffer:cursor_line() < start or self.buffer:cursor_line() >= last then
-        return
-      end
-
-      self.buffer:move_cursor(start)
-
-      section:close_all_folds(self.buffer.ui)
-      section:open_all_folds(self.buffer.ui, 1)
-
-      self.buffer.ui:update()
-
-      if row then
-        local start, _ = row:row_range_abs()
-        self.buffer:move_cursor(start)
-      end
-    end
-  end
+  return set_fold_depth(self, 1, false, function(ui)
+    return ui:get_component_under_cursor()
+  end)
 end
 
 ---@param self StatusBuffer
 ---@return fun(): nil
 M.n_depth3 = function(self)
-  return function()
-    local section = self.buffer.ui:get_current_section()
-    local context = self.buffer.ui:get_cursor_context()
-
-    if section then
-      local start, last = section:row_range_abs()
-      if self.buffer:cursor_line() < start or self.buffer:cursor_line() >= last then
-        return
-      end
-
-      self.buffer:move_cursor(start)
-
-      section:close_all_folds(self.buffer.ui)
-      section:open_all_folds(self.buffer.ui, 2)
-      section:close_all_folds(self.buffer.ui)
-      section:open_all_folds(self.buffer.ui, 2)
-
-      self.buffer.ui:update()
-
-      if context then
-        local start, _ = context:row_range_abs()
-        self.buffer:move_cursor(start)
-      end
-    end
-  end
+  return set_fold_depth(self, 2, true, function(ui)
+    return ui:get_cursor_context()
+  end)
 end
 
 ---@param self StatusBuffer
 ---@return fun(): nil
 M.n_depth4 = function(self)
-  return function()
-    local section = self.buffer.ui:get_current_section()
-    local context = self.buffer.ui:get_cursor_context()
-
-    if section then
-      local start, last = section:row_range_abs()
-      if self.buffer:cursor_line() < start or self.buffer:cursor_line() >= last then
-        return
-      end
-
-      self.buffer:move_cursor(start)
-      section:close_all_folds(self.buffer.ui)
-      section:open_all_folds(self.buffer.ui, 3)
-
-      self.buffer.ui:update()
-
-      if context then
-        local start, _ = context:row_range_abs()
-        self.buffer:move_cursor(start)
-      end
-    end
-  end
+  return set_fold_depth(self, 3, false, function(ui)
+    return ui:get_cursor_context()
+  end)
 end
 
 ---@param _self StatusBuffer
@@ -869,6 +886,34 @@ M.n_yank_selected = function(self)
   end
 end
 
+---Conflict-side discard ("Discard File" on a conflicted unstaged item):
+---prompts for ours/theirs/conflict and applies the choice. Every resolution
+---re-stages the file; abort does nothing.
+---@param item StatusItem
+local function discard_conflict(item)
+  local choices = { "&ours", "&theirs", "&conflict", "&abort" }
+  local choice = input.get_choice("Discard conflict by taking...", { values = choices, default = #choices })
+
+  if choice == "o" then
+    if item.mode:sub(1, 1) == "D" then
+      git.files.remove { item.absolute_path }
+    else
+      git.reset.checkout_ours { item.absolute_path }
+      git.status.stage { item.name }
+    end
+  elseif choice == "t" then
+    if item.mode:sub(2, 2) == "D" then
+      git.files.remove { item.absolute_path }
+    else
+      git.reset.checkout_theirs { item.absolute_path }
+      git.status.stage { item.name }
+    end
+  elseif choice == "c" then
+    git.reset.checkout_merge { item.absolute_path }
+    git.status.stage { item.name }
+  end
+end
+
 ---@param self StatusBuffer
 ---@return fun(): nil
 M.n_discard = function(self)
@@ -881,7 +926,7 @@ M.n_discard = function(self)
     end
 
     local section = selection.section.name
-    local action, message, choices
+    local action, message, own_prompt
     local refresh = {}
 
     if selection.item and selection.item.first == fn.line(".") then -- Discard File
@@ -902,29 +947,12 @@ M.n_discard = function(self)
         end
       elseif section == "unstaged" then
         if git.status.is_unmerged(selection.item.mode) then
-          choices = { "&ours", "&theirs", "&conflict", "&abort" }
+          -- The conflict flow prompts for its own choice (see discard_conflict
+          -- above); marking the action as own-prompted skips the generic
+          -- permission prompt below.
+          own_prompt = true
           action = function()
-            local choice =
-              input.get_choice("Discard conflict by taking...", { values = choices, default = #choices })
-
-            if choice == "o" then
-              if selection.item.mode:sub(1, 1) == "D" then
-                git.files.remove { selection.item.absolute_path }
-              else
-                git.reset.checkout_ours { selection.item.absolute_path }
-                git.status.stage { selection.item.name }
-              end
-            elseif choice == "t" then
-              if selection.item.mode:sub(2, 2) == "D" then
-                git.files.remove { selection.item.absolute_path }
-              else
-                git.reset.checkout_theirs { selection.item.absolute_path }
-                git.status.stage { selection.item.name }
-              end
-            elseif choice == "c" then
-              git.reset.checkout_merge { selection.item.absolute_path }
-              git.status.stage { selection.item.name }
-            end
+            discard_conflict(selection.item)
           end
           -- Resolution re-stages the file, so BOTH sides' diff caches are
           -- stale; update_file carries cached diffs into the refreshed
@@ -944,60 +972,26 @@ M.n_discard = function(self)
         end
         refresh = { update_diffs = { "unstaged:" .. selection.item.name } }
       elseif section == "staged" then
-        if git.status.is_unmerged(selection.item.mode) then
-          choices = { "&ours", "&theirs", "&conflict", "&abort" }
-          action = function()
-            local choice =
-              input.get_choice("Discard conflict by taking...", { values = choices, default = #choices })
-
-            if choice == "o" then
-              if selection.item.mode:sub(1, 1) == "D" then
-                git.files.remove { selection.item.absolute_path }
-              else
-                git.reset.checkout_ours { selection.item.absolute_path }
-                git.status.stage { selection.item.name }
-              end
-            elseif choice == "t" then
-              if selection.item.mode:sub(2, 2) == "D" then
-                git.files.remove { selection.item.absolute_path }
-              else
-                git.reset.checkout_theirs { selection.item.absolute_path }
-                git.status.stage { selection.item.name }
-              end
-            elseif choice == "c" then
-              git.reset.checkout_merge { selection.item.absolute_path }
-              git.status.stage { selection.item.name }
-            end
+        message = ("Discard %q?"):format(selection.item.name)
+        action = function()
+          if selection.item.mode == "N" or selection.item.mode == "A" then
+            git.index.reset { selection.item.escaped_path }
+            cleanup_items { selection.item }
+          elseif selection.item.mode == "M" then
+            git.index.reset { selection.item.escaped_path }
+            git.index.checkout { selection.item.escaped_path }
+          elseif selection.item.mode == "R" then
+            git.index.reset_HEAD(selection.item.name, selection.item.original_name)
+            git.index.checkout { selection.item.original_name }
+            cleanup_items { selection.item }
+          elseif selection.item.mode == "D" then
+            git.index.reset_HEAD(selection.item.escaped_path)
+            git.index.checkout { selection.item.escaped_path }
+          else
+            error(("Unhandled file mode %q for %q"):format(selection.item.mode, selection.item.escaped_path))
           end
-          -- Resolution re-stages the file, so BOTH sides' diff caches are
-          -- stale; update_file carries cached diffs into the refreshed
-          -- state, and a single-section filter would keep the other side's
-          -- old diff alive.
-          refresh = { update_diffs = { "*:" .. selection.item.name } }
-        else
-          message = ("Discard %q?"):format(selection.item.name)
-          action = function()
-            if selection.item.mode == "N" or selection.item.mode == "A" then
-              git.index.reset { selection.item.escaped_path }
-              cleanup_items { selection.item }
-            elseif selection.item.mode == "M" then
-              git.index.reset { selection.item.escaped_path }
-              git.index.checkout { selection.item.escaped_path }
-            elseif selection.item.mode == "R" then
-              git.index.reset_HEAD(selection.item.name, selection.item.original_name)
-              git.index.checkout { selection.item.original_name }
-              cleanup_items { selection.item }
-            elseif selection.item.mode == "D" then
-              git.index.reset_HEAD(selection.item.escaped_path)
-              git.index.checkout { selection.item.escaped_path }
-            else
-              error(
-                ("Unhandled file mode %q for %q"):format(selection.item.mode, selection.item.escaped_path)
-              )
-            end
-          end
-          refresh = { update_diffs = { "staged:" .. selection.item.name } }
         end
+        refresh = { update_diffs = { "staged:" .. selection.item.name } }
       elseif section == "stashes" then
         message = ("Discard %q?"):format(selection.item.name)
         action = function()
@@ -1120,7 +1114,7 @@ M.n_discard = function(self)
       end
     end
 
-    if action and (choices or input.get_permission(message)) then
+    if action and (own_prompt or input.get_permission(message)) then
       action()
       self:dispatch_refresh(refresh, "n_discard")
     end
@@ -1531,40 +1525,37 @@ M.n_goto_file = function(self)
   end
 end
 
+---Shared body of n_tab_open / n_split_open / n_vertical_split_open: open the
+---file item under the cursor with the given vim command.
 ---@param self StatusBuffer
+---@param type string vim command used to open the file
 ---@return fun(): nil
-M.n_tab_open = function(self)
+local function open_item(self, type)
   return function()
     local item = self.buffer.ui:get_item_under_cursor()
 
     if item and item.absolute_path then
-      open("tabedit", item.absolute_path, translate_cursor_location(self, item))
+      open(type, item.absolute_path, translate_cursor_location(self, item))
     end
   end
+end
+
+---@param self StatusBuffer
+---@return fun(): nil
+M.n_tab_open = function(self)
+  return open_item(self, "tabedit")
 end
 
 ---@param self StatusBuffer
 ---@return fun(): nil
 M.n_split_open = function(self)
-  return function()
-    local item = self.buffer.ui:get_item_under_cursor()
-
-    if item and item.absolute_path then
-      open("split", item.absolute_path, translate_cursor_location(self, item))
-    end
-  end
+  return open_item(self, "split")
 end
 
 ---@param self StatusBuffer
 ---@return fun(): nil
 M.n_vertical_split_open = function(self)
-  return function()
-    local item = self.buffer.ui:get_item_under_cursor()
-
-    if item and item.absolute_path then
-      open("vsplit", item.absolute_path, translate_cursor_location(self, item))
-    end
-  end
+  return open_item(self, "vsplit")
 end
 
 ---@param self StatusBuffer

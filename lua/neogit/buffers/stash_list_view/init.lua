@@ -7,6 +7,7 @@ local util = require("neogit.lib.util")
 local git = require("neogit.lib.git")
 local ui = require("neogit.buffers.stash_list_view.ui")
 local input = require("neogit.lib.input")
+local helpers = require("neogit.lib.ui.helpers")
 
 ---@class StashListBuffer
 ---@field stashes StashItem[]
@@ -188,47 +189,17 @@ function M:open()
             CommitViewBuffer.new(commit):open()
           end
         end,
-        [status_maps["PeekFile"]] = function()
-          local commit = self.buffer.ui:get_commit_under_cursor()
-          if commit then
-            CommitViewBuffer.new(commit):open()
-            self.buffer:focus()
-          end
-        end,
-        [status_maps["OpenOrScrollDown"]] = function()
-          local commit = self.buffer.ui:get_commit_under_cursor()
-          if commit then
-            CommitViewBuffer.open_or_scroll_down(commit)
-          end
-        end,
-        [status_maps["OpenOrScrollUp"]] = function()
-          local commit = self.buffer.ui:get_commit_under_cursor()
-          if commit then
-            CommitViewBuffer.open_or_scroll_up(commit)
-          end
-        end,
-        [status_maps["PeekUp"]] = function()
-          vim.cmd("normal! k")
-          local commit = self.buffer.ui:get_commit_under_cursor()
-          if commit then
-            if CommitViewBuffer.is_open() then
-              CommitViewBuffer.instance:update(commit)
-            else
-              CommitViewBuffer.new(commit):open()
-            end
-          end
-        end,
-        [status_maps["PeekDown"]] = function()
-          vim.cmd("normal! j")
-          local commit = self.buffer.ui:get_commit_under_cursor()
-          if commit then
-            if CommitViewBuffer.is_open() then
-              CommitViewBuffer.instance:update(commit)
-            else
-              CommitViewBuffer.new(commit):open()
-            end
-          end
-        end,
+        [status_maps["PeekFile"]] = helpers.peek_commit(self, "file"),
+        [status_maps["OpenOrScrollDown"]] = helpers.peek_commit(self, "scroll", "down"),
+        [status_maps["OpenOrScrollUp"]] = helpers.peek_commit(self, "scroll", "up"),
+        [status_maps["PeekUp"]] = helpers.peek_commit(self, "peek", "up", nil, { open_when_absent = true }),
+        [status_maps["PeekDown"]] = helpers.peek_commit(
+          self,
+          "peek",
+          "down",
+          nil,
+          { open_when_absent = true }
+        ),
       },
     },
     after = function()
