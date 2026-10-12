@@ -104,9 +104,9 @@ local BANNER = Component.new(function(props)
   local width = props.width or vim.o.columns
 
   local logo = {
-    "╔══╗ ╔═╗ ╔═╗ ╔═╗ ╦ ╔╦╗",
-    "║╔╗║ ╠═  ║ ║ ║ ╦ ║  ║",
-    "╚╝╚╝ ╚═╝ ╚═╝ ╚═╝ ╩  ╩",
+    "╔╗ ╦ ╔═╗ ╔═╗ ╔═╗ ╦ ╔╦╗",
+    "║╚╗║ ╠═  ║ ║ ║ ╦ ║  ║",
+    "╩ ╚╝ ╚═╝ ╚═╝ ╚═╝ ╩  ╩",
   }
 
   -- Letterforms carry trimmed trailing blanks, so rows differ in length by

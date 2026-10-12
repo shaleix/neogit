@@ -80,12 +80,12 @@ describe("status buffer banner", function()
     local dir = workdir()
     local buf = open_status(dir)
 
-    assert.truthy(buffer_contains(buf, "╔══╗ ╔═╗"), "the banner must render")
-    assert.truthy(buffer_contains(buf, "╚╝╚╝ ╚═╝"), "all banner lines must render")
+    assert.truthy(buffer_contains(buf, "╔╗ ╦ ╔═╗"), "the banner must render")
+    assert.truthy(buffer_contains(buf, "╩ ╚╝ ╚═╝"), "all banner lines must render")
 
     -- The banner leads the buffer: the first rendered line is part of it.
     local lines = buffer_lines(buf)
-    assert.truthy(lines[1]:find("╔══╗", 1, true), "the banner must be the topmost content")
+    assert.truthy(lines[1]:find("╔╗ ╦ ╔═╗", 1, true), "the banner must be the topmost content")
 
     -- All banner rows share one left grid (uniform centering): identical
     -- leading padding on every row, so the letterforms cannot shear.
@@ -117,7 +117,7 @@ describe("status buffer banner", function()
     local dir = workdir()
     local buf = open_status(dir)
 
-    assert.falsy(buffer_contains(buf, "╔══╗"), "the banner must respect the config switch")
+    assert.falsy(buffer_contains(buf, "║╚╗║"), "the banner must respect the config switch")
     assert.falsy(buffer_contains(buf, "────"), "the divider must respect the config switch")
   end)
 end)
