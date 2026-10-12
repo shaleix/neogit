@@ -32,44 +32,24 @@ local function get_reversed_maps(set)
   return mappings[set]
 end
 
----@return table<string, string[]>
-function M.get_reversed_status_maps()
-  return get_reversed_maps("status")
-end
-
----@return table<string, string[]>
-function M.get_reversed_popup_maps()
-  return get_reversed_maps("popup")
-end
-
----@return table<string, string[]>
-function M.get_reversed_rebase_editor_maps()
-  return get_reversed_maps("rebase_editor")
-end
-
----@return table<string, string[]>
-function M.get_reversed_rebase_editor_maps_I()
-  return get_reversed_maps("rebase_editor_I")
-end
-
----@return table<string, string[]>
-function M.get_reversed_commit_editor_maps()
-  return get_reversed_maps("commit_editor")
-end
-
----@return table<string, string[]>
-function M.get_reversed_commit_editor_maps_I()
-  return get_reversed_maps("commit_editor_I")
-end
-
----@return table<string, string[]>
-function M.get_reversed_commit_view_maps()
-  return get_reversed_maps("commit_view")
-end
-
----@return table<string, string[]>
-function M.get_reversed_refs_view_maps()
-  return get_reversed_maps("refs_view")
+-- Public per-set accessors, generated from one list: `fn` is the exported
+-- suffix after `get_reversed_` (load-bearing names, consumed across buffers/
+-- and popups/), `set` is the mapping set it reads. Adding a new mapping set
+-- is one entry here.
+for _, accessor in ipairs {
+  { fn = "status_maps", set = "status" },
+  { fn = "popup_maps", set = "popup" },
+  { fn = "rebase_editor_maps", set = "rebase_editor" },
+  { fn = "rebase_editor_maps_I", set = "rebase_editor_I" },
+  { fn = "commit_editor_maps", set = "commit_editor" },
+  { fn = "commit_editor_maps_I", set = "commit_editor_I" },
+  { fn = "commit_view_maps", set = "commit_view" },
+  { fn = "refs_view_maps", set = "refs_view" },
+} do
+  -- Signature for each generated accessor: fun(): table<string, string[]>
+  M["get_reversed_" .. accessor.fn] = function()
+    return get_reversed_maps(accessor.set)
+  end
 end
 
 ---@param set string
@@ -199,38 +179,44 @@ end
 ---| "MouseClick"
 ---| false
 
+-- Kept in lockstep with `get_default_values().mappings.status` (the
+-- authoritative list): every default status command appears here, in the
+-- order the defaults table introduces it.
 ---@alias NeogitConfigMappingsStatus
----| "Close"
 ---| "MoveDown"
 ---| "MoveUp"
 ---| "OpenTree"
----| "OpenFold"
----| "Command"
+---| "Close"
+---| "InitRepo"
 ---| "Depth1"
 ---| "Depth2"
 ---| "Depth3"
 ---| "Depth4"
+---| "Command"
 ---| "Toggle"
+---| "OpenFold"
+---| "CloseFold"
 ---| "Discard"
+---| "Reverse"
 ---| "Stage"
 ---| "StageUnstaged"
 ---| "StageAll"
 ---| "Unstage"
----| "UnstageStaged"
 ---| "Untrack"
+---| "Rename"
+---| "UnstageStaged"
+---| "ShowRefs"
+---| "CommandHistory"
+---| "YankSelected"
+---| "GoToParentRepo"
 ---| "RefreshBuffer"
 ---| "GoToFile"
----| "GoToParentRepo",
 ---| "PeekFile"
 ---| "VSplitOpen"
 ---| "SplitOpen"
 ---| "TabOpen"
 ---| "GoToPreviousHunkHeader"
 ---| "GoToNextHunkHeader"
----| "CommandHistory"
----| "ShowRefs"
----| "InitRepo"
----| "YankSelected"
 ---| "OpenOrScrollUp"
 ---| "OpenOrScrollDown"
 ---| "PeekUp"
@@ -310,6 +296,12 @@ end
 ---| false
 ---| fun()
 
+---@alias NeogitConfigMappingsCommitView
+---| "OpenFileInWorktree"
+---| "OpenCommitLinkInBrowser"
+---| false
+---| fun()
+
 ---@alias NeogitGraphStyle
 ---| "ascii"
 ---| "unicode"
@@ -348,6 +340,7 @@ end
 ---@field commit_editor? { [string]: NeogitConfigMappingsCommitEditor } A dictionary that uses Commit editor commands to set a single keybind
 ---@field commit_editor_I? { [string]: NeogitConfigMappingsCommitEditor_I } A dictionary that uses Commit editor commands to set a single keybind
 ---@field refs_view? { [string]: NeogitConfigMappingsRefsView } A dictionary that uses Refs view editor commands to set a single keybind
+---@field commit_view? { [string]: NeogitConfigMappingsCommitView } A dictionary that uses commit view commands to set a single keybind
 
 ---@class NeogitConfigGitService
 ---@field pull_request? string
@@ -1091,258 +1084,78 @@ function M.validate_config()
       return
     end
 
-    -- Validate mappings.finder
-    local valid_finder_commands = {
-      false,
+    -- Every mapping set shares the same validation skeleton, captured by
+    -- this descriptor table. Two historical wording quirks are pinned so the
+    -- error messages stay byte-identical with the previous copy-pasted
+    -- blocks: `finder` maps are command -> key lists, so its labels inspect
+    -- the *command* instead of the key and every allowed value (booleans
+    -- included) must be a known command; the other sets quote the key and
+    -- only check string values for membership.
+    local mapping_sets = {
+      { name = "finder", allowed_types = { "string", "boolean" }, known_values = true },
+      { name = "status", allowed_types = { "string", "boolean", "function" }, known_values = false },
+      { name = "popup", allowed_types = { "string", "boolean" }, known_values = false },
+      { name = "rebase_editor", allowed_types = { "string", "boolean", "function" }, known_values = false },
+      { name = "rebase_editor_I", allowed_types = { "string", "boolean", "function" }, known_values = false },
+      { name = "commit_editor_I", allowed_types = { "string", "boolean", "function" }, known_values = false },
+      { name = "commit_editor", allowed_types = { "string", "boolean", "function" }, known_values = false },
     }
 
-    for _, cmd in pairs(M.get_default_values().mappings.finder) do
-      table.insert(valid_finder_commands, cmd)
-    end
+    for _, set in ipairs(mapping_sets) do
+      local valid_commands = {
+        false,
+      }
 
-    local function validate_finder_map(command, key)
-      if
-        not validate_type(key, string.format("mappings.finder -> %s", vim.inspect(key)), "string")
-        or not validate_type(
-          command,
-          string.format("mappings.finder[%s]", vim.inspect(command)),
-          { "string", "boolean" }
-        )
-      then
-        return
+      for _, cmd in pairs(M.get_default_values().mappings[set.name]) do
+        table.insert(valid_commands, cmd)
       end
 
-      if not vim.tbl_contains(valid_finder_commands, command) then
-        local valid_finder_commands = util.map(valid_finder_commands, function(command)
-          return vim.inspect(command)
-        end)
-
-        err(
-          string.format("mappings.finder[%s] -> %s", vim.inspect(key), vim.inspect(command)),
-
-          string.format(
-            "Expected a valid finder command, got %s. Valid finder commands: { %s }",
-            vim.inspect(command),
-            table.concat(valid_finder_commands, ", ")
-          )
-        )
-      end
-    end
-
-    if validate_type(config.mappings.finder, "mappings.finder", "table") then
-      for key, command in pairs(config.mappings.finder) do
-        validate_finder_map(command, key)
-      end
-    end
-
-    -- Validate mappings.status
-    local valid_status_commands = {
-      false,
-    }
-
-    for _, cmd in pairs(M.get_default_values().mappings.status) do
-      table.insert(valid_status_commands, cmd)
-    end
-
-    if validate_type(config.mappings.status, "mappings.status", "table") then
-      for key, command in pairs(config.mappings.status) do
-        if
-          validate_type(key, "mappings.status -> " .. vim.inspect(key), "string")
-          and validate_type(
-            command,
-            string.format("mappings.status['%s']", key),
-            { "string", "boolean", "function" }
-          )
-        then
-          if type(command) == "string" and not vim.tbl_contains(valid_status_commands, command) then
-            local valid_status_commands = util.map(valid_status_commands, function(command)
-              return vim.inspect(command)
-            end)
-
-            err(
-              string.format("mappings.status['%s']", key),
-              string.format(
-                "Expected a valid status command, got '%s'. Valid status commands: { %s }",
-                command,
-                table.concat(valid_status_commands, ", ")
-              )
-            )
+      if validate_type(config.mappings[set.name], "mappings." .. set.name, "table") then
+        for key, command in pairs(config.mappings[set.name]) do
+          local command_label
+          if set.known_values then
+            command_label = string.format("mappings.%s[%s]", set.name, vim.inspect(command))
+          else
+            command_label = string.format("mappings.%s['%s']", set.name, key)
           end
-        end
-      end
-    end
 
-    local valid_popup_commands = {
-      false,
-    }
+          if
+            validate_type(key, "mappings." .. set.name .. " -> " .. vim.inspect(key), "string")
+            and validate_type(command, command_label, set.allowed_types)
+          then
+            -- The finder's membership check applies to every allowed value;
+            -- the other sets only check string commands.
+            local check_membership = set.known_values or type(command) == "string"
 
-    for _, cmd in pairs(M.get_default_values().mappings.popup) do
-      table.insert(valid_popup_commands, cmd)
-    end
+            if check_membership and not vim.tbl_contains(valid_commands, command) then
+              local valid_commands = util.map(valid_commands, function(command)
+                return vim.inspect(command)
+              end)
 
-    if validate_type(config.mappings.popup, "mappings.popup", "table") then
-      for key, command in pairs(config.mappings.popup) do
-        if
-          validate_type(key, "mappings.popup -> " .. vim.inspect(key), "string")
-          and validate_type(command, string.format("mappings.popup['%s']", key), { "string", "boolean" })
-        then
-          if type(command) == "string" and not vim.tbl_contains(valid_popup_commands, command) then
-            local valid_popup_commands = util.map(valid_popup_commands, function(command)
-              return vim.inspect(command)
-            end)
-
-            err(
-              string.format("mappings.popup['%s']", key),
-              string.format(
-                "Expected a valid popup command, got '%s'. Valid popup commands: { %s }",
-                command,
-                table.concat(valid_popup_commands, ", ")
-              )
-            )
-          end
-        end
-      end
-    end
-
-    local valid_rebase_editor_commands = {
-      false,
-    }
-
-    for _, cmd in pairs(M.get_default_values().mappings.rebase_editor) do
-      table.insert(valid_rebase_editor_commands, cmd)
-    end
-
-    if validate_type(config.mappings.rebase_editor, "mappings.rebase_editor", "table") then
-      for key, command in pairs(config.mappings.rebase_editor) do
-        if
-          validate_type(key, "mappings.rebase_editor -> " .. vim.inspect(key), "string")
-          and validate_type(
-            command,
-            string.format("mappings.rebase_editor['%s']", key),
-            { "string", "boolean", "function" }
-          )
-        then
-          if type(command) == "string" and not vim.tbl_contains(valid_rebase_editor_commands, command) then
-            local valid_rebase_editor_commands = util.map(valid_rebase_editor_commands, function(command)
-              return vim.inspect(command)
-            end)
-
-            err(
-              string.format("mappings.rebase_editor['%s']", key),
-              string.format(
-                "Expected a valid rebase_editor command, got '%s'. Valid rebase_editor commands: { %s }",
-                command,
-                table.concat(valid_rebase_editor_commands, ", ")
-              )
-            )
-          end
-        end
-      end
-    end
-
-    local valid_rebase_editor_I_commands = {
-      false,
-    }
-
-    for _, cmd in pairs(M.get_default_values().mappings.rebase_editor_I) do
-      table.insert(valid_rebase_editor_I_commands, cmd)
-    end
-
-    if validate_type(config.mappings.rebase_editor_I, "mappings.rebase_editor_I", "table") then
-      for key, command in pairs(config.mappings.rebase_editor_I) do
-        if
-          validate_type(key, "mappings.rebase_editor_I -> " .. vim.inspect(key), "string")
-          and validate_type(
-            command,
-            string.format("mappings.rebase_editor_I['%s']", key),
-            { "string", "boolean", "function" }
-          )
-        then
-          if type(command) == "string" and not vim.tbl_contains(valid_rebase_editor_I_commands, command) then
-            local valid_rebase_editor_I_commands = util.map(valid_rebase_editor_I_commands, function(command)
-              return vim.inspect(command)
-            end)
-
-            err(
-              string.format("mappings.rebase_editor_I['%s']", key),
-              string.format(
-                "Expected a valid rebase_editor_I command, got '%s'. Valid rebase_editor_I commands: { %s }",
-                command,
-                table.concat(valid_rebase_editor_I_commands, ", ")
-              )
-            )
-          end
-        end
-      end
-    end
-
-    local valid_commit_editor_I_commands = {
-      false,
-    }
-
-    for _, cmd in pairs(M.get_default_values().mappings.commit_editor_I) do
-      table.insert(valid_commit_editor_I_commands, cmd)
-    end
-
-    if validate_type(config.mappings.commit_editor_I, "mappings.commit_editor_I", "table") then
-      for key, command in pairs(config.mappings.commit_editor_I) do
-        if
-          validate_type(key, "mappings.commit_editor_I -> " .. vim.inspect(key), "string")
-          and validate_type(
-            command,
-            string.format("mappings.commit_editor_I['%s']", key),
-            { "string", "boolean", "function" }
-          )
-        then
-          if type(command) == "string" and not vim.tbl_contains(valid_commit_editor_I_commands, command) then
-            local valid_commit_editor_I_commands = util.map(valid_commit_editor_I_commands, function(command)
-              return vim.inspect(command)
-            end)
-
-            err(
-              string.format("mappings.commit_editor_I['%s']", key),
-              string.format(
-                "Expected a valid commit_editor_I command, got '%s'. Valid commit_editor_I commands: { %s }",
-                command,
-                table.concat(valid_commit_editor_I_commands, ", ")
-              )
-            )
-          end
-        end
-      end
-    end
-
-    local valid_commit_editor_commands = {
-      false,
-    }
-
-    for _, cmd in pairs(M.get_default_values().mappings.commit_editor) do
-      table.insert(valid_commit_editor_commands, cmd)
-    end
-
-    if validate_type(config.mappings.commit_editor, "mappings.commit_editor", "table") then
-      for key, command in pairs(config.mappings.commit_editor) do
-        if
-          validate_type(key, "mappings.commit_editor -> " .. vim.inspect(key), "string")
-          and validate_type(
-            command,
-            string.format("mappings.commit_editor['%s']", key),
-            { "string", "boolean", "function" }
-          )
-        then
-          if type(command) == "string" and not vim.tbl_contains(valid_commit_editor_commands, command) then
-            local valid_commit_editor_commands = util.map(valid_commit_editor_commands, function(command)
-              return vim.inspect(command)
-            end)
-
-            err(
-              string.format("mappings.commit_editor['%s']", key),
-              string.format(
-                "Expected a valid commit_editor command, got '%s'. Valid commit_editor commands: { %s }",
-                command,
-                table.concat(valid_commit_editor_commands, ", ")
-              )
-            )
+              if set.known_values then
+                err(
+                  string.format("mappings.%s[%s] -> %s", set.name, vim.inspect(key), vim.inspect(command)),
+                  string.format(
+                    "Expected a valid %s command, got %s. Valid %s commands: { %s }",
+                    set.name,
+                    vim.inspect(command),
+                    set.name,
+                    table.concat(valid_commands, ", ")
+                  )
+                )
+              else
+                err(
+                  string.format("mappings.%s['%s']", set.name, key),
+                  string.format(
+                    "Expected a valid %s command, got '%s'. Valid %s commands: { %s }",
+                    set.name,
+                    command,
+                    set.name,
+                    table.concat(valid_commands, ", ")
+                  )
+                )
+              end
+            end
           end
         end
       end
@@ -1370,7 +1183,7 @@ function M.validate_config()
     validate_type(config.remember_settings, "remember_settings", "boolean")
     validate_type(config.sort_branches, "sort_branches", "string")
     validate_type(config.initial_branch_name, "initial_branch_name", "string")
-    validate_type(config.initial_branch_rename, "initial_branch_name", { "string", "nil" })
+    validate_type(config.initial_branch_rename, "initial_branch_rename", { "string", "nil" })
     validate_type(config.notification_icon, "notification_icon", "string")
     validate_type(config.console_timeout, "console_timeout", "number")
     validate_kind(config.kind, "kind")
