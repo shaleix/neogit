@@ -12,11 +12,71 @@
 -- queries open their own handle (git2.with_repo).
 local git2 = require("neogit.lib.git2")
 local backend = require("neogit.lib.git.backend")
+local logger = require("neogit.logger")
 
 local M = {}
 
 M.run = git2.run
 M.with_repo = git2.with_repo
+
+---@param level "warn"|"debug"|"none"
+---@param module string
+---@param fn_name string
+---@param reason string "failed" (twin raised) or "unavailable" (twin declined)
+---@param detail? string optional traceback / extra context appended on its own line
+local function log_fallback(level, module, fn_name, reason, detail)
+  if level == "none" then
+    return
+  end
+
+  logger[level or "warn"](
+    ("[%s]: libgit2 %s %s - falling back to CLI%s"):format(
+      module:upper(),
+      fn_name,
+      reason,
+      detail and ("\n" .. tostring(detail)) or ""
+    )
+  )
+end
+
+---Dispatch a libgit2 twin with runtime degradation (migration spec §7): the
+---single seam point every CLI-side dispatcher goes through. Returns the
+---twin's result(s) plus `served = true` when the twin served the call. Twin
+---errors are logged with a traceback and treated like a nil ("declined")
+---result, so every dispatcher falls back to the CLI without repeating the
+---pcall/log dance. A legitimate nil answer (e.g. branch.current() on a
+---detached HEAD) also routes through the CLI, which produces the same
+---answer.
+---@param capability string capability key, e.g. "query_branch"
+---@param module string twin module under lib/git/libgit2/, e.g. "branch"
+---@param fn_name string function name on the twin module, e.g. "current"
+---@param level? "warn"|"debug"|"none" fallback log level (default "warn")
+---@return any result first twin result; nil unless the twin served the call
+---@return boolean served
+---@return ... extra trailing twin results, when the twin returns multiple values
+function M.twin(capability, module, fn_name, level, ...)
+  if backend.capability(capability) ~= "libgit2" then
+    return nil, false
+  end
+
+  local fn = require("neogit.lib.git.libgit2." .. module)[fn_name]
+  -- nb: a table constructor collects every value of the trailing xpcall
+  -- (trailing nils are dropped, which is what the decline check wants)
+  local results = { xpcall(fn, debug.traceback, ...) }
+
+  if not results[1] then
+    log_fallback(level, module, fn_name, "failed", results[2])
+    return nil, false
+  end
+
+  if #results < 2 or results[2] == nil then
+    log_fallback(level, module, fn_name, "unavailable")
+    return nil, false
+  end
+
+  results[#results + 1] = true
+  return unpack(results, 2, #results)
+end
 
 ---Sort ref entries per a git `--sort` key. Entries carry `.name` (sort/display
 ---name) and `.time` (peeled commit time, may be nil). Supports the keys in

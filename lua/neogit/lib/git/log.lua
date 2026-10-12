@@ -3,8 +3,8 @@ local util = require("neogit.lib.util")
 local config = require("neogit.config")
 local record = require("neogit.lib.record")
 local state = require("neogit.lib.state")
-local logger = require("neogit.logger")
 local backend = require("neogit.lib.git.backend")
+local libgit2 = require("neogit.lib.git.libgit2")
 
 ---@class NeogitGitLog
 local M = {}
@@ -487,12 +487,11 @@ function M.list(options, graph, files, hidden, graph_color)
     backend.capability("query_log_list") == "libgit2"
     and require("neogit.lib.git.libgit2.log").supports(options, files)
   then
-    local records = require("neogit.lib.git.libgit2.log").list(options, graph, files, graph_color)
-    if records ~= nil then
+    local records, served =
+      libgit2.twin("query_log_list", "log", "list", "debug", options, graph, files, graph_color)
+    if served then
       return records
     end
-
-    logger.debug("[LOG]: libgit2 list unavailable - falling back to CLI")
   end
 
   return list_cli(options, graph, files, hidden, graph_color)
@@ -517,6 +516,13 @@ function M.parent(commit)
     git.cli["rev-list"].max_count(1).parents.args(commit).call({ hidden = true }).stdout[1],
     " "
   )[2]
+end
+
+---Lists merge commits within a revision range (`git rev-list --merges`).
+---@param range string revision range, e.g. "abc123..HEAD"
+---@return string[] oids of the merge commits in the range
+function M.merges_between(range)
+  return git.cli["rev-list"].merges.args(range).call({ hidden = true }).stdout
 end
 
 function M.register(meta)
@@ -546,15 +552,9 @@ function M.update_ref(from, to)
 end
 
 function M.message(commit)
-  if backend.capability("query_log_message") == "libgit2" then
-    local msg = require("neogit.lib.git.libgit2.log").message(commit)
-    if msg ~= nil then
-      return msg
-    end
-
-    -- Either the commit is unknown (the CLI answers nil too) or the repo
-    -- could not be opened (the CLI can still serve) - fall through.
-    logger.debug(("[LOG]: libgit2 message(%s) unavailable - falling back to CLI"):format(tostring(commit)))
+  local msg, served = libgit2.twin("query_log_message", "log", "message", "debug", commit)
+  if served then
+    return msg
   end
 
   return git.cli.log.max_count(1).format("%s").args(commit).call({ hidden = true }).stdout[1]
@@ -698,8 +698,9 @@ M.abbreviated_size = util.memoize(function()
   -- abbreviated_size feeds the libgit2 twin (for abbreviated_commit), so
   -- routing through the dispatcher would recurse twin.list ->
   -- abbreviated_size -> M.list -> twin.list.
-  if backend.capability("query_abbrev_size") == "libgit2" then
-    return require("neogit.lib.git.libgit2.log").abbrev_size()
+  local size, served = libgit2.twin("query_abbrev_size", "log", "abbrev_size", "none")
+  if served then
+    return size
   end
 
   local commits = list_cli({ "HEAD", "--max-count=1" }, nil, {}, true)

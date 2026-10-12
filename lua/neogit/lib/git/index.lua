@@ -1,9 +1,8 @@
 local git = require("neogit.lib.git")
 local Path = require("neogit.lib.path")
 local util = require("neogit.lib.util")
-local logger = require("neogit.logger")
-local backend = require("neogit.lib.git.backend")
 local GitResult = require("neogit.lib.git.result")
+local libgit2 = require("neogit.lib.git.libgit2")
 
 ---@param path string
 ---@return string
@@ -94,13 +93,11 @@ function M.apply(patch, opts)
   opts = opts or { reverse = false, cached = false, index = false }
 
   -- Reverse application has no libgit2 equivalent: CLI only.
-  if not opts.reverse and backend.capability("index_write") == "libgit2" then
-    local result = require("neogit.lib.git.libgit2.index").apply_patch(patch, opts)
-    if result ~= nil then
+  if not opts.reverse then
+    local result, served = libgit2.twin("index_write", "index", "apply_patch", "warn", patch, opts)
+    if served then
       return result
     end
-
-    logger.warn("[INDEX]: libgit2 apply unavailable (repo open failed) - falling back to CLI")
   end
 
   local cmd = git.cli.apply
@@ -122,13 +119,9 @@ end
 
 ---@return GitResult
 function M.add(files)
-  if backend.capability("index_write") == "libgit2" then
-    local result = require("neogit.lib.git.libgit2.index").stage(files)
-    if result ~= nil then
-      return result
-    end
-
-    logger.warn("[INDEX]: libgit2 stage unavailable (repo open failed) - falling back to CLI")
+  local result, served = libgit2.twin("index_write", "index", "stage", "warn", files)
+  if served then
+    return result
   end
 
   return GitResult.from_process(git.cli.add.files(unpack(files)).call { await = true })
@@ -136,13 +129,9 @@ end
 
 ---@return GitResult
 function M.checkout(files)
-  if backend.capability("index_write") == "libgit2" then
-    local result = require("neogit.lib.git.libgit2.index").checkout_files(files)
-    if result ~= nil then
-      return result
-    end
-
-    logger.warn("[INDEX]: libgit2 checkout unavailable (repo open failed) - falling back to CLI")
+  local result, served = libgit2.twin("index_write", "index", "checkout_files", "warn", files)
+  if served then
+    return result
   end
 
   return GitResult.from_process(git.cli.checkout.files(unpack(files)).call { await = true })
@@ -150,13 +139,9 @@ end
 
 ---@return GitResult
 function M.reset(files)
-  if backend.capability("index_write") == "libgit2" then
-    local result = require("neogit.lib.git.libgit2.index").reset_files(files)
-    if result ~= nil then
-      return result
-    end
-
-    logger.warn("[INDEX]: libgit2 reset unavailable (repo open failed) - falling back to CLI")
+  local result, served = libgit2.twin("index_write", "index", "reset_files", "warn", files)
+  if served then
+    return result
   end
 
   return GitResult.from_process(git.cli.reset.files(unpack(files)).call { await = true })

@@ -1,7 +1,6 @@
 local git = require("neogit.lib.git")
 local util = require("neogit.lib.util")
-local logger = require("neogit.logger")
-local backend = require("neogit.lib.git.backend")
+local libgit2 = require("neogit.lib.git.libgit2")
 
 ---@class NeogitGitRemote
 local M = {}
@@ -64,19 +63,23 @@ end
 
 ---@return string[]
 M.list = util.memoize(function()
-  if backend.capability("query_remote_list") == "libgit2" then
-    local result = require("neogit.lib.git.libgit2.remote").list()
-    if result ~= nil then
-      return result
-    end
-
-    -- twin could not serve (logged in the twin): fall back instead of
-    -- memoizing a false "no remotes" for the rest of the session
-    logger.warn("[REMOTE]: libgit2 list unavailable - falling back to CLI")
+  local result, served = libgit2.twin("query_remote_list", "remote", "list", "warn")
+  if served then
+    return result
   end
 
   return git.cli.remote.call({ hidden = true }).stdout
 end)
+
+---Refs advertised by a remote (`git ls-remote <remote>`), split to the ref
+---name (the field after the TAB separator).
+---@param remote string
+---@return string[]
+function M.list_refspecs(remote)
+  return util.map(git.cli["ls-remote"].remote(remote).call({ hidden = true }).stdout, function(ref)
+    return vim.split(ref, "\t")[2]
+  end)
+end
 
 ---@param name string
 ---@return string[]

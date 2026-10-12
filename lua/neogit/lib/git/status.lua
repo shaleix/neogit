@@ -3,8 +3,8 @@ local git = require("neogit.lib.git")
 local util = require("neogit.lib.util")
 local Collection = require("neogit.lib.collection")
 local logger = require("neogit.logger")
-local backend = require("neogit.lib.git.backend")
 local GitResult = require("neogit.lib.git.result")
+local libgit2 = require("neogit.lib.git.libgit2")
 
 ---@class StatusItem
 ---@field mode string
@@ -218,35 +218,21 @@ end
 ---@class NeogitGitStatus
 local M = {}
 
--- index_write twin dispatch: the twin returns a GitResult, or nil when the
--- repository could not be opened - then the CLI serves the call. Keeping
--- the return shape identical across backends means callers never need to
--- know which one ran.
+-- index_write twins keep the GitResult return shape across backends, so
+-- callers never need to know which one ran; stage/unstage forward to the
+-- index module, which owns that dispatch.
 
 ---@param files string[]
 ---@return GitResult
 function M.stage(files)
-  if backend.capability("index_write") == "libgit2" then
-    local result = require("neogit.lib.git.libgit2.index").stage(files)
-    if result ~= nil then
-      return result
-    end
-
-    logger.warn("[STATUS]: libgit2 stage unavailable - falling back to CLI")
-  end
-
-  return GitResult.from_process(git.cli.add.files(unpack(files)).call { await = true })
+  return git.index.add(files)
 end
 
 ---@return GitResult
 function M.stage_modified()
-  if backend.capability("index_write") == "libgit2" then
-    local result = require("neogit.lib.git.libgit2.index").stage_modified()
-    if result ~= nil then
-      return result
-    end
-
-    logger.warn("[STATUS]: libgit2 stage_modified unavailable - falling back to CLI")
+  local result, served = libgit2.twin("index_write", "index", "stage_modified", "warn")
+  if served then
+    return result
   end
 
   return GitResult.from_process(git.cli.add.update.call { await = true })
@@ -254,31 +240,20 @@ end
 
 ---@return GitResult
 function M.stage_untracked()
+  -- Paths are collected BEFORE dispatching: the twin/CLI call can invalidate
+  -- the repo state, so the untracked item list must be snapshotted first.
   local paths = util.map(git.repo.state.untracked.items, function(item)
     return item.escaped_path
   end)
 
-  if backend.capability("index_write") == "libgit2" then
-    local result = require("neogit.lib.git.libgit2.index").stage(paths)
-    if result ~= nil then
-      return result
-    end
-
-    logger.warn("[STATUS]: libgit2 stage unavailable - falling back to CLI")
-  end
-
-  return GitResult.from_process(git.cli.add.files(unpack(paths)).call { await = true })
+  return git.index.add(paths)
 end
 
 ---@return GitResult
 function M.stage_all()
-  if backend.capability("index_write") == "libgit2" then
-    local result = require("neogit.lib.git.libgit2.index").stage_all()
-    if result ~= nil then
-      return result
-    end
-
-    logger.warn("[STATUS]: libgit2 stage_all unavailable - falling back to CLI")
+  local result, served = libgit2.twin("index_write", "index", "stage_all", "warn")
+  if served then
+    return result
   end
 
   return GitResult.from_process(git.cli.add.all.call { await = true })
@@ -287,27 +262,14 @@ end
 ---@param files string[]
 ---@return GitResult
 function M.unstage(files)
-  if backend.capability("index_write") == "libgit2" then
-    local result = require("neogit.lib.git.libgit2.index").reset_files(files)
-    if result ~= nil then
-      return result
-    end
-
-    logger.warn("[STATUS]: libgit2 unstage unavailable - falling back to CLI")
-  end
-
-  return GitResult.from_process(git.cli.reset.files(unpack(files)).call { await = true })
+  return git.index.reset(files)
 end
 
 ---@return GitResult
 function M.unstage_all()
-  if backend.capability("index_write") == "libgit2" then
-    local result = require("neogit.lib.git.libgit2.index").reset_all()
-    if result ~= nil then
-      return result
-    end
-
-    logger.warn("[STATUS]: libgit2 unstage_all unavailable - falling back to CLI")
+  local result, served = libgit2.twin("index_write", "index", "reset_all", "warn")
+  if served then
+    return result
   end
 
   return GitResult.from_process(git.cli.reset.call { await = true })
@@ -320,18 +282,13 @@ end
 
 ---@return boolean
 function M.anything_staged()
-  if backend.capability("query_status") == "libgit2" then
-    local result = require("neogit.lib.git.libgit2.status").anything_staged()
-    if result ~= nil then
-      return result
-    end
-
-    -- twin could not answer (repo open / status list failure, already
-    -- logged in the twin): serve from the CLI rather than report a
-    -- false "nothing staged"
-    logger.warn("[STATUS]: libgit2 anything_staged unavailable - falling back to CLI")
+  local result, served = libgit2.twin("query_status", "status", "anything_staged", "warn")
+  if served then
+    return result
   end
 
+  -- the twin could not answer: serve from the CLI rather than report a
+  -- false "nothing staged"
   local output = git.cli.status.porcelain(2).call({ hidden = true }).stdout
   return vim.iter(output):any(function(line)
     return line:match("^%d [^%.]")
@@ -340,13 +297,9 @@ end
 
 ---@return boolean
 function M.anything_unstaged()
-  if backend.capability("query_status") == "libgit2" then
-    local result = require("neogit.lib.git.libgit2.status").anything_unstaged()
-    if result ~= nil then
-      return result
-    end
-
-    logger.warn("[STATUS]: libgit2 anything_unstaged unavailable - falling back to CLI")
+  local result, served = libgit2.twin("query_status", "status", "anything_unstaged", "warn")
+  if served then
+    return result
   end
 
   local output = git.cli.status.porcelain(2).call({ hidden = true }).stdout

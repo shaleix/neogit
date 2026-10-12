@@ -103,9 +103,7 @@ function M.fetch_refspec(popup)
   end
 
   notification.info("Determining refspecs...")
-  local refspecs = util.map(git.cli["ls-remote"].remote(remote).call({ hidden = true }).stdout, function(ref)
-    return vim.split(ref, "\t")[2]
-  end)
+  local refspecs = git.remote.list_refspecs(remote)
   notification.delete_all()
 
   local refspec = FuzzyFinderBuffer.new(refspecs):open_async { prompt_prefix = "refspec" }

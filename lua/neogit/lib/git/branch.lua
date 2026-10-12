@@ -1,42 +1,13 @@
 local git = require("neogit.lib.git")
 local config = require("neogit.config")
 local util = require("neogit.lib.util")
-local logger = require("neogit.logger")
 local GitResult = require("neogit.lib.git.result")
-local backend = require("neogit.lib.git.backend")
+local libgit2 = require("neogit.lib.git.libgit2")
 
 local FuzzyFinderBuffer = require("neogit.buffers.fuzzy_finder")
 
 ---@class NeogitGitBranch
 local M = {}
-
----Call a libgit2 branch twin with runtime degradation (migration spec §7):
----returns `result, true` when the twin served the call. Twin errors are
----logged with a traceback and treated like a nil ("declined") result, so
----every dispatcher falls back to the CLI without repeating the pcall/log
----dance. A legitimate nil answer (e.g. current() on detached HEAD) also
----routes through the CLI, which produces the same answer.
----@param capability string capability key, e.g. "query_branch"
----@param fn_name string function name on the libgit2 branch twin
----@return any result
----@return boolean served
-local function twin(capability, fn_name, ...)
-  if backend.capability(capability) ~= "libgit2" then
-    return nil, false
-  end
-
-  local ok, result = xpcall(require("neogit.lib.git.libgit2.branch")[fn_name], debug.traceback, ...)
-  if not ok then
-    logger.warn(("[BRANCH]: libgit2 %s failed - falling back to CLI:\n%s"):format(fn_name, tostring(result)))
-    return nil, false
-  end
-
-  if result == nil then
-    return nil, false
-  end
-
-  return result, true
-end
 
 ---@param branches string[]
 ---@param include_current? boolean
@@ -132,7 +103,7 @@ end
 ---@param include_current? boolean
 ---@return string[]
 function M.get_local_branches(include_current)
-  local result, served = twin("query_branch", "get_local_branches", include_current)
+  local result, served = libgit2.twin("query_branch", "branch", "get_local_branches", "warn", include_current)
   if served then
     return result
   end
@@ -144,7 +115,8 @@ end
 ---@param include_current? boolean
 ---@return string[]
 function M.get_remote_branches(include_current)
-  local result, served = twin("query_branch", "get_remote_branches", include_current)
+  local result, served =
+    libgit2.twin("query_branch", "branch", "get_remote_branches", "warn", include_current)
   if served then
     return result
   end
@@ -184,7 +156,7 @@ end
 ---@param branch string
 ---@return boolean
 function M.exists(branch)
-  local answer, served = twin("query_branch", "exists", branch)
+  local answer, served = libgit2.twin("query_branch", "branch", "exists", "warn", branch)
   if served then
     return answer
   end
@@ -237,7 +209,7 @@ end
 ---Returns current branch name, or nil if detached HEAD
 ---@return string|nil
 function M.current()
-  local answer, served = twin("query_branch", "current")
+  local answer, served = libgit2.twin("query_branch", "branch", "current", "warn")
   if served then
     return answer
   end
@@ -259,7 +231,7 @@ end
 function M.current_full_name()
   local current = M.current()
   if current then
-    local answer, served = twin("query_branch", "current_full_name")
+    local answer, served = libgit2.twin("query_branch", "branch", "current_full_name", "warn")
     if served then
       return answer
     end
@@ -457,7 +429,7 @@ function M.status()
   -- The twin returns nil when the repository cannot be opened; serving
   -- that nil to update_branch_information would crash the whole refresh
   -- (it indexes status.head unconditionally), so fall back to the CLI.
-  local answer, served = twin("query_branch_status", "status")
+  local answer, served = libgit2.twin("query_branch_status", "branch", "status", "warn")
   if served then
     return answer
   end
@@ -596,5 +568,10 @@ end
 M.register = function(meta)
   meta.update_branch_information = update_branch_information
 end
+
+-- Internal parser; not public API.
+M.internal = {
+  parse_branches = parse_branches,
+}
 
 return M

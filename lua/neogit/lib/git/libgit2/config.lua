@@ -89,4 +89,20 @@ function M.global_get(key)
   return value
 end
 
+---Composite twin for git.config.get_global: merged lookup mirroring
+---`git config --get <key>` (local wins), with the global/system-only
+---fallback when the merged config lacks the key. A nil return means the
+---key is unset - the dispatcher then serves the CLI, which answers the
+---same nil.
+---@param key string
+---@return string? value
+function M.get_global(key)
+  local value = M.merged_get(key)
+  if value == nil then
+    value = M.global_get(key)
+  end
+
+  return value
+end
+
 return M

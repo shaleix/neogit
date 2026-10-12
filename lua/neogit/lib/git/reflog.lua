@@ -80,4 +80,9 @@ function M.list(refname, options)
   )
 end
 
+-- Internal parser; not public API.
+M.internal = {
+  parse = parse,
+}
+
 return M

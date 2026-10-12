@@ -2,8 +2,7 @@ local git = require("neogit.lib.git")
 local config = require("neogit.config")
 local record = require("neogit.lib.record")
 local util = require("neogit.lib.util")
-local logger = require("neogit.logger")
-local backend = require("neogit.lib.git.backend")
+local libgit2 = require("neogit.lib.git.libgit2")
 
 ---@class NeogitGitRefs
 local M = {}
@@ -23,16 +22,10 @@ function M.list(namespaces, format, sortby)
   -- config.sort_branches). An explicit format OR sortby must stay on the
   -- CLI: the twin honors neither, and silently ignoring the caller's sort
   -- order is worse than one spawn.
-  if not format and not sortby and backend.capability("query_refs_listing") == "libgit2" then
-    local ok, result = xpcall(require("neogit.lib.git.libgit2.refs").list, debug.traceback, namespaces)
-    if ok and result ~= nil then
+  if not format and not sortby then
+    local result, served = libgit2.twin("query_refs_listing", "refs", "list", "debug", namespaces)
+    if served then
       return result
-    end
-
-    if not ok then
-      logger.debug("[REFS]: libgit2 listing failed - falling back to CLI:\n" .. tostring(result))
-    else
-      logger.debug("[REFS]: libgit2 listing unavailable - falling back to CLI")
     end
   end
 

@@ -3,8 +3,7 @@ local input = require("neogit.lib.input")
 local util = require("neogit.lib.util")
 local config = require("neogit.config")
 local event = require("neogit.lib.event")
-local logger = require("neogit.logger")
-local backend = require("neogit.lib.git.backend")
+local libgit2 = require("neogit.lib.git.libgit2")
 
 ---@class NeogitGitStash
 local M = {}
@@ -69,15 +68,9 @@ function M.drop(stash)
 end
 
 function M.list()
-  if backend.capability("query_stash_list") == "libgit2" then
-    local result = require("neogit.lib.git.libgit2.stash").list()
-    if result ~= nil then
-      return result
-    end
-
-    -- twin could not serve (repo open / foreach failure, logged in the
-    -- twin): fall back instead of reporting "no stashes"
-    logger.warn("[STASH]: libgit2 list unavailable - falling back to CLI")
+  local result, served = libgit2.twin("query_stash_list", "stash", "list", "warn")
+  if served then
+    return result
   end
 
   return git.cli.stash.args("list").call({ hidden = true }).stdout
@@ -123,17 +116,10 @@ function M.register(meta)
   end
 
   meta.update_stashes = function(state)
-    local entries = nil
-
     -- libgit2 twin: one foreach, oids included at no extra cost
-    if backend.capability("query_stash_list") == "libgit2" then
-      entries = require("neogit.lib.git.libgit2.stash").list_detailed()
-      if entries == nil then
-        logger.warn("[STASH]: libgit2 detailed list unavailable - falling back to CLI")
-      end
-    end
+    local entries, served = libgit2.twin("query_stash_list", "stash", "list_detailed", "warn")
 
-    if not entries then
+    if not served then
       -- CLI fallback: ONE spawn resolves index, oid and subject together
       local lines = git.cli.stash.args("list", "--format=%gd%x1f%H%x1f%gs").call({ hidden = true }).stdout
       entries = util.filter_map(lines, parse_stash_line)

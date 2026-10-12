@@ -1,7 +1,7 @@
 local git = require("neogit.lib.git")
 local client = require("neogit.client")
 local GitResult = require("neogit.lib.git.result")
-local backend = require("neogit.lib.git.backend")
+local libgit2 = require("neogit.lib.git.libgit2")
 
 ---@class NeogitGitTag
 local M = {}
@@ -80,8 +80,9 @@ function M.register(meta)
   meta.update_tags = function(state)
     state.head.tag = { name = nil, distance = nil, oid = nil }
 
-    if backend.capability("query_describe") == "libgit2" then
-      local name, distance, oid = require("neogit.lib.git.libgit2.tag").describe()
+    -- multi-return twin: served is the LAST value
+    local name, distance, oid, served = libgit2.twin("query_describe", "tag", "describe", "none")
+    if served then
       if name and distance then
         state.head.tag = { name = name, distance = distance, oid = oid }
       end

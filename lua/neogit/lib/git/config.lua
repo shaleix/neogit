@@ -1,6 +1,6 @@
 local git = require("neogit.lib.git")
 local logger = require("neogit.logger")
-local backend = require("neogit.lib.git.backend")
+local libgit2 = require("neogit.lib.git.libgit2")
 
 ---@class NeogitGitConfig
 local M = {}
@@ -94,16 +94,15 @@ end
 local function build_config()
   local result = {}
 
-  if backend.capability("query_config_build") == "libgit2" then
-    local entries = require("neogit.lib.git.libgit2.config").local_entries()
-    if entries then
-      for key, value in pairs(entries) do
-        result[key] = ConfigEntry.new(key, value, "local")
-      end
-      return result
+  local entries, served = libgit2.twin("query_config_build", "config", "local_entries", "none")
+  if served then
+    for key, value in pairs(entries) do
+      result[key] = ConfigEntry.new(key, value, "local")
     end
-    -- else: fall through to the CLI path
+    return result
   end
+
+  -- else: fall through to the CLI path
 
   local out = vim.split(
     table.concat(git.cli.config.list.null._local.call({ hidden = true, remove_ansi = false }).stdout, "\0"),
@@ -143,14 +142,8 @@ end
 
 ---@return ConfigEntry
 function M.get_global(key)
-  if backend.capability("query_config_global") == "libgit2" then
-    local libgit2_config = require("neogit.lib.git.libgit2.config")
-    -- CLI semantics: `git config --get` reads the MERGED config (local wins),
-    -- so mirror that rather than a global-only lookup.
-    local value = libgit2_config.merged_get(key)
-    if value == nil then
-      value = libgit2_config.global_get(key)
-    end
+  local value, served = libgit2.twin("query_config_global", "config", "get_global", "none", key)
+  if served then
     return ConfigEntry.new(key, value, "global")
   end
 
