@@ -380,173 +380,191 @@ M.v_unstage = function(self)
   end)
 end
 
----@param self StatusBuffer
----@return fun(): nil
-M.v_branch_popup = function(self)
-  return popups.open("branch", function(p)
-    p { commits = self.buffer.ui:get_commits_in_selection() }
-  end)
-end
+---Popup launchers are data-driven: `M.popup_specs` holds one row per popup per
+---mode, and the thin `M.n_x_popup` / `M.v_x_popup` exports below are generated
+---from it. The same table drives the status buffer's key wiring
+---(buffers/status/init.lua) and the help popup's listing
+---(popups/help/actions.lua), so each popup's context behavior is described in
+---exactly one place.
+---
+---`env` names a context extractor; "none" opens the popup without context.
+---Rows are ordered so each popup's first appearance preserves the help popup's
+---historical listing order, and `label` (set on a popup's first row) is its
+---display name there. The help popup has no label: it does not list itself.
+---@class StatusPopupSpec
+---@field name string popup name, e.g. "cherry_pick"
+---@field mode "n"|"v"
+---@field env string context extractor key, or "none"
+---@field label nil|string help popup display label
 
----@param self StatusBuffer
----@return fun(): nil
-M.v_cherry_pick_popup = function(self)
-  return popups.open("cherry_pick", function(p)
-    p { commits = self.buffer.ui:get_commits_in_selection() }
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.v_commit_popup = function(self)
-  return popups.open("commit", function(p)
+---Context extractors. Each receives the status buffer and returns the table
+---handed to the popup's create function - or nil, which skips that call and
+---leaves the popup closed (preserving the historical hand-written guards).
+---Visual-mode rows read the selection; normal-mode rows read the cursor.
+local context = {
+  ["selection-commits"] = function(self)
+    return { commits = self.buffer.ui:get_commits_in_selection() }
+  end,
+  ["first-commit"] = function(self)
     local commits = self.buffer.ui:get_commits_in_selection()
     if #commits == 1 then
-      p { commit = commits[1] }
+      return { commit = commits[1] }
     end
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.v_merge_popup = function(self)
-  return popups.open("merge", function(p)
-    local commits = self.buffer.ui:get_commits_in_selection()
-    if #commits == 1 then
-      p { commit = commits[1] }
-    end
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.v_push_popup = function(self)
-  return popups.open("push", function(p)
-    local commits = self.buffer.ui:get_commits_in_selection()
-    if #commits == 1 then
-      p { commit = commits[1] }
-    end
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.v_rebase_popup = function(self)
-  return popups.open("rebase", function(p)
-    local commits = self.buffer.ui:get_commits_in_selection()
-    if #commits == 1 then
-      p { commit = commits[1] }
-    end
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.v_revert_popup = function(self)
-  return popups.open("revert", function(p)
-    p { commits = self.buffer.ui:get_commits_in_selection() }
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.v_reset_popup = function(self)
-  return popups.open("reset", function(p)
-    local commits = self.buffer.ui:get_commits_in_selection()
-    if #commits == 1 then
-      p { commit = commits[1] }
-    end
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.v_tag_popup = function(self)
-  return popups.open("tag", function(p)
-    local commits = self.buffer.ui:get_commits_in_selection()
-    if #commits == 1 then
-      p { commit = commits[1] }
-    end
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.v_stash_popup = function(self)
-  return popups.open("stash", function(p)
+  end,
+  -- Normal mode has no selection: the commit under the cursor is the context,
+  -- either as a bare commit or wrapped in the list form some popups expect.
+  ["cursor-commit"] = function(self)
+    return { commit = self.buffer.ui:get_commit_under_cursor() }
+  end,
+  ["cursor-commit-list"] = function(self)
+    return { commits = { self.buffer.ui:get_commit_under_cursor() } }
+  end,
+  stash = function(self)
     local stash = self.buffer.ui:get_yankable_under_cursor()
-    p { name = stash and stash:match("^stash@{%d+}") }
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.v_diff_popup = function(self)
-  return popups.open("diff", function(p)
+    return { name = stash and stash:match("^stash@{%d+}") }
+  end,
+  diff = function(self)
     local section = self.buffer.ui:get_selection().section
     local item = self.buffer.ui:get_yankable_under_cursor()
-    p { section = { name = section and section.name }, item = { name = item } }
-  end)
+    return { section = { name = section and section.name }, item = { name = item } }
+  end,
+  -- Visual ignore works on the selected file paths; normal ignore on the hunk
+  -- or filename under the cursor.
+  ["ignore-visual"] = function(self)
+    return { paths = self.buffer.ui:get_filepaths_in_selection(), worktree_root = git.repo.worktree_root }
+  end,
+  ["ignore-normal"] = function(self)
+    local path = self.buffer.ui:get_hunk_or_filename_under_cursor()
+    return { paths = { path and path.escaped_path }, worktree_root = git.repo.worktree_root }
+  end,
+  margin = function(self)
+    return { buffer = self }
+  end,
+  -- Since any other popup can be launched from help, build an ENV for any of them.
+  help = function(self)
+    local path = self.buffer.ui:get_hunk_or_filename_under_cursor()
+    local section = self.buffer.ui:get_selection().section
+    local section_name
+    if section then
+      section_name = section.name
+    end
+
+    local item = self.buffer.ui:get_yankable_under_cursor()
+    local stash = self.buffer.ui:get_yankable_under_cursor()
+    local commit = self.buffer.ui:get_commit_under_cursor()
+    local commits = { commit }
+
+    -- TODO: Pass selection here so we can stage/unstage etc stuff
+    return {
+      branch = { commits = commits },
+      cherry_pick = { commits = commits },
+      commit = { commit = commit },
+      merge = { commit = commit },
+      push = { commit = commit },
+      rebase = { commit = commit },
+      revert = { commits = commits },
+      bisect = { commits = commits },
+      reset = { commit = commit },
+      tag = { commit = commit },
+      margin = { buffer = self },
+      stash = { name = stash and stash:match("^stash@{%d+}") },
+      diff = {
+        section = { name = section_name },
+        item = { name = item },
+      },
+      ignore = {
+        paths = { path and path.escaped_path },
+        worktree_root = git.repo.worktree_root,
+      },
+      remote = {},
+      fetch = {},
+      pull = {},
+      log = {},
+      worktree = {},
+    }
+  end,
+}
+
+---@param name string popup name, e.g. "cherry_pick"
+---@param env? string key into `context`, or "none"/nil for no context
+---@return fun(self: StatusBuffer): fun(): nil
+local function open_popup(name, env)
+  return function(self)
+    if not env or env == "none" then
+      return popups.open(name)
+    end
+
+    return popups.open(name, function(p)
+      local args = context[env](self)
+      if args then
+        p(args)
+      end
+    end)
+  end
 end
 
----@param self StatusBuffer
----@return fun(): nil
-M.v_ignore_popup = function(self)
-  return popups.open("ignore", function(p)
-    p { paths = self.buffer.ui:get_filepaths_in_selection(), worktree_root = git.repo.worktree_root }
-  end)
+M.popup_specs = {
+  --                 name            mode env                       help label
+  { name = "diff", mode = "v", env = "diff", label = "Diff" },
+  { name = "diff", mode = "n", env = "diff" },
+  { name = "pull", mode = "v", env = "none", label = "Pull" },
+  { name = "pull", mode = "n", env = "none" },
+  { name = "rebase", mode = "v", env = "first-commit", label = "Rebase" },
+  { name = "rebase", mode = "n", env = "cursor-commit" },
+  { name = "merge", mode = "v", env = "first-commit", label = "Merge" },
+  { name = "merge", mode = "n", env = "cursor-commit" },
+  { name = "push", mode = "v", env = "first-commit", label = "Push" },
+  { name = "push", mode = "n", env = "cursor-commit" },
+  { name = "commit", mode = "v", env = "first-commit", label = "Commit" },
+  { name = "commit", mode = "n", env = "cursor-commit" },
+  { name = "ignore", mode = "v", env = "ignore-visual", label = "Ignore" },
+  { name = "ignore", mode = "n", env = "ignore-normal" },
+  { name = "tag", mode = "v", env = "first-commit", label = "Tag" },
+  { name = "tag", mode = "n", env = "cursor-commit" },
+  { name = "log", mode = "v", env = "none", label = "Log" },
+  { name = "log", mode = "n", env = "none" },
+  { name = "margin", mode = "v", env = "margin", label = "Margin" },
+  { name = "margin", mode = "n", env = "margin" },
+  { name = "cherry_pick", mode = "v", env = "selection-commits", label = "Cherry Pick" },
+  { name = "cherry_pick", mode = "n", env = "cursor-commit-list" },
+  { name = "branch", mode = "v", env = "selection-commits", label = "Branch" },
+  { name = "branch", mode = "n", env = "cursor-commit-list" },
+  { name = "bisect", mode = "v", env = "selection-commits", label = "Bisect" },
+  { name = "bisect", mode = "n", env = "cursor-commit-list" },
+  { name = "fetch", mode = "v", env = "none", label = "Fetch" },
+  { name = "fetch", mode = "n", env = "none" },
+  { name = "reset", mode = "v", env = "first-commit", label = "Reset" },
+  { name = "reset", mode = "n", env = "cursor-commit" },
+  { name = "revert", mode = "v", env = "selection-commits", label = "Revert" },
+  { name = "revert", mode = "n", env = "cursor-commit-list" },
+  { name = "remote", mode = "v", env = "none", label = "Remote" },
+  { name = "remote", mode = "n", env = "none" },
+  { name = "worktree", mode = "v", env = "none", label = "Worktree" },
+  { name = "worktree", mode = "n", env = "none" },
+  { name = "stash", mode = "v", env = "stash", label = "Stash" },
+  { name = "stash", mode = "n", env = "stash" },
+  { name = "help", mode = "v", env = "none" },
+  { name = "help", mode = "n", env = "help" },
+}
+
+-- Generate the thin per-mode exports (M.n_branch_popup, M.v_stash_popup, ...)
+-- that the status buffer's key wiring and the help popup resolve by name.
+for _, spec in ipairs(M.popup_specs) do
+  M[spec.mode .. "_" .. spec.name .. "_popup"] = open_popup(spec.name, spec.env)
 end
 
----@param self StatusBuffer
----@return fun(): nil
-M.v_bisect_popup = function(self)
-  return popups.open("bisect", function(p)
-    p { commits = self.buffer.ui:get_commits_in_selection() }
-  end)
-end
-
----@param _self StatusBuffer
----@return fun(): nil
-M.v_remote_popup = function(_self)
-  return popups.open("remote")
-end
-
----@param _self StatusBuffer
----@return fun(): nil
-M.v_fetch_popup = function(_self)
-  return popups.open("fetch")
-end
-
----@param _self StatusBuffer
----@return fun(): nil
-M.v_pull_popup = function(_self)
-  return popups.open("pull")
-end
-
----@param _self StatusBuffer
----@return fun(): nil
-M.v_help_popup = function(_self)
-  return popups.open("help")
-end
-
----@param _self StatusBuffer
----@return fun(): nil
-M.v_log_popup = function(_self)
-  return popups.open("log")
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.v_margin_popup = function(self)
-  return popups.open("margin", function(p)
-    p { buffer = self }
-  end)
-end
-
----@param _self StatusBuffer
----@return fun(): nil
-M.v_worktree_popup = function(_self)
-  return popups.open("worktree")
+---The popup command name ("CherryPickPopup") for a popup name ("cherry_pick"),
+---matching the values of config.mappings.popup.
+---@param name string popup name
+---@return string
+function M.command_name(name)
+  return (
+    name
+      :gsub("_(%a)", function(char)
+        return char:upper()
+      end)
+      :gsub("^%a", string.upper)
+  ) .. "Popup"
 end
 
 ---True when the cursor rests on a Recent Commits Connector Row (the Commit
@@ -1547,206 +1565,6 @@ M.n_vertical_split_open = function(self)
       open("vsplit", item.absolute_path, translate_cursor_location(self, item))
     end
   end
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.n_branch_popup = function(self)
-  return popups.open("branch", function(p)
-    p { commits = { self.buffer.ui:get_commit_under_cursor() } }
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.n_bisect_popup = function(self)
-  return popups.open("bisect", function(p)
-    p { commits = { self.buffer.ui:get_commit_under_cursor() } }
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.n_cherry_pick_popup = function(self)
-  return popups.open("cherry_pick", function(p)
-    p { commits = { self.buffer.ui:get_commit_under_cursor() } }
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.n_commit_popup = function(self)
-  return popups.open("commit", function(p)
-    p { commit = self.buffer.ui:get_commit_under_cursor() }
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.n_merge_popup = function(self)
-  return popups.open("merge", function(p)
-    p { commit = self.buffer.ui:get_commit_under_cursor() }
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.n_push_popup = function(self)
-  return popups.open("push", function(p)
-    p { commit = self.buffer.ui:get_commit_under_cursor() }
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.n_rebase_popup = function(self)
-  return popups.open("rebase", function(p)
-    p { commit = self.buffer.ui:get_commit_under_cursor() }
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.n_revert_popup = function(self)
-  return popups.open("revert", function(p)
-    p { commits = { self.buffer.ui:get_commit_under_cursor() } }
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.n_reset_popup = function(self)
-  return popups.open("reset", function(p)
-    p { commit = self.buffer.ui:get_commit_under_cursor() }
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.n_tag_popup = function(self)
-  return popups.open("tag", function(p)
-    p { commit = self.buffer.ui:get_commit_under_cursor() }
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.n_stash_popup = function(self)
-  return popups.open("stash", function(p)
-    local stash = self.buffer.ui:get_yankable_under_cursor()
-    p { name = stash and stash:match("^stash@{%d+}") }
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.n_diff_popup = function(self)
-  return popups.open("diff", function(p)
-    local section = self.buffer.ui:get_selection().section
-    local item = self.buffer.ui:get_yankable_under_cursor()
-    p {
-      section = { name = section and section.name },
-      item = { name = item },
-    }
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.n_ignore_popup = function(self)
-  return popups.open("ignore", function(p)
-    local path = self.buffer.ui:get_hunk_or_filename_under_cursor()
-    p {
-      paths = { path and path.escaped_path },
-      worktree_root = git.repo.worktree_root,
-    }
-  end)
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.n_help_popup = function(self)
-  return popups.open("help", function(p)
-    -- Since any other popup can be launched from help, build an ENV for any of them.
-    local path = self.buffer.ui:get_hunk_or_filename_under_cursor()
-    local section = self.buffer.ui:get_selection().section
-    local section_name
-    if section then
-      section_name = section.name
-    end
-
-    local item = self.buffer.ui:get_yankable_under_cursor()
-    local stash = self.buffer.ui:get_yankable_under_cursor()
-    local commit = self.buffer.ui:get_commit_under_cursor()
-    local commits = { commit }
-
-    -- TODO: Pass selection here so we can stage/unstage etc stuff
-    p {
-      branch = { commits = commits },
-      cherry_pick = { commits = commits },
-      commit = { commit = commit },
-      merge = { commit = commit },
-      push = { commit = commit },
-      rebase = { commit = commit },
-      revert = { commits = commits },
-      bisect = { commits = commits },
-      reset = { commit = commit },
-      tag = { commit = commit },
-      margin = { buffer = self },
-      stash = { name = stash and stash:match("^stash@{%d+}") },
-      diff = {
-        section = { name = section_name },
-        item = { name = item },
-      },
-      ignore = {
-        paths = { path and path.escaped_path },
-        worktree_root = git.repo.worktree_root,
-      },
-      remote = {},
-      fetch = {},
-      pull = {},
-      log = {},
-      worktree = {},
-    }
-  end)
-end
-
----@param _self StatusBuffer
----@return fun(): nil
-M.n_remote_popup = function(_self)
-  return popups.open("remote")
-end
-
----@param _self StatusBuffer
----@return fun(): nil
-M.n_fetch_popup = function(_self)
-  return popups.open("fetch")
-end
-
----@param _self StatusBuffer
----@return fun(): nil
-M.n_pull_popup = function(_self)
-  return popups.open("pull")
-end
-
----@param _self StatusBuffer
----@return fun(): nil
-M.n_log_popup = function(_self)
-  return popups.open("log")
-end
-
----@param self StatusBuffer
----@return fun(): nil
-M.n_margin_popup = function(self)
-  return popups.open("margin", function(p)
-    p { buffer = self }
-  end)
-end
-
----@param _self StatusBuffer
----@return fun(): nil
-M.n_worktree_popup = function(_self)
-  return popups.open("worktree")
 end
 
 ---@param self StatusBuffer

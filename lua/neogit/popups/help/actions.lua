@@ -44,6 +44,7 @@ end
 
 M.popups = function(env)
   local popups = require("neogit.popups")
+  local status_actions = require("neogit.buffers.status.actions")
   local items = {
     {
       "CommandHistory",
@@ -53,70 +54,25 @@ M.popups = function(env)
       end,
     },
     { "InitRepo", "Init", require("neogit.lib.git").init.init_repo },
-    -- { "HelpPopup", "Help", M.open("help") },
-    { "DiffPopup", "Diff", popups.open("diff", function(p)
-      p(env.diff)
-    end) },
-    { "PullPopup", "Pull", popups.open("pull", function(p)
-      p(env.pull)
-    end) },
-    { "RebasePopup", "Rebase", popups.open("rebase", function(p)
-      p(env.rebase)
-    end) },
-    { "MergePopup", "Merge", popups.open("merge", function(p)
-      p(env.merge)
-    end) },
-    { "PushPopup", "Push", popups.open("push", function(p)
-      p(env.push)
-    end) },
-    { "CommitPopup", "Commit", popups.open("commit", function(p)
-      p(env.commit)
-    end) },
-    { "IgnorePopup", "Ignore", popups.open("ignore", function(p)
-      p(env.ignore)
-    end) },
-    { "TagPopup", "Tag", popups.open("tag", function(p)
-      p(env.tag)
-    end) },
-    { "LogPopup", "Log", popups.open("log", function(p)
-      p(env.log)
-    end) },
-    { "MarginPopup", "Margin", popups.open("margin", function(p)
-      p(env.margin)
-    end) },
-    {
-      "CherryPickPopup",
-      "Cherry Pick",
-      popups.open("cherry_pick", function(p)
-        p(env.cherry_pick)
-      end),
-    },
-    { "BranchPopup", "Branch", popups.open("branch", function(p)
-      p(env.branch)
-    end) },
-    { "BisectPopup", "Bisect", popups.open("bisect", function(p)
-      p(env.bisect)
-    end) },
-    { "FetchPopup", "Fetch", popups.open("fetch", function(p)
-      p(env.fetch)
-    end) },
-    { "ResetPopup", "Reset", popups.open("reset", function(p)
-      p(env.reset)
-    end) },
-    { "RevertPopup", "Revert", popups.open("revert", function(p)
-      p(env.revert)
-    end) },
-    { "RemotePopup", "Remote", popups.open("remote", function(p)
-      p(env.remote)
-    end) },
-    { "WorktreePopup", "Worktree", popups.open("worktree", function(p)
-      p(env.worktree)
-    end) },
-    { "StashPopup", "Stash", popups.open("stash", function(p)
-      p(env.stash)
-    end) },
-    { "Command", "Command", require("neogit.buffers.status.actions").n_command(nil) },
   }
+
+  -- Popup entries are generated from the shared spec table in
+  -- buffers/status/actions.lua: a row with a label lists its popup (in the
+  -- table's first-appearance order), so the help popup and the status buffer
+  -- can never disagree about which popups exist.
+  for _, spec in ipairs(status_actions.popup_specs) do
+    if spec.label then
+      table.insert(items, {
+        status_actions.command_name(spec.name),
+        spec.label,
+        popups.open(spec.name, function(p)
+          p(env[spec.name])
+        end),
+      })
+    end
+  end
+
+  table.insert(items, { "Command", "Command", status_actions.n_command(nil) })
 
   return present(items)
 end

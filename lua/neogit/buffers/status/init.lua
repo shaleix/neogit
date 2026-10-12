@@ -222,6 +222,80 @@ function M:open(kind)
 
   local mappings = config.get_reversed_status_maps()
 
+  -- Popup launches are wired from the shared spec table in
+  -- buffers/status/actions.lua: one row per popup per mode names the popup,
+  -- its mode, and the context extractor it hands to the popup.
+  local status_actions = require("neogit.buffers.status.actions")
+
+  local mode_mappings = {
+    v = {
+      [mappings["Discard"]] = self:_action("v_discard"),
+      [mappings["Reverse"]] = self:_action("v_reverse"),
+      [mappings["Stage"]] = self:_action("v_stage"),
+      [mappings["Unstage"]] = self:_action("v_unstage"),
+      [mappings["Untrack"]] = self:_action("v_untrack"),
+    },
+    n = {
+      [mappings["Command"]] = self:_action("n_command"),
+      [mappings["OpenTree"]] = self:_action("n_open_tree"),
+      [mappings["MoveDown"]] = self:_action("n_down"),
+      [mappings["MoveUp"]] = self:_action("n_up"),
+      [mappings["Untrack"]] = self:_action("n_untrack"),
+      [mappings["Rename"]] = self:_action("n_rename"),
+      [mappings["Toggle"]] = self:_action("n_toggle"),
+      [mappings["OpenFold"]] = self:_action("n_open_fold"),
+      [mappings["CloseFold"]] = self:_action("n_close_fold"),
+      [mappings["Close"]] = self:_action("n_close"),
+      [mappings["OpenOrScrollDown"]] = self:_action("n_open_or_scroll_down"),
+      [mappings["OpenOrScrollUp"]] = self:_action("n_open_or_scroll_up"),
+      [mappings["RefreshBuffer"]] = self:_action("n_refresh_buffer"),
+      [mappings["Depth1"]] = self:_action("n_depth1"),
+      [mappings["Depth2"]] = self:_action("n_depth2"),
+      [mappings["Depth3"]] = self:_action("n_depth3"),
+      [mappings["Depth4"]] = self:_action("n_depth4"),
+      [mappings["CommandHistory"]] = self:_action("n_command_history"),
+      [mappings["ShowRefs"]] = self:_action("n_show_refs"),
+      [mappings["YankSelected"]] = self:_action("n_yank_selected"),
+      [mappings["Discard"]] = self:_action("n_discard"),
+      [mappings["Reverse"]] = self:_action("n_reverse"),
+      [mappings["GoToNextHunkHeader"]] = self:_action("n_go_to_next_hunk_header"),
+      [mappings["GoToPreviousHunkHeader"]] = self:_action("n_go_to_previous_hunk_header"),
+      [mappings["InitRepo"]] = self:_action("n_init_repo"),
+      [mappings["Stage"]] = self:_action("n_stage"),
+      [mappings["StageAll"]] = self:_action("n_stage_all"),
+      [mappings["StageUnstaged"]] = self:_action("n_stage_unstaged"),
+      [mappings["Unstage"]] = self:_action("n_unstage"),
+      [mappings["UnstageStaged"]] = self:_action("n_unstage_staged"),
+      [mappings["GoToFile"]] = self:_action("n_goto_file"),
+      [mappings["GoToParentRepo"]] = self:_action("n_goto_parent_repo"),
+      [mappings["TabOpen"]] = self:_action("n_tab_open"),
+      [mappings["SplitOpen"]] = self:_action("n_split_open"),
+      [mappings["VSplitOpen"]] = self:_action("n_vertical_split_open"),
+      [mappings["NextSection"]] = self:_action("n_next_section"),
+      [mappings["PreviousSection"]] = self:_action("n_prev_section"),
+      ["V"] = function()
+        vim.cmd("norm! V")
+      end,
+      -- scroll the diff preview split when it is open; otherwise keep
+      -- native half-page scrolling on the status buffer
+      ["<C-d>"] = function()
+        if not require("neogit.buffers.diff_preview").scroll("<C-d>") then
+          vim.cmd(("normal! %d<C-d>"):format(vim.v.count1))
+        end
+      end,
+      ["<C-u>"] = function()
+        if not require("neogit.buffers.diff_preview").scroll("<C-u>") then
+          vim.cmd(("normal! %d<C-u>"):format(vim.v.count1))
+        end
+      end,
+    },
+  }
+
+  for _, spec in ipairs(status_actions.popup_specs) do
+    mode_mappings[spec.mode][popups.mapping_for(status_actions.command_name(spec.name))] =
+      self:_action(spec.mode .. "_" .. spec.name .. "_popup")
+  end
+
   self.buffer = Buffer.create {
     -- One buffer per repository: a fixed name made the second repository's
     -- status view reuse the first one's buffer (same name => same buffer),
@@ -245,111 +319,7 @@ function M:open(kind)
         vim.o.autochdir = self.prev_autochdir
       end
     end,
-    --stylua: ignore start
-    mappings = {
-      v = {
-        [mappings["Discard"]]                   = self:_action("v_discard"),
-        [mappings["Reverse"]]                   = self:_action("v_reverse"),
-        [mappings["Stage"]]                     = self:_action("v_stage"),
-        [mappings["Unstage"]]                   = self:_action("v_unstage"),
-        [mappings["Untrack"]]                   = self:_action("v_untrack"),
-        [popups.mapping_for("BisectPopup")]     = self:_action("v_bisect_popup"),
-        [popups.mapping_for("BranchPopup")]     = self:_action("v_branch_popup"),
-        [popups.mapping_for("CherryPickPopup")] = self:_action("v_cherry_pick_popup"),
-        [popups.mapping_for("CommitPopup")]     = self:_action("v_commit_popup"),
-        [popups.mapping_for("DiffPopup")]       = self:_action("v_diff_popup"),
-        [popups.mapping_for("FetchPopup")]      = self:_action("v_fetch_popup"),
-        [popups.mapping_for("HelpPopup")]       = self:_action("v_help_popup"),
-        [popups.mapping_for("IgnorePopup")]     = self:_action("v_ignore_popup"),
-        [popups.mapping_for("LogPopup")]        = self:_action("v_log_popup"),
-        [popups.mapping_for("MarginPopup")]     = self:_action("v_margin_popup"),
-        [popups.mapping_for("MergePopup")]      = self:_action("v_merge_popup"),
-        [popups.mapping_for("PullPopup")]       = self:_action("v_pull_popup"),
-        [popups.mapping_for("PushPopup")]       = self:_action("v_push_popup"),
-        [popups.mapping_for("RebasePopup")]     = self:_action("v_rebase_popup"),
-        [popups.mapping_for("RemotePopup")]     = self:_action("v_remote_popup"),
-        [popups.mapping_for("ResetPopup")]      = self:_action("v_reset_popup"),
-        [popups.mapping_for("RevertPopup")]     = self:_action("v_revert_popup"),
-        [popups.mapping_for("StashPopup")]      = self:_action("v_stash_popup"),
-        [popups.mapping_for("TagPopup")]        = self:_action("v_tag_popup"),
-        [popups.mapping_for("WorktreePopup")]   = self:_action("v_worktree_popup"),
-      },
-      n = {
-        [mappings["Command"]]                   = self:_action("n_command"),
-        [mappings["OpenTree"]]                  = self:_action("n_open_tree"),
-        [mappings["MoveDown"]]                  = self:_action("n_down"),
-        [mappings["MoveUp"]]                    = self:_action("n_up"),
-        [mappings["Untrack"]]                   = self:_action("n_untrack"),
-        [mappings["Rename"]]                    = self:_action("n_rename"),
-        [mappings["Toggle"]]                    = self:_action("n_toggle"),
-        [mappings["OpenFold"]]                  = self:_action("n_open_fold"),
-        [mappings["CloseFold"]]                 = self:_action("n_close_fold"),
-        [mappings["Close"]]                     = self:_action("n_close"),
-        [mappings["OpenOrScrollDown"]]          = self:_action("n_open_or_scroll_down"),
-        [mappings["OpenOrScrollUp"]]            = self:_action("n_open_or_scroll_up"),
-        [mappings["RefreshBuffer"]]             = self:_action("n_refresh_buffer"),
-        [mappings["Depth1"]]                    = self:_action("n_depth1"),
-        [mappings["Depth2"]]                    = self:_action("n_depth2"),
-        [mappings["Depth3"]]                    = self:_action("n_depth3"),
-        [mappings["Depth4"]]                    = self:_action("n_depth4"),
-        [mappings["CommandHistory"]]            = self:_action("n_command_history"),
-        [mappings["ShowRefs"]]                  = self:_action("n_show_refs"),
-        [mappings["YankSelected"]]              = self:_action("n_yank_selected"),
-        [mappings["Discard"]]                   = self:_action("n_discard"),
-        [mappings["Reverse"]]                   = self:_action("n_reverse"),
-        [mappings["GoToNextHunkHeader"]]        = self:_action("n_go_to_next_hunk_header"),
-        [mappings["GoToPreviousHunkHeader"]]    = self:_action("n_go_to_previous_hunk_header"),
-        [mappings["InitRepo"]]                  = self:_action("n_init_repo"),
-        [mappings["Stage"]]                     = self:_action("n_stage"),
-        [mappings["StageAll"]]                  = self:_action("n_stage_all"),
-        [mappings["StageUnstaged"]]             = self:_action("n_stage_unstaged"),
-        [mappings["Unstage"]]                   = self:_action("n_unstage"),
-        [mappings["UnstageStaged"]]             = self:_action("n_unstage_staged"),
-        [mappings["GoToFile"]]                  = self:_action("n_goto_file"),
-        [mappings["GoToParentRepo"]]            = self:_action("n_goto_parent_repo"),
-        [mappings["TabOpen"]]                   = self:_action("n_tab_open"),
-        [mappings["SplitOpen"]]                 = self:_action("n_split_open"),
-        [mappings["VSplitOpen"]]                = self:_action("n_vertical_split_open"),
-        [mappings["NextSection"]]               = self:_action("n_next_section"),
-        [mappings["PreviousSection"]]           = self:_action("n_prev_section"),
-        [popups.mapping_for("BisectPopup")]     = self:_action("n_bisect_popup"),
-        [popups.mapping_for("BranchPopup")]     = self:_action("n_branch_popup"),
-        [popups.mapping_for("CherryPickPopup")] = self:_action("n_cherry_pick_popup"),
-        [popups.mapping_for("CommitPopup")]     = self:_action("n_commit_popup"),
-        [popups.mapping_for("DiffPopup")]       = self:_action("n_diff_popup"),
-        [popups.mapping_for("FetchPopup")]      = self:_action("n_fetch_popup"),
-        [popups.mapping_for("HelpPopup")]       = self:_action("n_help_popup"),
-        [popups.mapping_for("IgnorePopup")]     = self:_action("n_ignore_popup"),
-        [popups.mapping_for("LogPopup")]        = self:_action("n_log_popup"),
-        [popups.mapping_for("MarginPopup")]     = self:_action("n_margin_popup"),
-        [popups.mapping_for("MergePopup")]      = self:_action("n_merge_popup"),
-        [popups.mapping_for("PullPopup")]       = self:_action("n_pull_popup"),
-        [popups.mapping_for("PushPopup")]       = self:_action("n_push_popup"),
-        [popups.mapping_for("RebasePopup")]     = self:_action("n_rebase_popup"),
-        [popups.mapping_for("RemotePopup")]     = self:_action("n_remote_popup"),
-        [popups.mapping_for("ResetPopup")]      = self:_action("n_reset_popup"),
-        [popups.mapping_for("RevertPopup")]     = self:_action("n_revert_popup"),
-        [popups.mapping_for("StashPopup")]      = self:_action("n_stash_popup"),
-        [popups.mapping_for("TagPopup")]        = self:_action("n_tag_popup"),
-        [popups.mapping_for("WorktreePopup")]   = self:_action("n_worktree_popup"),
-        ["V"]                                   = function()
-          vim.cmd("norm! V")
-        end,
-        -- scroll the diff preview split when it is open; otherwise keep
-        -- native half-page scrolling on the status buffer
-        ["<C-d>"] = function()
-          if not require("neogit.buffers.diff_preview").scroll("<C-d>") then
-            vim.cmd(("normal! %d<C-d>"):format(vim.v.count1))
-          end
-        end,
-        ["<C-u>"] = function()
-          if not require("neogit.buffers.diff_preview").scroll("<C-u>") then
-            vim.cmd(("normal! %d<C-u>"):format(vim.v.count1))
-          end
-        end,
-      },
-    },
-    --stylua: ignore end
+    mappings = mode_mappings,
     user_mappings = config.get_user_mappings("status"),
     initialize = function()
       self.prev_autochdir = vim.o.autochdir
