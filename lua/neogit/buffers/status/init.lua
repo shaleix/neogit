@@ -259,6 +259,7 @@ function M:open(kind)
       [mappings["CommandHistory"]] = self:_action("n_command_history"),
       [mappings["ShowRefs"]] = self:_action("n_show_refs"),
       [mappings["YankSelected"]] = self:_action("n_yank_selected"),
+      [mappings["PopStash"]] = self:_action("n_pop_stash"),
       [mappings["Discard"]] = self:_action("n_discard"),
       [mappings["Reverse"]] = self:_action("n_reverse"),
       [mappings["GoToNextHunkHeader"]] = self:_action("n_go_to_next_hunk_header"),

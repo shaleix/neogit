@@ -800,6 +800,25 @@ M.n_yank_selected = function(self)
   end
 end
 
+---Pop the stash under the cursor ("stash@{N}" from the Stashes section) after
+---confirmation. Anywhere else the cursor has no stash and nothing happens.
+---@param self StatusBuffer
+---@return fun(): nil
+M.n_pop_stash = function(self)
+  return a.void(function()
+    local yankable = self.buffer.ui:get_yankable_under_cursor()
+    local stash = yankable and yankable:match("^stash@{%d+}")
+    if not stash then
+      return
+    end
+
+    if input.get_permission(("Pop stash '%s'?"):format(stash)) then
+      git.stash.pop(stash)
+      self:dispatch_refresh({ update_diffs = { "*:*" } }, "n_pop_stash")
+    end
+  end)
+end
+
 ---Conflict-side discard ("Discard File" on a conflicted unstaged item):
 ---prompts for ours/theirs/conflict and applies the choice. Every resolution
 ---re-stages the file; abort does nothing.
