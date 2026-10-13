@@ -13,6 +13,11 @@ function M.setup()
       local config = require("neogit.config")
       local highlight = require("neogit.lib.hl")
 
+      -- Stop the banner fade-in BEFORE hl.setup re-runs: both write the
+      -- NeogitStatusBanner groups, so the animation's frames would clobber
+      -- (or be clobbered by) the fresh colorscheme definitions.
+      require("neogit.lib.banner_transition").stop()
+
       highlight.setup(config.values)
     end,
     group = group,

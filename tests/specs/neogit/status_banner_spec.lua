@@ -68,11 +68,22 @@ local function buffer_contains(buf, needle)
   return false
 end
 
+-- Open the status buffer WITHOUT triggering (or waiting for) the refresh:
+-- the cold-open state, where the loading placeholder render is live.
+local function open_cold(dir)
+  vim.cmd.cd(dir)
+  Repo.instance(dir, { autorefresh = false })
+  local buf = status_buf.new(config.values, Repo.instance(dir).worktree_root, dir)
+  buf:open("split")
+  return buf
+end
+
 neogit.setup { filewatcher = { enabled = false }, disable_context_highlighting = true }
 
 describe("status buffer banner", function()
   after_each(function()
     config.values.status.show_banner = true
+    config.values.status.banner_animation = true
     vim.cmd("silent! %bwipeout!")
   end)
 
@@ -119,6 +130,33 @@ describe("status buffer banner", function()
 
     assert.falsy(buffer_contains(buf, "║╚╗║"), "the banner must respect the config switch")
     assert.falsy(buffer_contains(buf, "────"), "the divider must respect the config switch")
+  end)
+
+  it("renders the banner above the loading line on cold open", function()
+    -- The fade-in only touches highlight groups, but keep it off so the
+    -- content assertions below run against a fully static render.
+    config.values.status.banner_animation = false
+    local dir = workdir()
+    local buf = open_cold(dir)
+
+    assert.truthy(buffer_contains(buf, "╔╗ ╦ ╔═╗"), "banner must render while loading")
+    assert.truthy(buffer_contains(buf, "Loading repository state…"), "loading line must render")
+    assert.falsy(buffer_contains(buf, "tracked.txt"), "no file sections may render while loading")
+
+    -- Banner first: the loading placeholder leads with the same title the
+    -- real content will carry, so the window layout does not shift.
+    local lines = buffer_lines(buf)
+    assert.truthy(lines[1]:find("╔╗ ╦ ╔═╗", 1, true), "banner must be the topmost content")
+  end)
+
+  it("honors status.show_banner = false on the loading render too", function()
+    config.values.status.show_banner = false
+    local dir = workdir()
+    local buf = open_cold(dir)
+
+    assert.truthy(buffer_contains(buf, "Loading repository state…"), "loading line must still render")
+    assert.falsy(buffer_contains(buf, "║╚╗║"), "banner must not render while loading")
+    assert.falsy(buffer_contains(buf, "────"), "divider must not render while loading")
   end)
 
   it("re-centers the banner and resizes the divider on window resize", function()

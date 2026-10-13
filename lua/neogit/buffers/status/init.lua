@@ -8,6 +8,7 @@ local Watcher = require("neogit.watcher")
 local a = require("neogit.lib.async")
 local logger = require("neogit.logger") -- TODO: Add logging
 local event = require("neogit.lib.event")
+local banner_transition = require("neogit.lib.banner_transition")
 
 ---@class Semaphore
 ---@field permits number
@@ -314,6 +315,9 @@ function M:open(kind)
     foldmarkers = not config.values.disable_signs,
     active_item_highlight = true,
     on_detach = function()
+      -- Buffer gone mid-fade: restore the captured group definitions so the
+      -- banner transition cannot leak past the status buffer's lifetime.
+      banner_transition.finish()
       Watcher.instance(self.root):unregister(self)
       require("neogit.buffers.diff_preview").close()
 
@@ -327,14 +331,22 @@ function M:open(kind)
       self.prev_autochdir = vim.o.autochdir
       vim.o.autochdir = false
     end,
-    render = function()
+    render = function(buffer)
       -- Cold open: the first refresh wave (which fetches status, HEAD commit
       -- info, recent commits, ...) is still in flight and state is empty, so
       -- render the loading placeholder. The refresh completion callback's
       -- redraw replaces it with real content. Warm re-opens of an already
       -- refreshed repo render the existing state directly.
       local repo = Repo.instance(self.cwd)
-      return ui.Status(repo.state, self.config, not repo._refreshed)
+      -- Same width the real render (redraw) uses, so the banner does not
+      -- jump sideways when the loading placeholder is replaced. The buffer
+      -- arrives as an argument here: self.buffer is not assigned until
+      -- Buffer.create returns, after this render has run.
+      local width = nil
+      if buffer.win_handle and vim.api.nvim_win_is_valid(buffer.win_handle) then
+        width = vim.api.nvim_win_get_width(buffer.win_handle)
+      end
+      return ui.Status(repo.state, self.config, not repo._refreshed, width)
     end,
     ---@param buffer Buffer
     ---@param _win any
@@ -371,6 +383,13 @@ function M:open(kind)
       end,
     },
   }
+
+  -- Banner fade-in: cold open only (first refresh wave still in flight).
+  -- Warm re-opens of an already-refreshed repo skip it, later redraws never
+  -- restart it, and the refresh completion callback finishes it.
+  if not Repo.instance(self.cwd)._refreshed then
+    banner_transition.start(self.buffer.handle)
+  end
 
   -- Window-width tracking for the banner. These MUST be global, not
   -- buffer-local: buffer-local WinResized only fires while this buffer is
@@ -469,6 +488,9 @@ function M:refresh(partial, reason)
     source = "status",
     partial = partial,
     callback = function()
+      -- First refresh wave after a cold open landed: stop the banner fade-in
+      -- and jump its groups back to their exact definitions.
+      banner_transition.finish()
       self:redraw(cursor, view)
       event.send("StatusRefreshed")
       logger.info("[STATUS] Refresh complete")

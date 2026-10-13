@@ -669,15 +669,22 @@ end)
 ---@param state NeogitRepoState
 ---@param config NeogitConfig
 ---@param loading boolean? True while the first refresh wave is still in
----flight (cold open): renders a placeholder line instead of an empty buffer.
+---flight (cold open): renders the banner (config-gated) plus a placeholder
+---line instead of an empty buffer.
 ---The first redraw — the refresh completion callback — replaces it.
 ---@param width integer? Visible width of the status window, used to center
 ---the title banner.
 function M.Status(state, config, loading, width)
   if loading then
+    -- Cold open still leads with the banner: it anchors the layout and the
+    -- fade-in animation targets its highlight groups, so it must exist from
+    -- the very first frame the window shows.
+    local show_banner = config.status.show_banner ~= false
     return {
       List {
         items = {
+          show_banner and BANNER { width = width },
+          show_banner and EmptyLine(),
           row {
             text.highlight("NeogitSubtleText")("Loading repository state…"),
           },

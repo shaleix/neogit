@@ -82,3 +82,19 @@ column — directly under the parent row's leading glyph — `│` while later
 siblings follow, `└` on the last child's own row. The base column under a
 section header never carries a marker.
 _Avoid_: graph lines (that's Commit Graph), tree connectors
+
+### Cold Open
+
+The span between opening the status buffer and the completion of its first
+refresh wave: the buffer paints the banner and a loading line, and the
+Banner Transition (when enabled) plays. Ends the moment repository state
+first becomes ready.
+_Avoid_: first open (session-dependent), startup, splash screen
+
+### Banner Transition
+
+The Cold Open animation that eases the banner from a dim start to its final
+gradient colors, frame by frame, ending early — jumping straight to the
+final colors — when repository state becomes ready first. Never plays on
+later opens, and never shows without the banner.
+_Avoid_: loading banner (that's the in-buffer operation indicator), spinner

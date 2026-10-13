@@ -106,6 +106,11 @@ describe("Neogit config", function()
         assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
       end)
 
+      it("should return invalid when status.banner_animation isn't a boolean", function()
+        config.values.status.banner_animation = "not a boolean"
+        assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)
+      end)
+
       it("should return invalid when commit_editor isn't a table", function()
         config.values.commit_editor = "not a table"
         assert.True(vim.tbl_count(require("neogit.config").validate_config()) ~= 0)

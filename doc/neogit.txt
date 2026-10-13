@@ -289,6 +289,9 @@ diffs. The buffer is a snapshot - it never refreshes; close it with `q` or
         -- Show a large ASCII-art "NEOGIT" title centered at the top of the
         -- status buffer (mcphub.nvim-style header)
         show_banner = true,
+        -- Play a short brightness fade-in on the banner while the status
+        -- buffer loads (set to false to render it statically)
+        banner_animation = true,
         -- Show lazygit-style per-file "+N/-M" line counts after each file
         -- name (from two bulk `git diff --numstat` calls per refresh)
         file_line_counts = true,

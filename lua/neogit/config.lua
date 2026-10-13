@@ -320,6 +320,7 @@ end
 ---@field mode_padding? integer The amount of padding to add to the right of the mode column
 ---@field mode_text? { [string]: string } The text to display for each mode
 ---@field show_banner? boolean Show a large ASCII-art title at the top of the status buffer (default true)
+---@field banner_animation? boolean Play a short brightness fade-in on the banner while the status buffer loads (default true)
 ---@field show_no_changes? boolean Show a "No changes" placeholder when the worktree has no file changes (default true)
 ---@field file_line_counts? boolean Show lazygit-style per-file "+N/-M" line counts after each file name (default true)
 ---@field diff_preview? NeogitConfigDiffPreview Render file diffs in the preview split - the standard and only diff view for the status buffer
@@ -522,6 +523,8 @@ function M.get_default_values()
       -- Large ASCII-art "NEOGIT" title centered at the top of the status
       -- buffer (mcphub.nvim-style header).
       show_banner = true,
+      -- Brightness fade-in on the banner during the cold-open loading phase.
+      banner_animation = true,
       -- Show a subtle "No changes" placeholder in place of the file sections
       -- when the worktree is clean, instead of them silently vanishing.
       show_no_changes = true,
@@ -1207,6 +1210,7 @@ function M.validate_config()
     validate_type(config.auto_close_console, "auto_close_console", "boolean")
     if validate_type(config.status, "status", "table") then
       validate_type(config.status.show_banner, "status.show_banner", { "boolean", "nil" })
+      validate_type(config.status.banner_animation, "status.banner_animation", { "boolean", "nil" })
       validate_type(config.status.show_no_changes, "status.show_no_changes", { "boolean", "nil" })
       validate_type(config.status.file_line_counts, "status.file_line_counts", { "boolean", "nil" })
       validate_type(config.status.recent_commit_count, "status.recent_commit_count", "number")
