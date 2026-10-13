@@ -178,7 +178,12 @@ describe("status diff_preview", function()
   end)
 
   it("floats the preview below the banner when the banner is shown", function()
-    config.values.status.diff_preview = { enabled = true, kind = "vsplit", debounce = 50 }
+    -- below_cursor_width pinned to 0 (disabled): this test asserts the
+    -- right-side layout, and the headless runner's status window is narrower
+    -- than the default threshold (100 columns), which would legitimately
+    -- flip the float into the below-cursor layout.
+    config.values.status.diff_preview =
+      { enabled = true, kind = "vsplit", debounce = 50, below_cursor_width = 0 }
     local dir = workdir()
     local buf = open_status(dir)
     config.values.status.show_banner = true
@@ -223,6 +228,158 @@ describe("status diff_preview", function()
 
     -- focus stays in the status buffer
     assert.equal(buf.buffer.handle, vim.api.nvim_get_current_buf())
+  end)
+
+  it("floats the preview below the cursor when the status window is narrow", function()
+    -- huge threshold: any status window counts as narrow, forcing the
+    -- below-cursor layout regardless of the runner's editor size
+    config.values.status.diff_preview =
+      { enabled = true, kind = "vsplit", debounce = 50, below_cursor_width = 10000 }
+    local dir = workdir()
+    local buf = open_status(dir)
+    config.values.status.show_banner = true
+
+    cursor_onto(buf, "tracked.txt")
+
+    local preview = require("neogit.buffers.diff_preview")
+    assert.truthy(
+      vim.wait(5000, function()
+        return preview.is_open()
+      end),
+      "preview window must open"
+    )
+
+    local win = vim.fn.bufwinid(preview.buffer_handle())
+    assert.truthy(win ~= -1, "preview window must be visible")
+
+    local cfg = vim.api.nvim_win_get_config(win)
+    assert.equal("editor", cfg.relative, "the below-cursor float is editor-relative")
+    assert.equal("NW", cfg.anchor, "the below-cursor float anchors at its top-left corner")
+    assert.truthy(cfg.row >= 1, "the float must start below the cursor row, not above it")
+
+    -- top border along slots 1-3 (mirroring floating_console) ...
+    assert.equal("─", cfg.border[1][1], "a top border is drawn")
+    assert.equal("─", cfg.border[3][1], "a top border is drawn across the full edge")
+    assert.equal("NeogitSubtleText", cfg.border[1][2], "top border matches the banner divider color")
+    -- ... and no side edges: below-cursor floats draw only the top border
+    assert.equal("", cfg.border[8], "no west separator is drawn")
+
+    -- width tracks the status window (minus the padding columns)
+    local status_win = vim.fn.bufwinid(buf.buffer.handle)
+    assert.truthy(status_win ~= -1, "status window must be visible")
+    assert.truthy(cfg.width >= 20, "the float has a sane minimum width")
+    assert.truthy(
+      cfg.width <= vim.api.nvim_win_get_width(status_win),
+      "the float must not be wider than the status window"
+    )
+
+    -- focus stays in the status buffer
+    assert.equal(buf.buffer.handle, vim.api.nvim_get_current_buf())
+  end)
+
+  it("re-lays the below-cursor float out under the new cursor line on cursor move", function()
+    -- huge threshold: force the below-cursor layout regardless of the
+    -- runner's editor size
+    config.values.status.diff_preview =
+      { enabled = true, kind = "vsplit", debounce = 50, below_cursor_width = 10000 }
+    local dir = workdir()
+    -- a second unstaged file listed BELOW tracked.txt (git sorts items
+    -- alphabetically, hence the name), so the cursor has another item row
+    -- further down to move to
+    do
+      local fd = assert(io.open(dir .. "/znext.txt", "w"))
+      fd:write("znext content\n")
+      fd:close()
+      vim.system({ "git", "-C", dir, "add", "znext.txt" }):wait()
+      fd = assert(io.open(dir .. "/znext.txt", "a"))
+      fd:write("znext addition\n")
+      fd:close()
+    end
+
+    local buf = open_status(dir)
+    config.values.status.show_banner = true
+
+    -- the headless runner opens the status buffer as a short bottom split,
+    -- so the below-cursor clamps (bottom margin, status window top) would
+    -- pin the float to the same row for every cursor line; grow the status
+    -- window so the item rows sit inside the unclamped range
+    local status_win = vim.fn.bufwinid(buf.buffer.handle)
+    assert.truthy(status_win ~= -1, "status window must be visible")
+    vim.api.nvim_win_set_height(status_win, vim.o.lines - 6)
+
+    local preview = require("neogit.buffers.diff_preview")
+
+    cursor_onto(buf, "tracked.txt")
+    assert.truthy(
+      vim.wait(5000, function()
+        return preview.is_open()
+      end),
+      "preview window must open"
+    )
+    assert.truthy(wait_for_content(preview, "+two"), "first file's diff must render")
+
+    local win = vim.fn.bufwinid(preview.buffer_handle())
+    assert.truthy(win ~= -1, "preview window must be visible")
+    local cfg1 = vim.api.nvim_win_get_config(win)
+
+    -- move the cursor onto the next file item: the reused float must be
+    -- re-laid out under the new cursor line (debounce applies, so wait on
+    -- content, not on timing)
+    cursor_onto(buf, "znext.txt")
+    assert.truthy(wait_for_content(preview, "+znext addition"), "second file's diff must render")
+
+    win = vim.fn.bufwinid(preview.buffer_handle())
+    assert.truthy(win ~= -1, "preview window must stay visible")
+    local cfg2 = vim.api.nvim_win_get_config(win)
+    assert.not_equal(cfg1.row, cfg2.row, "the float must move with the cursor")
+
+    -- expected row: the first editor row under the new cursor line. Read
+    -- from the status window at assert time (the cursor is still on
+    -- znext.txt); the item rows sit high enough that neither the
+    -- bottom-margin nor the status-window clamp kicks in.
+    local screen_row = vim.fn.win_screenpos(status_win)[1]
+    local cursor_winrow = vim.api.nvim_win_call(status_win, function()
+      return vim.fn.winline()
+    end)
+    local unclamped = screen_row - 1 + cursor_winrow
+    local expected = math.min(unclamped, vim.o.lines - 2 - 5)
+    assert.equal(unclamped, expected, "the target row must not hit the clamps")
+    assert.equal(expected, cfg2.row, "the float must sit under the new cursor line")
+    assert.equal(
+      math.max(vim.o.lines - cfg2.row - 2, 5),
+      cfg2.height,
+      "the float must fill down to the bottom margin"
+    )
+
+    -- focus stays in the status buffer
+    assert.equal(buf.buffer.handle, vim.api.nvim_get_current_buf())
+  end)
+
+  it("keeps the right-side layout above the threshold", function()
+    -- 0 disables the below-cursor layout entirely
+    config.values.status.diff_preview =
+      { enabled = true, kind = "vsplit", debounce = 50, below_cursor_width = 0 }
+    local dir = workdir()
+    local buf = open_status(dir)
+    config.values.status.show_banner = true
+
+    cursor_onto(buf, "tracked.txt")
+
+    local preview = require("neogit.buffers.diff_preview")
+    assert.truthy(
+      vim.wait(5000, function()
+        return preview.is_open()
+      end),
+      "preview window must open"
+    )
+
+    local win = vim.fn.bufwinid(preview.buffer_handle())
+    assert.truthy(win ~= -1, "preview window must be visible")
+
+    local cfg = vim.api.nvim_win_get_config(win)
+    assert.equal("editor", cfg.relative, "the right-side float is editor-relative")
+    assert.equal("│", cfg.border[8][1], "the right-side layout keeps the west-only separator")
+    assert.truthy(cfg.col > 0, "the right-side float must sit in the editor's right half")
   end)
 
   it("hides the preview when the cursor leaves the file items", function()

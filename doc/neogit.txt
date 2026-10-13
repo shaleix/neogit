@@ -330,6 +330,11 @@ diffs. The buffer is a snapshot - it never refreshes; close it with `q` or
             -- fun(columns) callback, or nil for auto (60% when the editor is
             -- over 120 columns, else 50%)
             width = nil,
+            -- When the status window is narrower than this many columns the
+            -- preview floats below the cursor (top-bordered, aligned to the
+            -- status window's column and width) instead of on the right.
+            -- 0 disables the below-cursor layout.
+            below_cursor_width = 100,
         },
     },
     -- Background `git fetch` when the status buffer opens, so the Head

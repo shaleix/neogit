@@ -68,31 +68,112 @@ local function effective_kind()
   return config.values.status.diff_preview.kind
 end
 
--- Right-anchored float geometry: same width resolution as the vsplit kind,
--- placed below the banner rows so the title is never covered, filling the
--- rest of the screen height minus a one-line bottom margin. The only drawn
--- border is the west edge in NeogitSubtleText - the same color as the
--- divider under the banner - so the preview reads as a pane of the status
--- view. NOTE: the border array is clockwise from the top-left, so the west
--- edge lives in slot 8 and the east edge in slot 4; the west edge renders
--- for the window's full height, filler rows included. The east border is a
--- blank cell (slot 4 = " ") and the statuscolumn a single space (set in
--- the `after` callback), together providing one column of padding on each
--- side of the content.
+-- Below-cursor fallback when `below_cursor_width` is unset on a partial
+-- diff_preview table: single-sourced from config (M.BELOW_CURSOR_WIDTH_DEFAULT).
+
+-- Float geometry, two modes (picked from the status window's width against
+-- `status.diff_preview.below_cursor_width`):
+--
+-- RIGHT mode - the default, used whenever the status window is at least
+-- `below_cursor_width` columns wide (`0` disables the below mode entirely):
+-- same width resolution as the vsplit kind, placed below the banner rows so
+-- the title is never covered, filling the rest of the screen height minus a
+-- one-line bottom margin. The only drawn border is the west edge in
+-- NeogitSubtleText - the same color as the divider under the banner - so the
+-- preview reads as a pane of the status view.
+--
+-- BELOW mode - when the status window is narrower than `below_cursor_width`
+-- there is no room for a side-by-side pane, so the float renders right
+-- under the cursor line instead, aligned to the status window's column and
+-- spanning roughly its inner width: it reads as attached below the cursor
+-- and never covers the status layout. The border is drawn along the top
+-- only (slots 1-3, mirroring floating_console); no side edges are drawn,
+-- so the content's left padding comes from the statuscolumn (a single
+-- space, set in the `after` callback).
+--
+-- NOTE: the border array is clockwise from the top-left, so the west edge
+-- lives in slot 8 and the east edge in slot 4; a drawn edge renders for
+-- the window's full height, filler rows included. In RIGHT mode the east
+-- border is a blank cell (slot 4 = " ") and the statuscolumn a single
+-- space (set in the `after` callback), together providing one column of
+-- padding on each side of the content.
+---@param ctx { conf: table|nil, status_width: number, cursor_winrow: number, status_pos: number[] }
+---  conf: diff_preview config (threshold resolution)
+---  status_width: editor width of the status window
+---  cursor_winrow: 1-based row of the cursor within the status window
+---  status_pos: editor-relative {row, col} of the status window
 ---@return table
-local function float_geometry()
-  local width = preview_width(vim.o.columns)
-  local row = BANNER_ROWS + 1
+local function float_geometry(ctx)
+  local conf = ctx.conf or {}
+  local threshold = conf.below_cursor_width
+  if threshold == nil then
+    threshold = config.BELOW_CURSOR_WIDTH_DEFAULT
+  end
+
+  if threshold <= 0 or ctx.status_width >= threshold then
+    local width = preview_width(vim.o.columns)
+    local row = BANNER_ROWS + 1
+
+    return {
+      relative = "editor",
+      --              TL  T  TR  R   BR  B  BL  W
+      border = { "", "", "", " ", "", "", "", { "│", "NeogitSubtleText" } },
+      style = "minimal",
+      width = width,
+      height = math.max(vim.o.lines - 2 - row, 5),
+      col = math.max(vim.o.columns - width - 2, 0),
+      row = row,
+    }
+  end
+
+  -- First editor row strictly under the cursor line, clamped so at least
+  -- five rows fit above the bottom margin and never ending up above the
+  -- status window's first content row.
+  local row = ctx.status_pos[1] + ctx.cursor_winrow
+  row = math.max(math.min(row, vim.o.lines - 2 - 5), ctx.status_pos[1] + 1)
+  -- Roughly the status window's inner width, aligned under it: the float
+  -- tracks the status window's column/width so it reads as attached below
+  -- the cursor.
+  local width = math.max(ctx.status_width - 2, 20)
 
   return {
     relative = "editor",
-    --              TL  T  TR  R   BR  B  BL  W
-    border = { "", "", "", " ", "", "", "", { "│", "NeogitSubtleText" } },
+    anchor = "NW",
+    --              TL                      T                       TR
+    border = {
+      { "─", "NeogitSubtleText" },
+      { "─", "NeogitSubtleText" },
+      { "─", "NeogitSubtleText" },
+      "",
+      "",
+      "",
+      "",
+      "",
+    },
     style = "minimal",
     width = width,
-    height = math.max(vim.o.lines - 2 - row, 5),
-    col = math.max(vim.o.columns - width - 2, 0),
+    height = math.max(vim.o.lines - row - 2, 5),
+    col = ctx.status_pos[2] + 1,
     row = row,
+  }
+end
+
+-- Capture the status window's layout for the float geometry: the
+-- below-cursor mode anchors the preview under the cursor's row, aligned to
+-- the status window's editor position and width. show() always runs with
+-- the status window current - on window creation and on reuse alike - so
+-- the current window is the status window in both paths; nothing is
+-- asserted, only captured. win_screenpos is the window's 1-based screen
+-- position; editor-relative float coordinates are the same grid, 0-based.
+---@return { status_window: number, status_width: number, cursor_winrow: number, status_pos: number[] }
+local function status_layout()
+  local status_window = vim.api.nvim_get_current_win()
+  local screen_pos = vim.fn.win_screenpos(status_window)
+  return {
+    status_window = status_window,
+    status_width = vim.api.nvim_win_get_width(status_window),
+    cursor_winrow = vim.fn.winline(),
+    status_pos = { screen_pos[1] - 1, screen_pos[2] - 1 },
   }
 end
 
@@ -233,12 +314,39 @@ function M.show(_status_buffer, section, item)
   self.error = nil
 
   if self.buffer and self.buffer:is_visible() then
+    -- Re-apply the float geometry on every show(): in below-cursor mode the
+    -- window's row/height depend on the cursor's line, so every cursor move
+    -- must re-lay the window out under the new line. nvim_win_set_config
+    -- regenerates the window config in place - no close/reopen flicker,
+    -- buffer and folds state are preserved - and applying the freshly
+    -- computed geometry wholesale also covers a threshold-flip after an
+    -- editor resize (the other mode's geometry and border take over). In
+    -- right mode the recomputed geometry is identical, so the call is
+    -- visually a no-op there while still fixing stale sizes after resizes.
+    if
+      effective_kind() == "float"
+      and self.buffer.win_handle
+      and vim.api.nvim_win_is_valid(self.buffer.win_handle)
+    then
+      local layout = status_layout()
+      vim.api.nvim_win_set_config(
+        self.buffer.win_handle,
+        float_geometry {
+          conf = preview_config,
+          status_width = layout.status_width,
+          cursor_winrow = layout.cursor_winrow,
+          status_pos = layout.status_pos,
+        }
+      )
+    end
+
     self:refresh_content()
     -- New item in a reused window: snap the viewport back to the top, the
     -- scroll position of the previous file's diff must not carry over.
     self:_reset_view()
   else
-    local status_window = vim.api.nvim_get_current_win()
+    local layout = status_layout()
+    local status_window = layout.status_window
     local status_maps = config.get_reversed_status_maps()
 
     local function goto_hunk(direction)
@@ -270,7 +378,12 @@ function M.show(_status_buffer, section, item)
       name = "NeogitDiffPreview",
       filetype = "NeogitDiffPreview",
       kind = kind == "float" and "floating" or kind,
-      floating = kind == "float" and float_geometry() or nil,
+      floating = kind == "float" and float_geometry {
+        conf = preview_config,
+        status_width = layout.status_width,
+        cursor_winrow = layout.cursor_winrow,
+        status_pos = layout.status_pos,
+      } or nil,
       bufhidden = "hide",
       status_column = not config.values.disable_signs and "" or nil,
       context_highlight = not config.values.disable_context_highlighting and config.values.log_pager == nil,

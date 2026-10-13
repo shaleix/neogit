@@ -329,6 +329,7 @@ end
 ---@field debounce? integer ms to wait after cursor movement before updating the preview
 ---@field content? fun(item: table, section: string): table|nil Custom content source: return { filetype = "diff", lines = {...} } to take over the preview body (external renderers can hook in via the FileType event); return nil to use the built-in renderer
 ---@field width? number|fun(columns: number): number Preview window width in columns, or a function receiving the editor width (applies to vsplit; default: 60% over 120 columns, else 50%)
+---@field below_cursor_width? number When the status window is narrower than this many columns, the preview floats below the cursor (top-bordered) instead of on the right. 0 disables.
 
 ---@class NeogitConfigMappings Consult the config file or documentation for values
 ---@field finder? { [string]: NeogitConfigMappingsFinder } A dictionary that uses finder commands to set multiple keybinds
@@ -430,6 +431,11 @@ end
 ---Allowed values for the git_backend config option (single source;
 ---also consumed by lib/git/backend.lua).
 M.GIT_BACKENDS = { "auto", "libgit2", "cli" }
+
+---Default for `status.diff_preview.below_cursor_width` (single source;
+---also consumed by buffers/diff_preview.lua as the fallback when a partial
+---diff_preview table reaches it without a setup-merged default).
+M.BELOW_CURSOR_WIDTH_DEFAULT = 100
 
 ---Returns the default Neogit configuration
 ---@return NeogitConfig
@@ -553,6 +559,9 @@ function M.get_default_values()
         content = nil, -- fun(item, section): { filetype: string, lines: string[] } | nil
         width = nil, -- number | fun(columns: number): number | nil (vsplit only;
         --   default: 60% when the editor is over 120 columns, else 50%)
+        below_cursor_width = M.BELOW_CURSOR_WIDTH_DEFAULT, -- float below the
+        --   cursor (top border) when the status window is narrower than
+        --   this many columns; 0 disables
       },
     },
     -- Fetch from the remote in the background when the status buffer opens,
@@ -1216,6 +1225,11 @@ function M.validate_config()
         validate_type(config.status.diff_preview.debounce, "diff_preview.debounce", "number")
         validate_type(config.status.diff_preview.content, "diff_preview.content", { "function", "nil" })
         validate_type(config.status.diff_preview.width, "diff_preview.width", { "number", "function", "nil" })
+        validate_type(
+          config.status.diff_preview.below_cursor_width,
+          "diff_preview.below_cursor_width",
+          { "number", "nil" }
+        )
       end
     end
     if validate_type(config.auto_fetch, "auto_fetch", "table") then
