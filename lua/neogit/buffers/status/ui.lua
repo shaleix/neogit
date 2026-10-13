@@ -254,9 +254,25 @@ local RebaseSection = Component.new(function(props)
   })
 end)
 
-local SectionItemFile = function(section, config, depth)
-  depth = depth or 0
-  local indent = ("  "):rep(depth + 1)
+-- neo-tree style indent guides: prefix = blank base block (under the
+-- section header), one block per ancestor level ("│ " while that ancestor
+-- has later siblings, else "  "), then the row's own-level block ("└ "
+-- when it is its parent's last child, "│ " otherwise). Rows whose parent
+-- is the section root draw no marker at all - the base column never
+-- carries one (neo-tree's level < 2 rule).
+local function indent_segments(guides, own_last)
+  local segments = { text("  ") }
+  for _, cont in ipairs(guides) do
+    table.insert(segments, cont and text.highlight("NeogitIndentGuide")("│ ") or text("  "))
+  end
+  if own_last ~= nil then
+    table.insert(segments, text.highlight("NeogitIndentGuide")(own_last and "└ " or "│ "))
+  end
+  return segments
+end
+
+local SectionItemFile = function(section, config, guides, own_last)
+  guides = guides or {}
   return Component.new(function(item)
     local mode = config.status.mode_text[item.mode]
     local mode_text
@@ -315,9 +331,9 @@ local SectionItemFile = function(section, config, depth)
     local name = item.original_name and ("%s -> %s"):format(item.original_name, item.name) or item.name
     -- In file-tree mode the directory hierarchy is expressed by nested
     -- indented rows, so file rows show only the basename.
-    if depth > 0 and not item.original_name then
+    if own_last ~= nil and not item.original_name then
       name = name:match("([^/]+)$") or name
-    elseif depth > 0 then
+    elseif own_last ~= nil then
       name = ("%s -> %s"):format(
         item.original_name:match("([^/]+)$") or item.original_name,
         item.name:match("([^/]+)$") or item.name
@@ -352,15 +368,14 @@ local SectionItemFile = function(section, config, depth)
     -- cursor (see status/init.lua): file rows are never foldable and hunks
     -- never render inline in the status buffer.
     return col.tag("Item")({
-      row {
-        text(indent),
+      row(util.merge(indent_segments(guides, own_last), {
         text.highlight(highlight)(mode_text),
         icon_text,
         staged_line and text.highlight(highlight)(name) or text(name),
         text.highlight("NeogitSubtleText")(unmerged_types[item.mode] or ""),
         file_mode_change,
         submodule,
-      },
+      })),
     }, {
       foldable = false,
       folded = true,
@@ -398,10 +413,9 @@ local function build_file_tree(items)
 end
 
 local DirRow = Component.new(function(props)
-  return row {
-    text(props.indent),
+  return row(util.merge(indent_segments(props.guides, props.own_last), {
     text.highlight("NeogitSubtleText")(props.icon .. " " .. props.name),
-  }
+  }))
 end)
 
 -- Collapse single-child directory chains: when a directory holds no files
@@ -424,7 +438,9 @@ local function collapse_dir(dir)
   end
 end
 
-local function render_file_tree(section, config, node, depth)
+local function render_file_tree(section, config, node, guides, depth)
+  guides = guides or {}
+  depth = depth or 0
   local children = {}
 
   local file_icons = (config.icons and config.icons.file_icons) or {}
@@ -432,17 +448,37 @@ local function render_file_tree(section, config, node, depth)
 
   local names = vim.tbl_keys(node.dirs)
   table.sort(names)
-  for _, dirname in ipairs(names) do
+  for i, dirname in ipairs(names) do
     local dir, display = collapse_dir(node.dirs[dirname])
+    -- Dirs render before files, so a dir is its parent's last child only
+    -- when it is the last dir AND no files follow: only then is the guide
+    -- line in this dir's column terminated for its subtree.
+    local is_last = (i == #names) and #node.files == 0
+    -- Rows directly under the section root (depth 0) never draw their own
+    -- marker (the base column stays blank, neo-tree's level < 2 rule).
+    -- NOTE: this must be keyed on depth, not on #guides == 0: children of
+    -- top-level directories also carry empty guides but DO draw a marker.
+    local own_last
+    if depth > 0 then
+      own_last = is_last
+    end
+    -- The dir's own sibling status propagates to its children's guides,
+    -- except at depth 0: those rows' base column never draws, so their
+    -- subtree starts a fresh guides chain.
+    local child_guides = {}
+    if depth > 0 then
+      child_guides = util.merge(guides, { not is_last })
+    end
     table.insert(
       children,
       col.tag("Directory")({
         DirRow {
           name = display,
           icon = dir_icon,
-          indent = ("  "):rep(depth + 1),
+          guides = guides,
+          own_last = own_last,
         },
-        render_file_tree(section, config, dir, depth + 1),
+        render_file_tree(section, config, dir, child_guides, depth + 1),
       }, {
         foldable = true,
         folded = false,
@@ -454,8 +490,12 @@ local function render_file_tree(section, config, node, depth)
     )
   end
 
-  for _, item in ipairs(node.files) do
-    table.insert(children, SectionItemFile(section, config, depth)(item))
+  for j, item in ipairs(node.files) do
+    local file_own_last
+    if depth > 0 then
+      file_own_last = (j == #node.files)
+    end
+    table.insert(children, SectionItemFile(section, config, guides, file_own_last)(item))
   end
 
   return col(children)
@@ -466,7 +506,7 @@ end
 ---@return fun(items: table): table
 FileTree = function(section, config)
   return function(items)
-    return render_file_tree(section, config, build_file_tree(items), 0)
+    return render_file_tree(section, config, build_file_tree(items), {})
   end
 end
 

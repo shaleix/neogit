@@ -66,3 +66,19 @@ The right-side split opened by `<cr>` on the Head Line: a snapshot of the
 repository's reference positions (Head, Merge, Push, Tag, divergence) with
 the ahead/behind range diffs rendered inline, commit-view style.
 _Avoid_: head popup, status details
+
+### File Tree
+
+A status buffer section's items rendered as a nested directory tree:
+foldable directory rows (single-child chains merged into one row) with
+nested rows showing only the basename.
+_Avoid_: file list, folder view
+
+### Indent Guide
+
+The File Tree's vertical markers linking a directory row to its nested
+rows: one two-column block per tree level, the marker in the block's first
+column — directly under the parent row's leading glyph — `│` while later
+siblings follow, `└` on the last child's own row. The base column under a
+section header never carries a marker.
+_Avoid_: graph lines (that's Commit Graph), tree connectors

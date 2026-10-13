@@ -173,6 +173,12 @@ function M.setup(config)
   -- noticeable without shouting for the whole duration of the work.
   local spinner_bg = Color.from_hex(palette.yellow):shade(bg_factor * -0.45):set_saturation(0.4):to_css()
 
+  -- Indent-guide gray: deliberately dimmer than palette.grey (the graph
+  -- gray, a 0.4 shade) - blended only 20% from the editor background
+  -- toward the text direction, so the neo-tree style guide lines hug the
+  -- background and stay subordinate to file names.
+  local indent_guide = Color.from_hex(palette.bg0):shade(bg_factor * 0.2):to_css()
+
   -- stylua: ignore
   hl_store = {
     NeogitGraphAuthor              = { fg = palette.orange, ctermfg = 3 },
@@ -194,6 +200,10 @@ function M.setup(config)
     NeogitGraphBoldBlue            = { fg = palette.blue, bold = palette.bold, ctermfg = 4 },
     NeogitGraphBoldPurple          = { fg = palette.purple, bold = palette.bold, ctermfg = 5 },
     NeogitGraphBoldGray            = { fg = palette.grey, bold = palette.bold, ctermfg = 7 },
+    -- File-tree indent guides (neo-tree style vertical lines) in the status
+    -- buffer. Dim gray, blended toward the editor background (see
+    -- indent_guide above) so the lines read as structure, not content.
+    NeogitIndentGuide              = { fg = indent_guide, ctermfg = 8 },
     NeogitSubtleText               = { link = "Comment" },
     NeogitSignatureGood            = { link = "NeogitGraphGreen" },
     NeogitSignatureBad             = { link = "NeogitGraphBoldRed" },

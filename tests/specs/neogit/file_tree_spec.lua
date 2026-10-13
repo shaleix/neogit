@@ -80,19 +80,29 @@ describe("status file tree", function()
     assert.is_nil(text:find("src/%s", 1, false), "directory rows must not carry a trailing slash")
 
     -- The basename file row sits indented one level deeper than its
-    -- directory row.
+    -- directory row. Indent width counts the neo-tree style guide columns
+    -- ("│ ") as well as blank ones - nested rows must carry the guide.
+    local function indent_width(line)
+      return vim.fn.strdisplaywidth(line:match("^[%s│]*"))
+    end
+
     local lines = vim.split(text, "\n")
-    local dir_indent, file_indent
+    local dir_indent, file_indent, file_line
     for _, line in ipairs(lines) do
       if not dir_indent and line:match("󰉋 src") then
-        dir_indent = line:match("^%s*"):len()
+        dir_indent = indent_width(line)
       elseif not file_indent and line:match("util%.lua") then
-        file_indent = line:match("^%s*"):len()
+        file_indent = indent_width(line)
+        file_line = line
       end
     end
 
     assert.truthy(dir_indent, "directory row not found")
     assert.truthy(file_indent, "file row not found")
+    assert.truthy(
+      file_line:match("^[%s│]*"):find("│", 1, true),
+      "rows nested under a directory must render the gray indent guide line"
+    )
     assert.truthy(
       file_indent > dir_indent,
       ("file row (indent %d) must be indented deeper than its directory row (indent %d)"):format(
@@ -100,5 +110,27 @@ describe("status file tree", function()
         dir_indent
       )
     )
+
+    -- neo-tree geometry: a marker sits in the FIRST column of each
+    -- 2-column block, directly under the parent row's leading glyph.
+    -- Continuing siblings draw "│", the last child's own block closes with
+    -- "└", and the section base column never carries a marker.
+    local function prefix(line)
+      return line:match("^[%s│└]*")
+    end
+
+    local lib_row, main_row
+    for _, line in ipairs(lines) do
+      if not lib_row and line:match("lib/deep") then
+        lib_row = line
+      elseif not main_row and line:match("main%.lua") then
+        main_row = line
+      end
+    end
+
+    assert.truthy(lib_row and main_row, "nested tree rows not found")
+    assert.equals("  │ ", prefix(lib_row), "dir row: │ under its parent's icon, base column blank")
+    assert.equals("  │ └ ", prefix(file_line), "nested file: ancestor │ continues, own └ closes")
+    assert.equals("  └ ", prefix(main_row), "last child of a top-level dir closes with └ in its column")
   end)
 end)
