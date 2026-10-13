@@ -321,6 +321,7 @@ end
 ---@field mode_text? { [string]: string } The text to display for each mode
 ---@field show_banner? boolean Show a large ASCII-art title at the top of the status buffer (default true)
 ---@field show_no_changes? boolean Show a "No changes" placeholder when the worktree has no file changes (default true)
+---@field file_line_counts? boolean Show lazygit-style per-file "+N/-M" line counts after each file name (default true)
 ---@field diff_preview? NeogitConfigDiffPreview Render file diffs in the preview split - the standard and only diff view for the status buffer
 
 ---@class NeogitConfigDiffPreview
@@ -524,6 +525,9 @@ function M.get_default_values()
       -- Show a subtle "No changes" placeholder in place of the file sections
       -- when the worktree is clean, instead of them silently vanishing.
       show_no_changes = true,
+      -- Lazygit-style per-file +N/-M line counts in the file tree, from two
+      -- bulk `git diff --numstat` calls per refresh.
+      file_line_counts = true,
       recent_commit_count = 10,
       mode_padding = 1,
       -- Single-letter mode column: each mode shows its porcelain code
@@ -1204,6 +1208,7 @@ function M.validate_config()
     if validate_type(config.status, "status", "table") then
       validate_type(config.status.show_banner, "status.show_banner", { "boolean", "nil" })
       validate_type(config.status.show_no_changes, "status.show_no_changes", { "boolean", "nil" })
+      validate_type(config.status.file_line_counts, "status.file_line_counts", { "boolean", "nil" })
       validate_type(config.status.recent_commit_count, "status.recent_commit_count", "number")
       validate_type(config.status.mode_padding, "status.mode_padding", "number")
       validate_type(config.status.mode_text, "status.mode_text", "table")

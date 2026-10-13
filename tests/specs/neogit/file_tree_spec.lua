@@ -35,6 +35,45 @@ local function workdir()
   return dir
 end
 
+-- Fixture with KNOWN per-file line counts for the +N/-M rows:
+-- - root.txt committed as "a\na\na\n", then rewritten "a\nb\na\n": the
+--   unstaged (worktree) diff is +1 -1.
+-- - counted.txt committed as "x\ny\n", then rewritten "x\ny\nz\nw\n" and
+--   STAGED: the cached diff is +2 -0.
+-- - src/main.lua stays untracked: untracked rows never get counts.
+local function workdir_with_counts()
+  local dir = vim.fn.tempname()
+  vim.uv.fs_mkdir(dir, 493)
+  local function run(...)
+    local r = vim.system({ "git", "-C", dir, ... }):wait()
+    assert(r.code == 0, tostring(r.stderr))
+  end
+
+  local function write(p, c)
+    vim.fn.mkdir(vim.fs.dirname(dir .. "/" .. p), "p")
+    local fd = assert(io.open(dir .. "/" .. p, "w"))
+    fd:write(c)
+    fd:close()
+  end
+
+  run("init", "-q", "-b", "main")
+  run("config", "user.email", "t@t")
+  run("config", "user.name", "t")
+
+  write("root.txt", "a\na\na\n")
+  write("counted.txt", "x\ny\n")
+  run("add", ".")
+  run("commit", "-qm", "init")
+
+  write("root.txt", "a\nb\na\n") -- unstaged: +1 -1
+  write("counted.txt", "x\ny\nz\nw\n") -- staged: +2 -0
+  run("add", "counted.txt")
+
+  write("src/main.lua", "c\n") -- untracked: no counts
+
+  return dir
+end
+
 local function open_status(dir)
   vim.cmd.cd(dir)
   Repo.instance(dir, { autorefresh = false })
@@ -132,5 +171,88 @@ describe("status file tree", function()
     assert.equals("  │ ", prefix(lib_row), "dir row: │ under its parent's icon, base column blank")
     assert.equals("  │ └ ", prefix(file_line), "nested file: ancestor │ continues, own └ closes")
     assert.equals("  └ ", prefix(main_row), "last child of a top-level dir closes with └ in its column")
+  end)
+
+  it("shows per-file +N/-M line counts in the file rows", function()
+    -- Line counts live in the CLI status collector (two bulk
+    -- `git diff --numstat` calls), so force the CLI backend: on machines
+    -- with libgit2 installed the refresh would otherwise be served by the
+    -- libgit2 twin, which does not carry the stats.
+    local saved_backend = config.values.git_backend
+    local saved_counts = config.values.status.file_line_counts
+    local backend = require("neogit.lib.git.backend")
+    config.values.git_backend = "cli"
+    backend.reset()
+
+    local ok, err = pcall(function()
+      local dir = workdir_with_counts()
+      local buf = open_status(dir)
+      local text = buffer_text(buf)
+
+      -- Unstaged root.txt: worktree diff "a\na\na\n" -> "a\nb\na\n" is +1 -1.
+      -- Two spaces separate the name from the counts.
+      assert.truthy(text:find("root%.txt  %+1  %-1", 1, false), "unstaged row must show +1 -1")
+      -- Staged counted.txt: cached diff is +2 -0; a zero deletion never renders.
+      assert.truthy(text:find("counted%.txt  %+2", 1, false), "staged row must show +2")
+      assert.is_nil(text:find("counted%.txt  %+2 %-0", 1, false), "zero counts must not render")
+      -- Untracked files never get stats.
+      assert.is_nil(text:find("main%.lua %+", 1, false), "untracked rows must not show counts")
+
+      -- Toggle off: rows render bare names again after a refresh.
+      config.values.status.file_line_counts = false
+      local fired = false
+      vim.api.nvim_create_autocmd("User", {
+        pattern = "NeogitStatusRefreshed",
+        once = true,
+        callback = function()
+          fired = true
+        end,
+      })
+      buf:dispatch_refresh()
+      assert.truthy(
+        vim.wait(10000, function()
+          return fired
+        end, 10),
+        "refresh did not complete"
+      )
+      vim.wait(50)
+
+      local off_text = buffer_text(buf)
+      assert.is_nil(off_text:find(" %+%d", 1, false), "no +N counts may render while disabled")
+      assert.is_nil(off_text:find(" %-1", 1, false), "no -M counts may render while disabled")
+    end)
+
+    config.values.git_backend = saved_backend
+    config.values.status.file_line_counts = saved_counts
+    backend.reset()
+    assert.truthy(ok, "line-count assertions failed: " .. tostring(err))
+  end)
+
+  it("shows per-file line counts under the default git backend", function()
+    -- No backend override: whatever the environment resolves (libgit2 where
+    -- available, cli otherwise) must attach the stats -- the attach lives in
+    -- a shared helper both backends call after their update pass.
+    local saved_backend = config.values.git_backend
+    local saved_counts = config.values.status.file_line_counts
+    local backend = require("neogit.lib.git.backend")
+
+    local ok, err = pcall(function()
+      backend.reset() -- re-resolve fresh under the ambient config
+      local dir = workdir_with_counts()
+      local buf = open_status(dir)
+      local text = buffer_text(buf)
+
+      -- Unstaged root.txt: worktree diff is +1 -1.
+      assert.truthy(text:find("root%.txt  %+1  %-1", 1, false), "unstaged row must show +1 -1")
+      -- Staged counted.txt: cached diff is +2 -0.
+      assert.truthy(text:find("counted%.txt  %+2", 1, false), "staged row must show +2")
+      -- Untracked files never get stats.
+      assert.is_nil(text:find("main%.lua %+", 1, false), "untracked rows must not show counts")
+    end)
+
+    config.values.git_backend = saved_backend
+    config.values.status.file_line_counts = saved_counts
+    backend.reset()
+    assert.truthy(ok, "line-count assertions failed: " .. tostring(err))
   end)
 end)

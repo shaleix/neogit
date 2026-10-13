@@ -364,18 +364,41 @@ local SectionItemFile = function(section, config, guides, own_last)
       submodule = text.highlight("NeogitTagName")(submodule_text)
     end
 
+    -- Lazygit-style per-file +N/-M line counts, computed in bulk at refresh
+    -- time (item.stats, from `git diff --numstat`). Both-zero counts (e.g.
+    -- mode-only changes) render nothing.
+    local line_counts = {}
+    if config.status.file_line_counts and item.stats and item.stats.additions + item.stats.deletions > 0 then
+      if item.stats.additions > 0 then
+        table.insert(
+          line_counts,
+          text.highlight("NeogitDiffAdditions")(("  +%d"):format(item.stats.additions))
+        )
+      end
+
+      if item.stats.deletions > 0 then
+        table.insert(
+          line_counts,
+          text.highlight("NeogitDiffDeletions")(("  -%d"):format(item.stats.deletions))
+        )
+      end
+    end
+
     -- The diff renders in the separate preview window that follows the
     -- cursor (see status/init.lua): file rows are never foldable and hunks
     -- never render inline in the status buffer.
+    local segments = util.merge(indent_segments(guides, own_last), {
+      text.highlight(highlight)(mode_text),
+      icon_text,
+      staged_line and text.highlight(highlight)(name) or text(name),
+    })
+    vim.list_extend(segments, line_counts)
+    table.insert(segments, text.highlight("NeogitSubtleText")(unmerged_types[item.mode] or ""))
+    table.insert(segments, file_mode_change)
+    table.insert(segments, submodule)
+
     return col.tag("Item")({
-      row(util.merge(indent_segments(guides, own_last), {
-        text.highlight(highlight)(mode_text),
-        icon_text,
-        staged_line and text.highlight(highlight)(name) or text(name),
-        text.highlight("NeogitSubtleText")(unmerged_types[item.mode] or ""),
-        file_mode_change,
-        submodule,
-      })),
+      row(segments),
     }, {
       foldable = false,
       folded = true,

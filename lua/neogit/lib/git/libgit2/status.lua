@@ -284,6 +284,17 @@ function M.update_status(state, filter, ctx)
 
     lg2.C.git_status_list_free(list[0])
   end)
+
+  -- Attach per-file +N/-M line counts here, OUTSIDE the git2.run callback:
+  -- the staged/unstaged item lists are final once the executor returns, and
+  -- control is back in the caller's coroutine on the Neovim main loop. The
+  -- git2.run seam (git2.lua, "Executor seam") currently executes its
+  -- callback synchronously on the main thread, but reserves a uv.new_work
+  -- replacement that would run the callback in a worker thread -- where
+  -- spawning the `git diff --numstat` subprocesses (a vim API operation)
+  -- would be unsafe. The CLI backend attaches at the end of its own
+  -- update_status (lib/git/status.lua).
+  status.attach_file_stats(state)
 end
 
 -- Quick checks replacing the porcelain scans in anything_staged/unstaged.

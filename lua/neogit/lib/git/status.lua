@@ -3,12 +3,17 @@ local git = require("neogit.lib.git")
 local util = require("neogit.lib.util")
 local Collection = require("neogit.lib.collection")
 local logger = require("neogit.logger")
+local config = require("neogit.config")
 local GitResult = require("neogit.lib.git.result")
 local libgit2 = require("neogit.lib.git.libgit2")
+
+---@class NeogitGitStatus
+local M = {}
 
 ---@class StatusItem
 ---@field mode string
 ---@field diff Diff
+---@field stats { additions: number, deletions: number }|nil Per-file +N/-M line counts from a bulk `git diff --numstat` call at refresh time (unstaged items: worktree diff; staged items: cached diff); nil for untracked/unmerged or when status.file_line_counts is off
 ---@field absolute_path string
 ---@field escaped_path string
 ---@field original_name string|nil
@@ -87,6 +92,74 @@ local function item_collection(state, section, filter)
   end
 
   return Collection.new(items):key_by("name")
+end
+
+-- Parse `git diff --numstat` output ("added<TAB>deleted<TAB>path") into a
+-- map keyed by path. Binary files report "-" for both counts and are
+-- skipped. Renames print "old => new" and are keyed by the new path,
+-- matching item.name: brace renames keep the surrounding path
+-- ("src/{a => b}/c.txt" -> "src/b/c.txt"), plain renames take the final
+-- segment ("old => new" -> "new").
+local function parse_numstat(lines)
+  local counts = {}
+  for _, line in ipairs(lines or {}) do
+    local added, deleted, path = line:match("^(%d+)%s+(%d+)%s+(.+)$")
+    if added then
+      -- Brace renames occur wherever the shared prefix/suffix differs, so
+      -- rewrite them first, wherever they sit in the path.
+      path = path:gsub("{(.-) => (.-)}", "%2")
+
+      -- A plain full rename ("old => new") may remain: key by the path after
+      -- the LAST separator (the greedy prefix guarantees that).
+      if path:find(" => ", 1, true) then
+        path = path:match(".* => (.+)$")
+      end
+
+      counts[path] = { additions = tonumber(added), deletions = tonumber(deleted) }
+    end
+  end
+
+  return counts
+end
+
+-- Bulk per-file +N/-M counts for the status buffer's file rows: two numstat
+-- calls cover both index states (worktree diff and cached diff). Wrapped in
+-- pcall so a numstat failure never breaks the status refresh.
+local function file_line_counts()
+  local worktree, staged = {}, {}
+  local ok, err = pcall(function()
+    worktree = parse_numstat(git.cli.diff.no_ext_diff.args("--numstat").call({ hidden = true }).stdout)
+    staged = parse_numstat(git.cli.diff.no_ext_diff.cached.args("--numstat").call({ hidden = true }).stdout)
+  end)
+
+  if not ok then
+    logger.debug(("[STATUS] Failed to collect file line counts: %s"):format(tostring(err)))
+  end
+
+  return worktree, staged
+end
+
+---Attach per-file +N/-M line counts (bulk `git diff --numstat`) to the
+---staged/unstaged items in `state`. Shared by both git backends; runs on
+---the main thread; no-ops when status.file_line_counts is off or both
+---numstat calls fail.
+---@param state NeogitRepoState
+M.attach_file_stats = function(state)
+  if not config.values.status.file_line_counts then
+    return
+  end
+
+  -- Per-file line counts, attached per SECTION: the same path can appear in
+  -- both sections with different counts (worktree vs cached diff).
+  -- Untracked and unmerged items get none.
+  local worktree_counts, staged_counts = file_line_counts()
+  for _, item in ipairs(state.unstaged.items) do
+    item.stats = worktree_counts[item.name]
+  end
+
+  for _, item in ipairs(state.staged.items) do
+    item.stats = staged_counts[item.name]
+  end
 end
 
 local function update_status(state, filter)
@@ -213,10 +286,9 @@ local function update_status(state, filter)
       end
     end
   end
-end
 
----@class NeogitGitStatus
-local M = {}
+  M.attach_file_stats(state)
+end
 
 -- index_write twins keep the GitResult return shape across backends, so
 -- callers never need to know which one ran; stage/unstage forward to the
