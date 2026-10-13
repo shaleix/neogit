@@ -93,8 +93,8 @@ _Avoid_: first open (session-dependent), startup, splash screen
 
 ### Banner Transition
 
-The Cold Open animation that eases the banner from a dim start to its final
-gradient colors, frame by frame, ending early — jumping straight to the
-final colors — when repository state becomes ready first. Never plays on
-later opens, and never shows without the banner.
+The Cold Open animation that pulses the banner between dimmed and full
+gradient colors for as long as repository state is still loading, settling
+on the final colors the moment state becomes ready. Never plays on later
+opens, and never shows without the banner.
 _Avoid_: loading banner (that's the in-buffer operation indicator), spinner

@@ -315,7 +315,7 @@ function M:open(kind)
     foldmarkers = not config.values.disable_signs,
     active_item_highlight = true,
     on_detach = function()
-      -- Buffer gone mid-fade: restore the captured group definitions so the
+      -- Buffer gone mid-pulse: restore the captured group definitions so the
       -- banner transition cannot leak past the status buffer's lifetime.
       banner_transition.finish()
       Watcher.instance(self.root):unregister(self)
@@ -384,9 +384,10 @@ function M:open(kind)
     },
   }
 
-  -- Banner fade-in: cold open only (first refresh wave still in flight).
-  -- Warm re-opens of an already-refreshed repo skip it, later redraws never
-  -- restart it, and the refresh completion callback finishes it.
+  -- Banner pulse: cold open only (first refresh wave still in flight), and
+  -- it runs for as long as that loading phase lasts. Warm re-opens of an
+  -- already-refreshed repo skip it, later redraws never restart it, and the
+  -- refresh completion callback finishes it.
   if not Repo.instance(self.cwd)._refreshed then
     banner_transition.start(self.buffer.handle)
   end
@@ -488,7 +489,7 @@ function M:refresh(partial, reason)
     source = "status",
     partial = partial,
     callback = function()
-      -- First refresh wave after a cold open landed: stop the banner fade-in
+      -- First refresh wave after a cold open landed: stop the banner pulse
       -- and jump its groups back to their exact definitions.
       banner_transition.finish()
       self:redraw(cursor, view)

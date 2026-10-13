@@ -677,7 +677,7 @@ end)
 function M.Status(state, config, loading, width)
   if loading then
     -- Cold open still leads with the banner: it anchors the layout and the
-    -- fade-in animation targets its highlight groups, so it must exist from
+    -- pulse animation targets its highlight groups, so it must exist from
     -- the very first frame the window shows.
     local show_banner = config.status.show_banner ~= false
     return {

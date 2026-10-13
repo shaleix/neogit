@@ -133,7 +133,7 @@ describe("status buffer banner", function()
   end)
 
   it("renders the banner above the loading line on cold open", function()
-    -- The fade-in only touches highlight groups, but keep it off so the
+    -- The pulse only touches highlight groups, but keep it off so the
     -- content assertions below run against a fully static render.
     config.values.status.banner_animation = false
     local dir = workdir()

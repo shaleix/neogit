@@ -1,12 +1,11 @@
--- Integration spec: cold open starts the fade-in,
--- the first refresh completes it, and the group definitions land back on
+-- Integration spec: cold open starts the pulse,
+-- the first refresh finishes it, and the group definitions land back on
 -- hl.setup's values.
 local neogit = require("neogit")
 local config = require("neogit.config")
 local Repo = require("neogit.lib.git.repository")
 local status_buf = require("neogit.buffers.status")
 local transition = require("neogit.lib.banner_transition")
-local hl = require("neogit.lib.hl")
 
 local function run(dir, ...)
   local r = vim.system({ "git", "-C", dir, ... }):wait()
@@ -43,7 +42,7 @@ describe("cold open integration", function()
     local buf = status_buf.new(config.values, Repo.instance(dir).worktree_root, dir)
     buf:open("split")
 
-    assert.truthy(transition.is_active(), "cold open must start the fade-in")
+    assert.truthy(transition.is_active(), "cold open must start the pulse")
     -- Loading render leads with the banner.
     local lines = buf.buffer:get_lines(0, -1, false)
     assert.truthy(lines[1]:find("╔╗ ╦ ╔═╗", 1, true), "banner tops the loading render")
@@ -81,6 +80,6 @@ describe("cold open integration", function()
     buf:close()
     local buf2 = status_buf.new(config.values, Repo.instance(dir).worktree_root, dir)
     buf2:open("split")
-    assert.falsy(transition.is_active(), "warm open must not start the fade-in")
+    assert.falsy(transition.is_active(), "warm open must not start the pulse")
   end)
 end)

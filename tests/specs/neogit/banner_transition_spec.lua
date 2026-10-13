@@ -1,5 +1,5 @@
--- The banner fade-in transition: the pure math (easing, interpolation,
--- frame plan), and the start/finish lifecycle driven on a sentinel
+-- The banner pulse transition: the pure math (waveform, interpolation,
+-- pulse plan, floor), and the start/finish lifecycle driven on a sentinel
 -- definition of one of the real gradient groups.
 local transition = require("neogit.lib.banner_transition")
 local config = require("neogit.config")
@@ -22,21 +22,29 @@ local function set_sentinel()
   vim.api.nvim_set_hl(0, NAME, SENTINEL)
 end
 
+-- Floating-point-safe comparison for waveform values.
+local function assert_close(actual, expected, message)
+  assert.truthy(
+    math.abs(actual - expected) < 1e-9,
+    ("%s (got %s, want %s)"):format(message, actual, expected)
+  )
+end
+
 describe("banner transition math", function()
-  it("eases out cubically", function()
-    assert.equal(0, transition.ease_out_cubic(0))
-    assert.equal(1, transition.ease_out_cubic(1))
-    -- Ease-out front-loads the change: every prefix is past the linear point.
-    assert.truthy(transition.ease_out_cubic(0.25) > 0.25)
-    assert.truthy(transition.ease_out_cubic(0.5) > 0.5)
-    assert.truthy(transition.ease_out_cubic(0.75) > 0.75)
+  it("plans a ~2400ms period at 100ms frames", function()
+    local plan = transition.frame_plan()
+    assert.equal(100, plan.interval)
+    assert.equal(24, plan.frames_per_period)
+    assert.equal(2400, plan.period)
   end)
 
-  it("plans ~400ms in ~40ms frames", function()
-    local plan = transition.frame_plan()
-    assert.equal(40, plan.interval)
-    assert.equal(10, plan.frames)
-    assert.equal(400, plan.total)
+  it("waves smoothly: floor at the edges, full at mid-period", function()
+    assert_close(transition.pulse_wave(0), 0, "phase 0 must sit at the floor")
+    assert_close(transition.pulse_wave(1), 0, "phase 1 must sit at the floor")
+    assert_close(transition.pulse_wave(0.5), 1, "mid-period must be the full color")
+    -- Sine ease-in-out: the quarter phases are exactly halfway.
+    assert_close(transition.pulse_wave(0.25), 0.5, "rise must ease in and out")
+    assert_close(transition.pulse_wave(0.75), 0.5, "fall must ease in and out")
   end)
 
   it("interpolates in integer RGB", function()
@@ -50,12 +58,11 @@ describe("banner transition math", function()
     end
   end)
 
-  it("dims toward the background, keeping a trace of the final color", function()
-    local anchor = transition.internal.dim_anchor { 100, 100, 100 }
-    -- 15% of the final color survives: dim, but not invisible.
-    for i = 1, 3 do
-      assert.truthy(anchor[i] > 0 and anchor[i] < 100, "anchor must sit between black and the final color")
-    end
+  it("floors at a 40% trace of the final color", function()
+    -- Toward a black background: exactly 40% of the final color survives.
+    assert.are.same({ 40, 40, 40 }, transition.internal.floor({ 100, 100, 100 }, { 0, 0, 0 }))
+    -- Toward a bright background the floor sits between the two.
+    assert.are.same({ 160, 160, 160 }, transition.internal.floor({ 100, 100, 100 }, { 200, 200, 200 }))
   end)
 end)
 
@@ -76,15 +83,15 @@ describe("banner transition lifecycle", function()
     local original = sentinel_as_read()
 
     transition.start(assert(vim.api.nvim_get_current_buf()))
-    assert.truthy(transition.is_active(), "animation must run after start")
+    assert.truthy(transition.is_active(), "pulse must run after start")
 
-    -- Mid-animation the group carries the interpolated dim color, not the
-    -- sentinel (and not the dim anchor of frame 0 either).
-    transition.internal.step(3)
+    -- Mid-pulse the group carries an interpolated color, neither the floor
+    -- nor the sentinel.
+    transition.internal.step(7)
     assert.are_not.same(
       original,
       vim.api.nvim_get_hl(0, { name = NAME }),
-      "frame 3 must not show the final colors"
+      "mid-pulse frame must not show the final colors"
     )
 
     transition.finish()
@@ -92,16 +99,68 @@ describe("banner transition lifecycle", function()
     assert.are.same(original, vim.api.nvim_get_hl(0, { name = NAME }))
   end)
 
-  it("writes the exact originals on the final frame", function()
+  it("keeps pulsing well past one period: no self-finish", function()
     set_sentinel()
     local original = sentinel_as_read()
 
     transition.start(assert(vim.api.nvim_get_current_buf()))
-    -- Jump straight to the last frame: the natural end of the animation.
-    transition.internal.step(transition.frame_plan().frames)
-    assert.are.same(original, vim.api.nvim_get_hl(0, { name = NAME }))
+
+    -- Drive far beyond a full period (24 frames) and past the old one-shot
+    -- 400ms runtime: the pulse is tied to the loading phase, not a count.
+    for n = 0, 61 do
+      transition.internal.step(n)
+    end
+    assert.truthy(transition.is_active(), "pulse must run until finish()/stop()")
 
     transition.finish()
+    assert.falsy(transition.is_active())
+    assert.are.same(original, vim.api.nvim_get_hl(0, { name = NAME }))
+  end)
+
+  it("step colors are periodic and stay within floor..full", function()
+    set_sentinel()
+
+    transition.start(assert(vim.api.nvim_get_current_buf()))
+    local frames_per_period = transition.frame_plan().frames_per_period
+
+    local function fg_at(n)
+      transition.internal.step(n)
+      return vim.api.nvim_get_hl(0, { name = NAME }).fg
+    end
+
+    -- Periodic: same phase, same color, arbitrarily far apart.
+    assert.equal(fg_at(5), fg_at(5 + frames_per_period))
+    assert.equal(fg_at(5), fg_at(5 + 3 * frames_per_period))
+
+    -- Top of the pulse hits the exact final color.
+    assert.equal(SENTINEL.fg, fg_at(frames_per_period / 2))
+
+    -- Bottom sits exactly on the floor: a 40% trace of the final color
+    -- toward the same Normal bg the module dims toward (a very dark final
+    -- color on a lighter bg may floor BRIGHTER than the final - that is the
+    -- correct bg-relative dimming, so compare against the exact value).
+    local function rgb_of(c)
+      return { math.floor(c / 0x10000) % 0x100, math.floor(c / 0x100) % 0x100, c % 0x100 }
+    end
+
+    local ok, normal = pcall(vim.api.nvim_get_hl, 0, { name = "Normal" })
+    local bg = ok and normal and normal.bg and rgb_of(normal.bg)
+      or (vim.o.bg == "light" and { 255, 255, 255 } or { 0, 0, 0 })
+    local floor = transition.internal.floor(rgb_of(SENTINEL.fg), bg)
+    assert.equal(floor[1] * 0x10000 + floor[2] * 0x100 + floor[3], fg_at(0))
+
+    transition.finish()
+  end)
+
+  it("finish from a mid-pulse phase restores the exact originals", function()
+    set_sentinel()
+    local original = sentinel_as_read()
+
+    transition.start(assert(vim.api.nvim_get_current_buf()))
+    -- Park the pulse near its brightest phase before cutting it.
+    transition.internal.step(transition.frame_plan().frames_per_period / 2)
+    transition.finish()
+    assert.are.same(original, vim.api.nvim_get_hl(0, { name = NAME }))
   end)
 
   it("double-finish is idempotent", function()
@@ -121,7 +180,7 @@ describe("banner transition lifecycle", function()
     local original = sentinel_as_read()
 
     transition.start(assert(vim.api.nvim_get_current_buf()))
-    assert.falsy(transition.is_active(), "animation must be skipped")
+    assert.falsy(transition.is_active(), "pulse must be skipped")
     assert.are.same(original, vim.api.nvim_get_hl(0, { name = NAME }), "group must stay untouched")
   end)
 
