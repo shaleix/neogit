@@ -172,6 +172,7 @@ end
 ---@field worktree_root     string Project root, or  worktree
 ---@field worktree_git_dir  string Dir to watch for changes in worktree
 ---@field git_dir           string '.git/' directory for repo
+---@field provisional       boolean? Created without git discovery (two-phase open); paths empty until bind()
 ---@field _refresh_task     NeogitTask|nil  Active refresh task (cancellable).
 ---@field tmp_state         table
 ---@field refresh_callbacks function[]
@@ -191,11 +192,13 @@ local instances = {}
 local lastDir = nil
 
 ---@param dir? string
----@param opts? { autorefresh?: boolean } Set `autorefresh = false` when the
+---@param opts? { autorefresh?: boolean, provisional?: boolean } Set `autorefresh = false` when the
 ---caller is about to drive the first refresh itself (e.g. the status-buffer
 ---open path); suppresses the automatic dispatch_refresh on creation, which
 ---would otherwise be cancelled — after already spawning work — a few
 ---milliseconds later. Defaults to true, preserving the existing contract.
+---Set `provisional = true` to register the instance WITHOUT spawning git
+---(two-phase optimistic open); paths stay empty until Repo.bind fills them.
 ---@return NeogitRepo
 function Repo.instance(dir, opts)
   -- Without an explicit dir and with no binding yet, seed from the current
@@ -212,7 +215,11 @@ function Repo.instance(dir, opts)
   local cwd = vim.fs.normalize(lastDir)
   if not instances[cwd] then
     logger.debug("[REPO]: Registered Repository for: " .. cwd)
-    instances[cwd] = Repo.new(cwd)
+    if opts and opts.provisional then
+      instances[cwd] = Repo.new_provisional()
+    else
+      instances[cwd] = Repo.new(cwd)
+    end
 
     if not (opts and opts.autorefresh == false) then
       instances[cwd]:dispatch_refresh()
@@ -226,10 +233,31 @@ end
 ---@param dir string
 ---@return NeogitRepo
 function Repo.new(dir)
-  logger.debug("[REPO]: Initializing Repository")
-
   -- One cached `git rev-parse` for all three paths (see cli.repo_info).
-  local info = git.cli.repo_info(dir)
+  return Repo._build(git.cli.repo_info(dir))
+end
+
+---Provisional twin of new(): registers the instance for the caller's
+---directory WITHOUT spawning git - paths stay empty until Repo.bind fills
+---them from the async discovery result (two-phase optimistic status open).
+---Counts as cold (_refreshed = false), so the status buffer renders its
+---loading state and starts the banner pulse immediately, and Repo:refresh
+---no-ops on it (the worktree_root == "" guard) until the real metadata
+---arrives. (Named new_provisional so the `provisional` INSTANCE field stays
+---reachable: a Repo.provisional method would shadow it through the
+---metatable.)
+---@return NeogitRepo
+function Repo.new_provisional()
+  return Repo._build({ worktree_root = "", worktree_git_dir = "", git_dir = "", inside = false }, true)
+end
+
+---Shared constructor for new()/new_provisional(): shapes an instance from
+---already-resolved repo metadata.
+---@param info { worktree_root: string, worktree_git_dir: string, git_dir: string, inside: boolean }
+---@param provisional boolean?
+---@return NeogitRepo
+function Repo._build(info, provisional)
+  logger.debug("[REPO]: Initializing Repository")
 
   local instance = {
     lib = {},
@@ -244,6 +272,7 @@ function Repo.new(dir)
     -- (the first content render is gated on the whole wave, which includes
     -- fetching the HEAD commit info).
     _refreshed = false,
+    provisional = provisional or nil,
     tmp_state = util.weak_table("v"),
   }
 
@@ -266,6 +295,24 @@ function Repo.new(dir)
   end
 
   return instance
+end
+
+---Bind a provisional instance to real repo metadata (the async discovery
+---result of the two-phase open). Fills the paths in place, keeping table
+---identity AND the instance-cache key (the directory it was created for) -
+---the same key today's sync path would have used - so every existing and
+---future Repo.instance(dir) caller, including the status buffer's
+---render/refresh paths, sees the real repository.
+---@param instance NeogitRepo
+---@param info { worktree_root: string, worktree_git_dir: string, git_dir: string, inside: boolean }
+function Repo.bind(instance, info)
+  instance.worktree_root = info.worktree_root
+  instance.worktree_git_dir = info.worktree_git_dir
+  instance.git_dir = info.git_dir
+  instance.state.worktree_root = info.worktree_root
+  instance.state.worktree_git_dir = info.worktree_git_dir
+  instance.state.git_dir = info.git_dir
+  instance.provisional = nil
 end
 
 function Repo:reset()

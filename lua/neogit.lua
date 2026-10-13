@@ -114,16 +114,86 @@ local function open_popup(name)
   end
 end
 
+---Phase 2 completion for the two-phase status open: fill the provisional
+---repo in place with the discovered metadata (every Repo.instance(cwd)
+---caller sees the real repository from then on) and hand it to the status
+---buffer, which attaches what `open` deferred and drives the first refresh.
+local function bind_and_refresh(instance, info)
+  local Repo = require("neogit.lib.git.repository")
+  local repo = Repo.instance(instance.cwd)
+  Repo.bind(repo, info)
+  instance:bind_repository(repo)
+end
+
 local function open_status_buffer(opts)
   local status = require("neogit.buffers.status")
   local config = require("neogit.config")
+  local git = require("neogit.lib.git")
 
-  -- We need to construct the repo instance manually here since the actual CWD may not be the directory neogit is
-  -- going to open into. We will use vim.fn.lcd() in the status buffer constructor, so this will eventually be
-  -- correct. The status buffer drives the first refresh itself right after opening, so suppress the
-  -- automatic one here (it would only be cancelled mid-flight).
-  local repo = require("neogit.lib.git.repository").instance(opts.cwd, { autorefresh = false })
-  status.new(config.values, repo.worktree_root, opts.cwd):open(opts.kind):dispatch_refresh()
+  -- Double-open guard: a second :Neogit while a previous open (possibly
+  -- with discovery still in flight) already shows this buffer only focuses
+  -- it - a second discovery/bind must not race the first one. The refresh
+  -- still runs (today's open():dispatch_refresh() semantics); on a still
+  -- provisional repo it is a guarded no-op.
+  local existing = status.instance(opts.cwd)
+  if existing and existing.buffer and existing.buffer:is_visible() then
+    existing:open(opts.kind)
+    existing:dispatch_refresh()
+    return
+  end
+
+  -- Phase 1 - optimistic open, ZERO git processes: show the status window
+  -- right away on a provisional repo (paths empty, counts as un-refreshed),
+  -- so the cold-open render (banner pulse + loading line) is on screen
+  -- while discovery runs.
+  local Repo = require("neogit.lib.git.repository")
+  local repo = Repo.instance(opts.cwd, { autorefresh = false, provisional = true })
+  local instance = status.new(config.values, repo.worktree_root, opts.cwd)
+  instance:open(opts.kind)
+
+  if not repo.provisional then
+    -- Warm cache: the instance already existed bound (an earlier open or
+    -- Repo.instance caller created it, rev-parse cached) - nothing to
+    -- discover, just today's post-open refresh.
+    instance:bind_repository(repo)
+    return
+  end
+
+  -- Phase 2 - discovery, off the synchronous path: open() must not launch
+  -- any git process, so the single async rev-parse batch starts on the next
+  -- event-loop turn, with the window already on screen.
+  instance._pending_binding = true
+  vim.schedule(function()
+    -- Closed again before discovery even started (fast toggle): leave the
+    -- provisional repo behind, nothing is watching it.
+    if not instance.buffer then
+      return
+    end
+
+    git.cli.repo_info_async(opts.cwd, function(info)
+      if not info.inside then
+        local input = require("neogit.lib.input")
+        if input.get_permission(("Initialize repository in %s?"):format(opts.cwd)) then
+          git.init.create(opts.cwd)
+          -- The "not a repository" answer is cached; drop it so the re-run
+          -- sees the freshly created repository.
+          git.cli.invalidate_repo_info(opts.cwd)
+          git.cli.repo_info_async(opts.cwd, function(retried)
+            bind_and_refresh(instance, retried)
+          end)
+        else
+          -- Restore the old net effect of declining: an error and NO status
+          -- buffer (the just-opened window closes; the pulse cleans up via
+          -- the buffer's on_detach).
+          M.notification.error("The current working directory is not a git repository")
+          instance:close()
+        end
+        return
+      end
+
+      bind_and_refresh(instance, info)
+    end)
+  end)
 end
 
 ---@alias Popup
@@ -161,20 +231,25 @@ function M.open(opts)
     M.setup {}
   end
 
-  opts = construct_opts(opts)
+  opts = opts or {}
 
   local git = require("neogit.lib.git")
-  if not git.cli.is_inside_worktree(opts.cwd) then
-    local input = require("neogit.lib.input")
-    if input.get_permission(("Initialize repository in %s?"):format(opts.cwd)) then
-      git.init.create(opts.cwd)
-    else
-      M.notification.error("The current working directory is not a git repository")
-      return
-    end
-  end
 
   if opts[1] ~= nil then
+    -- Popup path: unchanged synchronous behavior - repository discovery
+    -- (and the init-repo interaction) happen before anything opens.
+    opts = construct_opts(opts)
+
+    if not git.cli.is_inside_worktree(opts.cwd) then
+      local input = require("neogit.lib.input")
+      if input.get_permission(("Initialize repository in %s?"):format(opts.cwd)) then
+        git.init.create(opts.cwd)
+      else
+        M.notification.error("The current working directory is not a git repository")
+        return
+      end
+    end
+
     local a = require("neogit.lib.async")
     local cb = function()
       open_popup(opts[1])
@@ -184,6 +259,17 @@ function M.open(opts)
       git.repo:dispatch_refresh { source = "popup", callback = cb }
     end)()
   else
+    -- Status path: two-phase optimistic open. Provisional cwd is whatever
+    -- the caller gave (expanded) or the editor cwd - resolved against the
+    -- real repository asynchronously AFTER the window is visible.
+    if opts.cwd and not opts.no_expand then
+      opts.cwd = vim.fn.expand(opts.cwd)
+    end
+
+    if not opts.cwd then
+      opts.cwd = vim.uv.cwd()
+    end
+
     open_status_buffer(opts)
   end
 end

@@ -894,27 +894,16 @@ local configurations = {
 ---@param dir string
 ---@return { worktree_root: string, worktree_git_dir: string, git_dir: string, inside: boolean }
 local repo_info_cache = {}
+-- In-flight async discoveries, for coalescing (see repo_info_async).
+local repo_info_pending = {}
 
-local function repo_info(dir)
-  local resolved = vim.fs.normalize(dir)
-  local cached = repo_info_cache[resolved]
-  if cached then
-    return cached
-  end
-
-  local result = vim
-    .system({
-      get_git_executable(),
-      "-C",
-      dir,
-      "rev-parse",
-      "--show-toplevel",
-      "--absolute-git-dir",
-      "--git-common-dir",
-      "--is-inside-work-tree",
-    }, { text = true })
-    :wait()
-
+---Parse a finished `git rev-parse` metadata batch and fill the cache (under
+---the resolved directory and, when inside a repo, its worktree root alias).
+---Shared by the sync and async flavors so they get identical semantics.
+---@param result { code: integer, stdout: string } completed vim.system result
+---@param resolved string normalized directory the batch ran in
+---@return { worktree_root: string, worktree_git_dir: string, git_dir: string, inside: boolean }
+local function store_repo_info(result, resolved)
   if result.code ~= 0 then
     local outside = { worktree_root = "", worktree_git_dir = "", git_dir = "", inside = false }
     repo_info_cache[resolved] = outside
@@ -946,6 +935,85 @@ local function repo_info(dir)
   end
 
   return info
+end
+
+local function repo_info(dir)
+  local resolved = vim.fs.normalize(dir)
+  local cached = repo_info_cache[resolved]
+  if cached then
+    return cached
+  end
+
+  local result = vim
+    .system({
+      get_git_executable(),
+      "-C",
+      dir,
+      "rev-parse",
+      "--show-toplevel",
+      "--absolute-git-dir",
+      "--git-common-dir",
+      "--is-inside-work-tree",
+    }, { text = true })
+    :wait()
+
+  return store_repo_info(result, resolved)
+end
+
+---Async twin of repo_info(): the same single `git rev-parse` batch and the
+---same cache, delivered callback-style (always on the main loop) so the
+---two-phase status open can show the window before discovery runs. A
+---completed run of either flavor satisfies later calls of the other;
+---concurrent calls for the same directory share one process.
+---@param dir string
+---@param callback fun(info: { worktree_root: string, worktree_git_dir: string, git_dir: string, inside: boolean })
+local function repo_info_async(dir, callback)
+  local resolved = vim.fs.normalize(dir)
+  local cached = repo_info_cache[resolved]
+  if cached then
+    callback(cached)
+    return
+  end
+
+  local pending = repo_info_pending[resolved]
+  if pending then
+    pending[#pending + 1] = callback
+    return
+  end
+  repo_info_pending[resolved] = { callback }
+
+  vim.system({
+    get_git_executable(),
+    "-C",
+    dir,
+    "rev-parse",
+    "--show-toplevel",
+    "--absolute-git-dir",
+    "--git-common-dir",
+    "--is-inside-work-tree",
+  }, { text = true }, function(result)
+    vim.schedule(function()
+      local info = store_repo_info(result, resolved)
+      local waiters = repo_info_pending[resolved] or {}
+      repo_info_pending[resolved] = nil
+      for _, cb in ipairs(waiters) do
+        cb(info)
+      end
+    end)
+  end)
+end
+
+---Forget cached repo metadata for dir (and its worktree-root alias). The
+---two-phase open needs this after `git init` created a repository where the
+---cached answer said there was none.
+---@param dir string
+local function invalidate_repo_info(dir)
+  local resolved = vim.fs.normalize(dir)
+  local cached = repo_info_cache[resolved]
+  repo_info_cache[resolved] = nil
+  if cached and cached.worktree_root ~= "" then
+    repo_info_cache[vim.fs.normalize(cached.worktree_root)] = nil
+  end
 end
 ---@param dir string
 ---@return string Absolute path of current worktree
@@ -1223,6 +1291,8 @@ local cli = setmetatable({
   git_dir = git_dir,
   is_inside_worktree = is_inside_worktree,
   repo_info = repo_info,
+  repo_info_async = repo_info_async,
+  invalidate_repo_info = invalidate_repo_info,
 }, meta)
 
 return cli

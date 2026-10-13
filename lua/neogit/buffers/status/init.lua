@@ -318,7 +318,12 @@ function M:open(kind)
       -- Buffer gone mid-pulse: restore the captured group definitions so the
       -- banner transition cannot leak past the status buffer's lifetime.
       banner_transition.finish()
-      Watcher.instance(self.root):unregister(self)
+      -- Two-phase open: while the repo is still provisional nothing was
+      -- registered (see `after`), so there is nothing to unregister.
+      if self._watcher_registered then
+        Watcher.instance(self.root):unregister(self)
+        self._watcher_registered = false
+      end
       require("neogit.buffers.diff_preview").close()
 
       if self.prev_autochdir then
@@ -351,7 +356,15 @@ function M:open(kind)
     ---@param buffer Buffer
     ---@param _win any
     after = function(buffer, _win)
-      Watcher.instance(self.root):register(self)
+      -- Two-phase open: while the repo is still provisional (async discovery
+      -- in flight) there is no real root to watch and no git_dir to publish,
+      -- and both lookups would spawn git - bind_repository() runs these once
+      -- discovery has landed.
+      if self:repo_bound() then
+        Watcher.instance(self.root):register(self)
+        self._watcher_registered = true
+        vim.b.neogit_git_dir = git.repo.git_dir
+      end
       -- Best-effort immediate anchor (when state is already rendered). The
       -- authoritative anchor lands in redraw after the first refresh: at open
       -- time the repo may not be refreshed yet.
@@ -360,7 +373,6 @@ function M:open(kind)
         buffer:move_cursor(target.first)
       end
       self._anchor_pending = true
-      vim.b.neogit_git_dir = git.repo.git_dir
     end,
     user_autocmds = {
       -- Resetting doesn't yield the correct repo state instantly, so we need to re-refresh after a few seconds
@@ -422,9 +434,13 @@ function M:open(kind)
 
   -- Background auto-fetch once per open (never part of a refresh cycle):
   -- keeps the Head line's ↓N behind counter current when the remote moved
-  -- since the last manual fetch.
+  -- since the last manual fetch. Two-phase open: with discovery still in
+  -- flight there is no repository to fetch in (and probing would spawn git),
+  -- so bind_repository() schedules the fetch once it binds.
   vim.schedule(function()
-    require("neogit.lib.git.autofetch").trigger(self)
+    if self:repo_bound() then
+      require("neogit.lib.git.autofetch").trigger(self)
+    end
   end)
 
   return self
@@ -463,6 +479,46 @@ function M:focus()
     logger.debug("[STATUS] Focusing Buffer")
     self.buffer:focus()
   end
+end
+
+---Whether this buffer's repository is fully bound (two-phase optimistic
+---open): provisional instances carry empty paths until the async discovery
+---lands and Repo.bind fills them.
+---@return boolean
+function M:repo_bound()
+  return not Repo.instance(self.cwd).provisional
+end
+
+---Phase 2 of the two-phase optimistic open: discovery landed. Run what
+---`open` deferred while the repo was provisional (watcher registration,
+---buffer git-dir var, background auto-fetch), then drive the first
+---refresh. Safe when the buffer is already gone (user closed it while
+---discovery ran) - the repo stays bound either way, and every later
+---refresh is a plain no-op guarded redraw.
+---@param repo NeogitRepo
+function M:bind_repository(repo)
+  -- The handle can be wiped while discovery runs (user closes the window /
+  -- :%bwipeout): nothing left to attach or refresh.
+  if not self.buffer or not vim.api.nvim_buf_is_valid(self.buffer.handle) then
+    return
+  end
+
+  if self._pending_binding then
+    self._pending_binding = false
+    self.root = repo.worktree_root
+    Watcher.instance(self.root):register(self)
+    self._watcher_registered = true
+    self.buffer:call(function()
+      vim.b.neogit_git_dir = repo.git_dir
+    end)
+    -- Mirror open()'s once-per-open auto-fetch, now that a repository
+    -- exists to fetch in.
+    vim.schedule(function()
+      require("neogit.lib.git.autofetch").trigger(self)
+    end)
+  end
+
+  self:dispatch_refresh()
 end
 
 function M:refresh(partial, reason)
@@ -517,7 +573,12 @@ function M:redraw(cursor, view, fold_state)
     width = vim.api.nvim_win_get_width(self.buffer.win_handle)
   end
 
-  self.buffer.ui:render(unpack(ui.Status(Repo.instance(self.cwd).state, self.config, nil, width)))
+  local repo = Repo.instance(self.cwd)
+  -- The loading flag follows the repo exactly like the cold-open render:
+  -- a redraw racing the first refresh - or arriving while the two-phase
+  -- open is still unbound - keeps the placeholder instead of flashing an
+  -- empty sections UI.
+  self.buffer.ui:render(unpack(ui.Status(repo.state, self.config, not repo._refreshed, width)))
 
   if fold_state then
     logger.debug("[STATUS] Restoring explicit fold state")
