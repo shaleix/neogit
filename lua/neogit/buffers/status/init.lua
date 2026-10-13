@@ -372,6 +372,34 @@ function M:open(kind)
     },
   }
 
+  -- Window-width tracking for the banner. These MUST be global, not
+  -- buffer-local: buffer-local WinResized only fires while this buffer is
+  -- current, but the status window is usually resized from a neighboring
+  -- window. v:event.windows lists the actually-resized windows, so foreign
+  -- resizes are filtered out. The augroup is owned by the buffer and gets
+  -- deleted on detach, which removes these too.
+  vim.api.nvim_create_autocmd("WinResized", {
+    group = self.buffer.autocmd_group,
+    callback = function()
+      local win = self.buffer.win_handle
+      if not win or not vim.api.nvim_win_is_valid(win) then
+        return
+      end
+      local wins = vim.v.event and vim.v.event.windows
+      if wins == nil or vim.tbl_contains(vim.tbl_map(tostring, wins), tostring(win)) then
+        self:redraw()
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd("VimResized", {
+    group = self.buffer.autocmd_group,
+    callback = function()
+      if self.buffer.win_handle and vim.api.nvim_win_is_valid(self.buffer.win_handle) then
+        self:redraw()
+      end
+    end,
+  })
+
   -- Background auto-fetch once per open (never part of a refresh cycle):
   -- keeps the Head line's ↓N behind counter current when the remote moved
   -- since the last manual fetch.
