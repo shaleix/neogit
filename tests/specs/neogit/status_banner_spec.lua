@@ -200,8 +200,9 @@ describe("status buffer banner", function()
     assert.equal(expected_divider, lines[4], "divider must track the new window width")
 
     -- Logo rows keep one shared left grid (no shear) and stay centered for
-    -- the new width: padding = floor((width - logo_width) / 2), measured
-    -- against the widest row, computed from the rendered lines.
+    -- the new width: padding = floor((width - logo_width) / 2) - 3 (optical
+    -- centering nudge), measured against the widest row, computed from the
+    -- rendered lines.
     local logo_width = 0
     for i = 1, 3 do
       logo_width = math.max(logo_width, vim.fn.strdisplaywidth(vim.trim(lines[i])))
@@ -213,7 +214,7 @@ describe("status buffer banner", function()
     end
     assert.truthy(pads[1] == pads[2] and pads[2] == pads[3], "resized banner rows must not shear")
 
-    local expected_pad = math.floor((40 - logo_width) / 2)
+    local expected_pad = math.max(0, math.floor((40 - logo_width) / 2) - 3)
     for i = 1, 3 do
       assert.equal(expected_pad, pads[i], "logo row " .. i .. " must be centered for width 40")
     end

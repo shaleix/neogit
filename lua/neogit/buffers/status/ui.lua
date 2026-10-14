@@ -68,7 +68,9 @@ local BANNER = Component.new(function(props)
   local items = {}
 
   for _, line in ipairs(logo) do
-    local padding = math.max(0, math.floor((width - banner_width) / 2))
+    -- -3: optical centering nudge; the geometric center reads a touch too
+    -- far right for the logo's shape
+    local padding = math.max(0, math.floor((width - banner_width) / 2) - 3)
 
     -- One text segment per column, each mapped to a gradient step, so the
     -- title fades left-to-right (dashboard-style). strcharpart iterates
