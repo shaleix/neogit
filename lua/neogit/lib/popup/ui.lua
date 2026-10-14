@@ -1,6 +1,7 @@
 local M = {}
 
 local common = require("neogit.buffers.common")
+local config = require("neogit.config")
 local Ui = require("neogit.lib.ui")
 local util = require("neogit.lib.util")
 
@@ -273,8 +274,10 @@ end
 
 function M.Popup(state)
   return {
-    List {
-      items = M.items(state),
+    col.padding_left(config.values.popup.padding) {
+      List {
+        items = M.items(state),
+      },
     },
   }
 end

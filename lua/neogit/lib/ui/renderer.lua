@@ -292,6 +292,15 @@ function Renderer:_render_child_in_row(child, i, col_start, col_end, highlights,
   if child.tag == "text" then
     return self:_render_in_row_text(child, i, col_start, highlights, text)
   elseif child.tag == "row" then
+    -- Mirror the text-child rule so padding_left applies to a row's first
+    -- child regardless of it being a text or another row: rows nested in a
+    -- padded col otherwise silently drop the padding.
+    if not self.flags.in_nested_row and i == 1 then
+      local padding_left = child:get_padding_left(true)
+      table.insert(text, padding_left)
+      col_start = col_start + #padding_left
+    end
+
     return self:_render_in_row_row(child, highlights, text, col_start, col_end)
   else
     error("The row component does not support having a `" .. child.tag .. "` as a child")

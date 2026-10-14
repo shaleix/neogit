@@ -89,6 +89,7 @@ end
 ---@class NeogitConfigPopup Popup window options
 ---@field kind WindowKind The type of window that should be opened
 ---@field show_title boolean Show a title for the popup
+---@field padding? integer Spaces to pad popup content from the window's left edge
 
 ---@class NeogitConfigFloating
 ---@field relative? string
@@ -633,6 +634,7 @@ function M.get_default_values()
     popup = {
       kind = "popup",
       show_title = false,
+      padding = 1,
     },
     stash = {
       kind = "tab",
@@ -1306,6 +1308,7 @@ function M.validate_config()
     if validate_type(config.popup, "popup", "table") then
       validate_kind(config.popup.kind, "popup.kind")
       validate_type(config.popup.show_title, "popup.show_title", "boolean")
+      validate_type(config.popup.padding, "popup.padding", "number")
     end
 
     if validate_type(config.git_services, "git_services", "table") then
