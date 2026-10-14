@@ -86,6 +86,8 @@ M.actions = function()
     { "UnstageStaged", "Unstage all", NONE },
     { "Discard", "Discard", NONE },
     { "Untrack", "Untrack", NONE },
+    { "PopStash", "Pop stash", NONE },
+    { "QuickStash", "Stash changes", NONE },
   }
 end
 
