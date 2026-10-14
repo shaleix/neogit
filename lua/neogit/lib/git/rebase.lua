@@ -3,12 +3,35 @@ local git = require("neogit.lib.git")
 local client = require("neogit.client")
 local notification = require("neogit.lib.notification")
 local event = require("neogit.lib.event")
+local loading = require("neogit.lib.loading")
 
 ---@class NeogitGitRebase
 local M = {}
 
-local function rebase_command(cmd)
-  return cmd.env(client.get_envs_git_editor()).call { long = true, pty = true }
+---Runs a rebase command with the user's git editor wired up. Callers that
+---won't sit in an editor pass `what`: the bottom loading indicator tracks
+---the run the way pull/push do. Editor-opening callers must not pass it -
+---the pty spends most of its life waiting on the user, and a spinner there
+---would be noise.
+---@param cmd table git command builder
+---@param what string? progress label, e.g. "onto 'main'"
+---@return ProcessResult
+local function rebase_command(cmd, what)
+  if what then
+    loading.show(("Rebasing %s"):format(what))
+  end
+
+  local result = cmd.env(client.get_envs_git_editor()).call { long = true, pty = true }
+
+  if what then
+    if result:success() then
+      loading.done(("Rebased %s"):format(what), vim.log.levels.INFO)
+    else
+      loading.done(("Rebasing %s stopped"):format(what), vim.log.levels.ERROR)
+    end
+  end
+
+  return result
 end
 
 ---Instant rebase. This is a way to rebase without using the interactive editor
@@ -52,12 +75,11 @@ function M.rebase_interactive(commit, args)
 end
 
 function M.onto_branch(branch, args)
-  local result = rebase_command(git.cli.rebase.args(branch).arg_list(args))
+  local result = rebase_command(git.cli.rebase.args(branch).arg_list(args), ("onto '%s'"):format(branch))
   if result:failure() then
     notification.error("Rebasing failed. Resolve conflicts before continuing")
     event.send("Rebase", { commit = branch, status = "conflict" })
   else
-    notification.info("Rebased onto '" .. branch .. "'")
     event.send("Rebase", { commit = branch, status = "ok" })
   end
 end
@@ -67,12 +89,12 @@ function M.onto(start, newbase, args)
     start = ""
   end
 
-  local result = rebase_command(git.cli.rebase.onto.args(newbase, start).arg_list(args))
+  local result =
+    rebase_command(git.cli.rebase.onto.args(newbase, start).arg_list(args), ("onto '%s'"):format(newbase))
   if result:failure() then
     notification.error("Rebasing failed. Resolve conflicts before continuing")
     event.send("Rebase", { status = "conflict" })
   else
-    notification.info("Rebased onto '" .. newbase .. "'")
     event.send("Rebase", { commit = newbase, status = "ok" })
   end
 end
@@ -125,11 +147,11 @@ function M.drop(commit)
 end
 
 function M.continue()
-  return rebase_command(git.cli.rebase.continue)
+  return rebase_command(git.cli.rebase.continue, "(continue)")
 end
 
 function M.skip()
-  return rebase_command(git.cli.rebase.skip)
+  return rebase_command(git.cli.rebase.skip, "(skip)")
 end
 
 function M.edit()
@@ -137,7 +159,7 @@ function M.edit()
 end
 
 function M.abort()
-  return rebase_command(git.cli.rebase.abort)
+  return rebase_command(git.cli.rebase.abort, "(abort)")
 end
 
 ---Find the merge base for HEAD and it's upstream
