@@ -88,6 +88,18 @@ local function stub_confirm(record_asked, answer)
   end
 end
 
+---Capture vim.notify calls; returns the capture table and the restore fn.
+local function capture_notify()
+  local captured = {}
+  local original = vim.notify
+  vim.notify = function(msg, level)
+    table.insert(captured, { msg = msg, level = level })
+  end
+  return captured, function()
+    vim.notify = original
+  end
+end
+
 neogit.setup { filewatcher = { enabled = false }, disable_context_highlighting = true }
 
 describe("status stash pop (G)", function()
@@ -147,5 +159,87 @@ describe("status stash pop (G)", function()
 
     assert.equal(0, #asked, "no confirmation may be asked off a stash row; " .. vim.inspect(asked))
     assert.truthy(stash_list(dir):find("stash@{0}", 1, true), "stash must survive when off a stash row")
+  end)
+
+  it("surfaces git's error and keeps the stash when the pop cannot apply", function()
+    local dir = workdir()
+    -- dirty the SAME file the stash touches: both apply attempts are refused
+    local fd = assert(io.open(dir .. "/tracked.txt", "a"))
+    fd:write("conflicting\n")
+    fd:close()
+
+    local buf = open_status(dir)
+    buf.buffer:focus()
+
+    local restore_confirm = stub_confirm({}, true)
+    local captured, restore_notify = capture_notify()
+
+    assert.truthy(vim.fn.search([[\Vstash@{]], "w") > 0, "stash row must render")
+    actions.n_pop_stash(buf)()
+    vim.wait(2000, function()
+      return #captured > 0
+    end, 10)
+    restore_notify()
+
+    restore_confirm()
+
+    assert.truthy(stash_list(dir):find("stash@{0}", 1, true), "stash must be kept when apply fails")
+    local errors = vim.tbl_filter(function(n)
+      return n.level == vim.log.levels.ERROR
+    end, captured)
+    assert.truthy(
+      #errors > 0,
+      "an ERROR notification must surface the failure; got: " .. vim.inspect(captured)
+    )
+    assert.truthy(
+      vim.inspect(errors):find("would be overwritten", 1, true),
+      "the notification must carry git's wording; got: " .. vim.inspect(errors)
+    )
+  end)
+
+  it("drops the stash when only the --index apply fails", function()
+    local dir = workdir()
+    -- stage a change to other.txt AFTER the stash: a dirty index refuses
+    -- `apply --index` (it restores the full stashed index state) while the
+    -- plain apply still succeeds on the clean tracked.txt worktree
+    local fd = assert(io.open(dir .. "/other.txt", "a"))
+    fd:write("staged-after-stash\n")
+    fd:close()
+    run(dir, "add", "other.txt")
+
+    local buf = open_status(dir)
+    buf.buffer:focus()
+
+    local restore_confirm = stub_confirm({}, true)
+    local captured, restore_notify = capture_notify()
+
+    assert.truthy(vim.fn.search([[\Vstash@{]], "w") > 0, "stash row must render")
+    actions.n_pop_stash(buf)()
+
+    local popped = vim.wait(10000, function()
+      return stash_list(dir) == ""
+    end, 10)
+    restore_notify()
+
+    restore_confirm()
+
+    assert.truthy(popped, "the fallback apply must pop (and drop) the stash; list: " .. stash_list(dir))
+
+    local f = assert(io.open(dir .. "/tracked.txt", "r"))
+    local content = f:read("*a")
+    f:close()
+    assert.truthy(
+      content:find("two", 1, true),
+      "the stashed worktree change must be restored; got: " .. vim.inspect(content)
+    )
+
+    local errors = vim.tbl_filter(function(n)
+      return n.level == vim.log.levels.ERROR
+    end, captured)
+    assert.equal(
+      0,
+      #errors,
+      "no ERROR notification on the fallback-success path; got: " .. vim.inspect(errors)
+    )
   end)
 end)

@@ -818,20 +818,14 @@ end
 ---@return fun(): nil
 M.n_pop_stash = function(self)
   return a.void(function()
-    local dbg = require("neogit.lib.git.stash").__dbg -- [DEBUG-stashpop]
     local stash = stash_under_cursor(self)
-    dbg("n_pop_stash: resolved stash=%s", vim.inspect(stash))
     if not stash then
-      dbg("n_pop_stash: no stash under cursor, returning")
       return
     end
 
     if input.get_permission(("Pop stash '%s'?"):format(stash)) then
-      dbg("n_pop_stash(%s): confirmed, popping", stash)
       git.stash.pop(stash)
       self:dispatch_refresh({ update_diffs = { "*:*" } }, "n_pop_stash")
-    else
-      dbg("n_pop_stash(%s): cancelled at confirmation", stash)
     end
   end)
 end

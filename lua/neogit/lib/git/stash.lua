@@ -3,6 +3,7 @@ local input = require("neogit.lib.input")
 local util = require("neogit.lib.util")
 local config = require("neogit.config")
 local event = require("neogit.lib.event")
+local notification = require("neogit.lib.notification")
 local libgit2 = require("neogit.lib.git.libgit2")
 
 ---@class NeogitGitStash
@@ -40,38 +41,33 @@ function M.push(args, files)
   event.send("Stash", { success = result:success() })
 end
 
--- [DEBUG-stashpop] TEMPORARY instrumentation for a failed-pop diagnosis.
--- Cleanup: grep "\[DEBUG-stashpop\]" and remove M.__dbg consumers.
-local DEBUG_LOG_PATH = "/tmp/opencode/neogit-stashpop.log"
-local function dbg(fmt, ...)
-  local line = fmt:format(...)
-  pcall(function()
-    local fd = io.open(DEBUG_LOG_PATH, "a")
-    if fd then
-      fd:write(("[DEBUG-stashpop] %s %s\n"):format(os.date("%Y-%m-%d %H:%M:%S"), line))
-      fd:close()
-    end
-  end)
+---Surfaces a failed stash operation's stderr as an error notification:
+---git's own wording is the only useful diagnosis (dirty-tree refusals etc),
+---and nothing else in the pop/apply/drop paths reports it.
+---@param result ProcessResult
+local function notify_failure(result)
+  local stderr = vim.tbl_filter(function(line)
+    return line and line ~= ""
+  end, result.stderr or {})
+  notification.error(table.concat(stderr, "\n"))
 end
-M.__dbg = dbg
 
 function M.pop(stash)
-  dbg("pop(%s) called, cwd=%s", vim.inspect(stash), vim.uv.cwd())
-
   local result = git.cli.stash.apply.index.args(stash).call()
-  dbg("pop(%s) apply --index: code=%s stderr=%s", vim.inspect(stash), result.code, vim.inspect(result.stderr))
+
+  if result:failure() then
+    -- --index also restores the stashed index state; when the current index
+    -- or worktree cannot take it, retry without it - getting the worktree
+    -- changes back is what "pop" promised.
+    result = git.cli.stash.apply.args(stash).call()
+  end
 
   if result:success() then
-    local drop = git.cli.stash.drop.args(stash).call()
-    dbg("pop(%s) drop: code=%s stderr=%s", vim.inspect(stash), drop.code, vim.inspect(drop.stderr))
-  else
-    local fallback = git.cli.stash.apply.args(stash).call()
-    dbg(
-      "pop(%s) fallback apply (no --index): code=%s stderr=%s",
-      vim.inspect(stash),
-      fallback.code,
-      vim.inspect(fallback.stderr)
-    )
+    result = git.cli.stash.drop.args(stash).call()
+  end
+
+  if result:failure() then
+    notify_failure(result)
   end
 
   event.send("Stash", { success = result:success() })
@@ -81,7 +77,11 @@ function M.apply(stash)
   local result = git.cli.stash.apply.index.args(stash).call()
 
   if result:failure() then
-    git.cli.stash.apply.args(stash).call()
+    result = git.cli.stash.apply.args(stash).call()
+  end
+
+  if result:failure() then
+    notify_failure(result)
   end
 
   event.send("Stash", { success = result:success() })
@@ -89,6 +89,11 @@ end
 
 function M.drop(stash)
   local result = git.cli.stash.drop.args(stash).call()
+
+  if result:failure() then
+    notify_failure(result)
+  end
+
   event.send("Stash", { success = result:success() })
 end
 
