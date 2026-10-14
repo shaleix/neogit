@@ -830,6 +830,36 @@ M.n_pop_stash = function(self)
   end)
 end
 
+---Quick stash: pick a scope (both / staged only / with untracked), then type
+---a message - Enter stashes, an empty message keeps git's default
+---"WIP on <branch>: <sha> <subject>", and Esc at the message box aborts.
+---Cancelling the scope choice falls back to "both".
+---@param self StatusBuffer
+---@return fun(): nil
+M.n_quick_stash = function(self)
+  return a.void(function()
+    local scope = input.get_choice("Stash scope", {
+      values = { "&Both", "&Staged only", "With &untracked" },
+      default = 1,
+    })
+
+    local message = input.get_user_input("Stash message", { allow_empty = true })
+    if message == nil then
+      return -- Esc at the message box aborts without stashing
+    end
+
+    if scope == "s" then
+      git.stash.stash_index(message)
+    elseif scope == "u" then
+      git.stash.stash_all({ "-u" }, message)
+    else
+      git.stash.stash_all({}, message)
+    end
+
+    self:dispatch_refresh({ update_diffs = { "*:*" } }, "n_quick_stash")
+  end)
+end
+
 ---Conflict-side discard ("Discard File" on a conflicted unstaged item):
 ---prompts for ours/theirs/conflict and applies the choice. Every resolution
 ---re-stages the file; abort does nothing.

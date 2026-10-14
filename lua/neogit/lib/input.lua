@@ -53,6 +53,7 @@ end
 ---@field separator string?
 ---@field cancel string?
 ---@field prepend string?
+---@field allow_empty boolean? Return "" instead of nil when the user submits an empty line
 
 ---@param prompt string Prompt to use for user input
 ---@param opts GetUserInputOpts? Options table
@@ -81,7 +82,7 @@ function M.get_user_input(prompt, opts)
     result, _ = result:gsub("%s", "-")
   end
 
-  if result == "" then
+  if result == "" and not opts.allow_empty then
     return nil
   end
 

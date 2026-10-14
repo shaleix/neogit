@@ -19,18 +19,47 @@ function M.list_refs()
 end
 
 ---@param args string[]
-function M.stash_all(args)
+---@param message string? custom stash message; nil/empty keeps git's default
+function M.stash_all(args, message)
+  if message and message ~= "" then
+    args = vim.list_extend({ "-m", message }, args)
+  end
+
   local result = git.cli.stash.push.files(".").arg_list(args).call()
+  if result:failure() then
+    notify_failure(result)
+  end
   event.send("Stash", { success = result:success() })
 end
 
-function M.stash_index()
-  local result = git.cli.stash.staged.call()
+---@param message string? custom stash message; nil/empty keeps git's default
+function M.stash_index(message)
+  -- `git stash staged` is not a command: staged-only stashing is
+  -- `stash push --staged`
+  local args = {}
+  if message and message ~= "" then
+    args = { "-m", message }
+  end
+
+  local result = git.cli.stash.push.staged.arg_list(args).call()
+  if result:failure() then
+    notify_failure(result)
+  end
   event.send("Stash", { success = result:success() })
 end
 
-function M.stash_keep_index()
-  local result = git.cli.stash.keep_index.files(".").call()
+---@param message string? custom stash message; nil/empty keeps git's default
+function M.stash_keep_index(message)
+  -- needs the `push` subcommand: `git stash --keep-index .` is rejected
+  local args = {}
+  if message and message ~= "" then
+    args = { "-m", message }
+  end
+
+  local result = git.cli.stash.push.keep_index.files(".").arg_list(args).call()
+  if result:failure() then
+    notify_failure(result)
+  end
   event.send("Stash", { success = result:success() })
 end
 

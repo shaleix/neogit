@@ -208,6 +208,7 @@ end
 ---| "CommandHistory"
 ---| "YankSelected"
 ---| "PopStash"
+---| "QuickStash"
 ---| "GoToParentRepo"
 ---| "RefreshBuffer"
 ---| "GoToFile"
@@ -853,6 +854,7 @@ function M.get_default_values()
         ["$"] = "CommandHistory",
         ["Y"] = "YankSelected",
         ["a"] = "PopStash",
+        ["e"] = "QuickStash",
         ["gp"] = "GoToParentRepo",
         ["<c-r>"] = "RefreshBuffer",
         ["<cr>"] = "GoToFile",
