@@ -311,6 +311,19 @@ end
 ---@field env string context extractor key, or "none"
 ---@field label nil|string help popup display label
 
+---Resolves the stash ref ("stash@{N}") under the cursor, or nil anywhere
+---else in the buffer. Stash rows' yankable is the stash OID (see
+---SectionItemStash in buffers/status/ui.lua), so the ref must come from the
+---selection's item - get_yankable_under_cursor() can never match it.
+---@param self StatusBuffer
+---@return string?
+local function stash_under_cursor(self)
+  local selection = self.buffer.ui:get_selection()
+  if selection.section and selection.section.name == "stashes" and selection.item then
+    return selection.item.name:match("^stash@{%d+}")
+  end
+end
+
 ---Context extractors. Each receives the status buffer and returns the table
 ---handed to the popup's create function - or nil, which skips that call and
 ---leaves the popup closed (preserving the historical hand-written guards).
@@ -334,8 +347,7 @@ local context = {
     return { commits = { self.buffer.ui:get_commit_under_cursor() } }
   end,
   stash = function(self)
-    local stash = self.buffer.ui:get_yankable_under_cursor()
-    return { name = stash and stash:match("^stash@{%d+}") }
+    return { name = stash_under_cursor(self) }
   end,
   diff = function(self)
     local section = self.buffer.ui:get_selection().section
@@ -806,15 +818,20 @@ end
 ---@return fun(): nil
 M.n_pop_stash = function(self)
   return a.void(function()
-    local yankable = self.buffer.ui:get_yankable_under_cursor()
-    local stash = yankable and yankable:match("^stash@{%d+}")
+    local dbg = require("neogit.lib.git.stash").__dbg -- [DEBUG-stashpop]
+    local stash = stash_under_cursor(self)
+    dbg("n_pop_stash: resolved stash=%s", vim.inspect(stash))
     if not stash then
+      dbg("n_pop_stash: no stash under cursor, returning")
       return
     end
 
     if input.get_permission(("Pop stash '%s'?"):format(stash)) then
+      dbg("n_pop_stash(%s): confirmed, popping", stash)
       git.stash.pop(stash)
       self:dispatch_refresh({ update_diffs = { "*:*" } }, "n_pop_stash")
+    else
+      dbg("n_pop_stash(%s): cancelled at confirmation", stash)
     end
   end)
 end

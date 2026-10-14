@@ -40,13 +40,38 @@ function M.push(args, files)
   event.send("Stash", { success = result:success() })
 end
 
+-- [DEBUG-stashpop] TEMPORARY instrumentation for a failed-pop diagnosis.
+-- Cleanup: grep "\[DEBUG-stashpop\]" and remove M.__dbg consumers.
+local DEBUG_LOG_PATH = "/tmp/opencode/neogit-stashpop.log"
+local function dbg(fmt, ...)
+  local line = fmt:format(...)
+  pcall(function()
+    local fd = io.open(DEBUG_LOG_PATH, "a")
+    if fd then
+      fd:write(("[DEBUG-stashpop] %s %s\n"):format(os.date("%Y-%m-%d %H:%M:%S"), line))
+      fd:close()
+    end
+  end)
+end
+M.__dbg = dbg
+
 function M.pop(stash)
+  dbg("pop(%s) called, cwd=%s", vim.inspect(stash), vim.uv.cwd())
+
   local result = git.cli.stash.apply.index.args(stash).call()
+  dbg("pop(%s) apply --index: code=%s stderr=%s", vim.inspect(stash), result.code, vim.inspect(result.stderr))
 
   if result:success() then
-    git.cli.stash.drop.args(stash).call()
+    local drop = git.cli.stash.drop.args(stash).call()
+    dbg("pop(%s) drop: code=%s stderr=%s", vim.inspect(stash), drop.code, vim.inspect(drop.stderr))
   else
-    git.cli.stash.apply.args(stash).call()
+    local fallback = git.cli.stash.apply.args(stash).call()
+    dbg(
+      "pop(%s) fallback apply (no --index): code=%s stderr=%s",
+      vim.inspect(stash),
+      fallback.code,
+      vim.inspect(fallback.stderr)
+    )
   end
 
   event.send("Stash", { success = result:success() })

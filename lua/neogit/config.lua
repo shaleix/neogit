@@ -852,7 +852,7 @@ function M.get_default_values()
         ["y"] = "ShowRefs",
         ["$"] = "CommandHistory",
         ["Y"] = "YankSelected",
-        ["G"] = "PopStash",
+        ["a"] = "PopStash",
         ["gp"] = "GoToParentRepo",
         ["<c-r>"] = "RefreshBuffer",
         ["<cr>"] = "GoToFile",
