@@ -13,6 +13,37 @@ local FuzzyFinderBuffer = require("neogit.buffers.fuzzy_finder")
 
 local M = {}
 
+---Scan git push output for failure evidence. stdout and stderr are both
+---scanned because the pty call merges stderr into stdout. Returns the
+---human-readable reason (rejection notices, error/fatal lines, and any
+---remote-hook commentary) and whether any hard failure signal was present
+---at all - the strict success gate: exit code 0 alone must not report
+---success while git itself reported a rejection or error.
+---@param res table|nil push result
+---@return string reason, boolean hard_failure
+local function push_failure_info(res)
+  res = type(res) == "table" and res or {}
+
+  local reason, hard = {}, false
+  local lines = vim.list_extend(vim.list_extend({}, res.stdout or {}), res.stderr or {})
+  for _, line in ipairs(lines) do
+    local is_hard = line:match("%[rejected%]") ~= nil
+      or line:match("^error:") ~= nil
+      or line:match("^fatal:") ~= nil
+      or line:match("Updates were rejected") ~= nil
+      or line:match("failed to push some refs") ~= nil
+
+    if is_hard then
+      hard = true
+      table.insert(reason, vim.trim(line))
+    elseif line:match("^remote:") then
+      table.insert(reason, vim.trim(line))
+    end
+  end
+
+  return table.concat(reason, "\n"), hard
+end
+
 ---@param args string[]
 ---@param remote string
 ---@param branch string|nil
@@ -50,13 +81,6 @@ local function push_to(args, remote, branch, opts)
     res.stderr = res.stderr or {}
   end
 
-  -- Inform the user about missing permissions
-  if res.code == 128 then
-    loading.done(("Push to %s failed (missing permissions)"):format(name), vim.log.levels.ERROR)
-    notification.info(table.concat(res.stdout, "\n"))
-    return
-  end
-
   local using_force = vim.tbl_contains(args, "--force") or vim.tbl_contains(args, "--force-with-lease")
   local updates_rejected = string.find(table.concat(res.stdout), "Updates were rejected") ~= nil
 
@@ -71,7 +95,10 @@ local function push_to(args, remote, branch, opts)
     end
   end
 
-  if res and res:success() then
+  local reason, hard_failure = push_failure_info(res)
+  local ok = res ~= nil and res:success() and not hard_failure
+
+  if ok then
     -- settle the banner before yielding: a.util.scheduler can suspend for
     -- the rest of the turn in some async contexts
     loading.done("Pushed to " .. name, vim.log.levels.INFO)
@@ -80,8 +107,22 @@ local function push_to(args, remote, branch, opts)
     event.send("PushComplete")
   else
     logger.debug("Failed to push to " .. name)
-    loading.done("Failed to push to " .. name, vim.log.levels.ERROR)
-    notification.error("Failed to push to " .. name, { dismiss = true })
+
+    -- surface git's own wording: the remote's rejection or git's error is
+    -- the only useful diagnosis, and exit code 128 covers auth, missing
+    -- repositories and permissions alike
+    local banner = ("Failed to push to %s"):format(name)
+    local first_reason = reason:match("([^\n]+)")
+    if first_reason and first_reason ~= "" then
+      banner = ("%s: %s"):format(banner, first_reason)
+    end
+    loading.done(banner, vim.log.levels.ERROR)
+
+    local message = ("Failed to push to %s"):format(name)
+    if reason ~= "" then
+      message = message .. "\n" .. reason
+    end
+    notification.error(message, { dismiss = true })
   end
 end
 
