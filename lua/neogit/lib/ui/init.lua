@@ -235,11 +235,11 @@ function Ui:get_filepaths_in_selection()
   local paths = {}
   for i = start, stop do
     local component = self:_find_component_by_index(i, function(node)
-      return node.options.item ~= nil and node.options.item.escaped_path
+      return node.options.item ~= nil and node.options.item.name
     end)
 
     if component then
-      table.insert(paths, 1, component.options.item.escaped_path)
+      table.insert(paths, 1, component.options.item.name)
     end
   end
 

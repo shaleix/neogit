@@ -195,20 +195,20 @@ M.v_discard = function(self)
 
       if #unstaged_files > 0 then
         git.index.checkout(util.map(unstaged_files, function(item)
-          return item.escaped_path
+          return item.name
         end))
       end
 
       if #new_files > 0 then
         git.index.reset(util.map(new_files, function(item)
-          return item.escaped_path
+          return item.name
         end))
         cleanup_items(new_files)
       end
 
       if #staged_files_modified > 0 then
         local paths = util.map(staged_files_modified, function(item)
-          return item.escaped_path
+          return item.name
         end)
         git.index.reset(paths)
         git.index.checkout(paths)
@@ -247,9 +247,9 @@ M.v_stage = function(self)
           table.insert(invalidated_diffs, "*:" .. item.name)
 
           if section.name == "unstaged" then
-            table.insert(unstaged_files, item.escaped_path)
+            table.insert(unstaged_files, item.name)
           else
-            table.insert(untracked_files, item.escaped_path)
+            table.insert(untracked_files, item.name)
           end
         end
       end
@@ -282,7 +282,7 @@ M.v_unstage = function(self)
       if section.name == "staged" then
         for _, item in ipairs(section.items) do
           table.insert(invalidated_diffs, "*:" .. item.name)
-          table.insert(files, item.escaped_path)
+          table.insert(files, item.name)
         end
       end
     end
@@ -937,7 +937,7 @@ M.n_discard = function(self)
           message = ("Discard %q?"):format(selection.item.name)
           action = function()
             if selection.item.mode == "A" then
-              git.index.reset { selection.item.escaped_path }
+              git.index.reset { selection.item.name }
               cleanup_items { selection.item }
             else
               git.index.checkout { selection.item.name }
@@ -949,20 +949,20 @@ M.n_discard = function(self)
         message = ("Discard %q?"):format(selection.item.name)
         action = function()
           if selection.item.mode == "N" or selection.item.mode == "A" then
-            git.index.reset { selection.item.escaped_path }
+            git.index.reset { selection.item.name }
             cleanup_items { selection.item }
           elseif selection.item.mode == "M" then
-            git.index.reset { selection.item.escaped_path }
-            git.index.checkout { selection.item.escaped_path }
+            git.index.reset { selection.item.name }
+            git.index.checkout { selection.item.name }
           elseif selection.item.mode == "R" then
             git.index.reset_HEAD(selection.item.name, selection.item.original_name)
             git.index.checkout { selection.item.original_name }
             cleanup_items { selection.item }
           elseif selection.item.mode == "D" then
-            git.index.reset_HEAD(selection.item.escaped_path)
-            git.index.checkout { selection.item.escaped_path }
+            git.index.reset_HEAD(selection.item.name)
+            git.index.checkout { selection.item.name }
           else
-            error(("Unhandled file mode %q for %q"):format(selection.item.mode, selection.item.escaped_path))
+            error(("Unhandled file mode %q for %q"):format(selection.item.mode, selection.item.name))
           end
         end
         refresh = { update_diffs = { "staged:" .. selection.item.name } }
@@ -1012,19 +1012,19 @@ M.n_discard = function(self)
             if item.mode == "N" or item.mode == "A" then
               table.insert(new_files, item)
             elseif item.mode == "M" then
-              table.insert(staged_files_modified, item.escaped_path)
+              table.insert(staged_files_modified, item.name)
             elseif item.mode == "R" then
               table.insert(staged_files_renamed, item)
             elseif item.mode == "D" then
-              table.insert(staged_files_deleted, item.escaped_path)
+              table.insert(staged_files_deleted, item.name)
             else
-              error(("Unknown file mode %q for %q"):format(item.mode, item.escaped_path))
+              error(("Unknown file mode %q for %q"):format(item.mode, item.name))
             end
           end
 
           if #new_files > 0 then
             git.index.reset(util.map(new_files, function(item)
-              return item.escaped_path
+              return item.name
             end))
             cleanup_items(new_files)
           end
@@ -1038,7 +1038,7 @@ M.n_discard = function(self)
             for _, item in ipairs(staged_files_renamed) do
               git.index.reset_HEAD(item.name, item.original_name)
               git.index.checkout { item.original_name }
-              fn.delete(item.escaped_path)
+              fn.delete(item.name)
             end
           end
 
@@ -1129,12 +1129,8 @@ M.n_rename = function(self)
     local selection = self.buffer.ui:get_selection()
     local paths = git.files.all_tree()
 
-    if
-      selection.item
-      and selection.item.escaped_path
-      and git.files.is_tracked(selection.item.escaped_path)
-    then
-      paths = util.deduplicate(util.merge({ selection.item.escaped_path }, paths))
+    if selection.item and selection.item.name and git.files.is_tracked(selection.item.name) then
+      paths = util.deduplicate(util.merge({ selection.item.name }, paths))
     end
 
     local selected = FuzzyFinderBuffer.new(paths):open_async { prompt_prefix = "Rename file" }
@@ -1165,12 +1161,8 @@ M.n_untrack = function(self)
     local selection = self.buffer.ui:get_selection()
     local paths = git.files.all_tree()
 
-    if
-      selection.item
-      and selection.item.escaped_path
-      and git.files.is_tracked(selection.item.escaped_path)
-    then
-      paths = util.deduplicate(util.merge({ selection.item.escaped_path }, paths))
+    if selection.item and selection.item.name and git.files.is_tracked(selection.item.name) then
+      paths = util.deduplicate(util.merge({ selection.item.name }, paths))
     end
 
     local selected = FuzzyFinderBuffer.new(paths)
@@ -1195,8 +1187,8 @@ M.v_untrack = function(self)
   return a.void(function()
     local selection = self.buffer.ui:get_selection()
     local selected_paths = util.filter_map(selection.items or {}, function(item)
-      if git.files.is_tracked(item.escaped_path) then
-        return item.escaped_path
+      if git.files.is_tracked(item.name) then
+        return item.name
       end
     end)
 

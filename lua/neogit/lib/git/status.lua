@@ -15,7 +15,6 @@ local M = {}
 ---@field diff Diff
 ---@field stats { additions: number, deletions: number }|nil Per-file +N/-M line counts from a bulk `git diff --numstat` call at refresh time (unstaged items: worktree diff; staged items: cached diff); nil for untracked/unmerged or when status.file_line_counts is off
 ---@field absolute_path string
----@field escaped_path string
 ---@field original_name string|nil
 ---@field file_mode {head: number, index: number, worktree: number}|nil
 ---@field submodule SubmoduleStatus|nil
@@ -55,14 +54,12 @@ end
 ---@return StatusItem
 local function update_file(section, cwd, file, mode, name, original_name, file_mode, submodule)
   local absolute_path = Path:new(cwd, name):absolute()
-  local escaped_path = vim.fn.fnameescape(vim.fn.fnamemodify(absolute_path, ":~:."))
 
   local item = { --[[@class StatusItem]]
     mode = mode,
     name = name,
     original_name = original_name,
     absolute_path = absolute_path,
-    escaped_path = escaped_path,
     file_mode = file_mode,
     submodule = submodule,
   }
@@ -314,8 +311,11 @@ end
 function M.stage_untracked()
   -- Paths are collected BEFORE dispatching: the twin/CLI call can invalidate
   -- the repo state, so the untracked item list must be snapshotted first.
+  -- Raw (unescaped) paths are required: every executor here is shell-free
+  -- (libuv spawn argv / libgit2 FFI), so fnameescape'd strings with literal
+  -- backslashes would no longer match the files on disk.
   local paths = util.map(git.repo.state.untracked.items, function(item)
-    return item.escaped_path
+    return item.name
   end)
 
   return git.index.add(paths)
