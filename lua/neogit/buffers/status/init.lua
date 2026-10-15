@@ -384,6 +384,11 @@ function M:open(kind)
       ["NeogitEditorClosed"] = self:deferred_refresh("editor_closed"),
       ["NeogitFetchComplete"] = self:deferred_refresh("fetch"),
       ["NeogitMerge"] = self:deferred_refresh("merge"),
+      -- Push doesn't touch the worktree, so the filewatcher never fires:
+      -- without this handler the Head line's ↑N stays stale after a push.
+      -- No wait: the remote-tracking ref is already settled when the event
+      -- fires, so the refresh can run on the next tick.
+      ["NeogitPushComplete"] = self:deferred_refresh("push", 0),
     },
     autocmds = {
       ["FocusGained"] = self:deferred_refresh("focused", 10),

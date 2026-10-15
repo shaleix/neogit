@@ -209,4 +209,48 @@ describe("status Head Line divergence counters", function()
     assert.truthy(text:find("Recent Commits", 1, true), "Recent Commits must render while ahead:\n" .. text)
     assert.truthy(text:match("%* %x+ t local%-only"), "the ahead commit must be listed:\n" .. text)
   end)
+
+  it("clears ↑N from the Head line after a successful push", function()
+    local dir = workdir()
+
+    -- A real bare remote with upstream tracking: the fake-remote trick used
+    -- elsewhere can't be pushed to.
+    local remote = dir .. "-origin.git"
+    vim.uv.fs_mkdir(remote, 493)
+    run(remote, "init", "-q", "--bare", "-b", "main")
+    run(dir, "remote", "add", "origin", remote)
+    run(dir, "push", "-q", "-u", "origin", "main")
+
+    -- One local-only commit: the Head line must show ↑1.
+    local fd = assert(io.open(dir .. "/file.txt", "a"))
+    fd:write("two\n")
+    fd:close()
+    run(dir, "add", "file.txt")
+    run(dir, "commit", "-qm", "local-only")
+
+    local buf = open_status(dir)
+    local line = head_line(buffer_text(buf))
+    assert.truthy(line and line:find("↑1", 1, true), "Head line must show ↑1 before the push:\n" .. line)
+
+    -- Push for real, then fire the exact event push_to sends on success.
+    run(dir, "push", "-q", "origin", "main")
+    require("neogit.lib.event").send("PushComplete")
+
+    -- NeogitStatusRefreshed is global (any repo's refresh fires it), so poll
+    -- the observable outcome instead: the Head line must drop the ahead
+    -- counter and go in-sync.
+    assert.truthy(
+      vim.wait(5000, function()
+        local line = head_line(buffer_text(buf))
+        return line and not line:find("↑", 1, true)
+      end, 20),
+      "ahead counter must clear from the Head line after a push:\n" .. buffer_text(buf)
+    )
+
+    line = head_line(buffer_text(buf))
+    assert.truthy(
+      line and line:match("^✓ %S+ → main$"),
+      "Head line must be in sync after push:\n" .. tostring(line)
+    )
+  end)
 end)
