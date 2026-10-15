@@ -88,6 +88,22 @@ describe("lib.git.libgit2 twins", function()
     end)
   end)
 
+  describe("config twins (CLI equivalence)", function()
+    local config_twin = require("neogit.lib.git.libgit2.config")
+
+    it("strips the trailing newline git config --get drops", function()
+      -- git branch --edit-description stores the editor buffer verbatim, so
+      -- the value keeps its trailing newline in storage. `git config --get`
+      -- prints the value and the line terminator is lost when callers split
+      -- the output into lines; twins must land on the same bytes, or popup
+      -- rendering feeds nvim_buf_set_lines an embedded newline and dies.
+      vim.system({ "git", "-C", dir, "config", "branch.master.description", "hello world\n" }):wait()
+
+      assert.equal("hello world", config_twin.merged_get("branch.master.description"))
+      assert.equal("hello world", config_twin.local_entries()["branch.master.description"])
+    end)
+  end)
+
   describe("query twins (CLI equivalence)", function()
     local git
 
