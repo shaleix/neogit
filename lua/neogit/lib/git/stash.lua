@@ -18,6 +18,17 @@ function M.list_refs()
   end
 end
 
+---Surfaces a failed stash operation's stderr as an error notification:
+---git's own wording is the only useful diagnosis (dirty-tree refusals etc),
+---and nothing else in the pop/apply/drop paths reports it.
+---@param result ProcessResult
+local function notify_failure(result)
+  local stderr = vim.tbl_filter(function(line)
+    return line and line ~= ""
+  end, result.stderr or {})
+  notification.error(table.concat(stderr, "\n"))
+end
+
 ---@param args string[]
 ---@param message string? custom stash message; nil/empty keeps git's default
 function M.stash_all(args, message)
@@ -68,17 +79,6 @@ end
 function M.push(args, files)
   local result = git.cli.stash.push.arg_list(args).files(unpack(files)).call()
   event.send("Stash", { success = result:success() })
-end
-
----Surfaces a failed stash operation's stderr as an error notification:
----git's own wording is the only useful diagnosis (dirty-tree refusals etc),
----and nothing else in the pop/apply/drop paths reports it.
----@param result ProcessResult
-local function notify_failure(result)
-  local stderr = vim.tbl_filter(function(line)
-    return line and line ~= ""
-  end, result.stderr or {})
-  notification.error(table.concat(stderr, "\n"))
 end
 
 function M.pop(stash)
@@ -160,7 +160,7 @@ function M.register(meta)
   ---Parse one `git stash list --format=%gd%x1f%H%x1f%gs` line into a stash
   ---entry (single spawn for the whole list).
   local function parse_stash_line(line)
-    local ref, oid, message = line:match("stash@{(%-?%d*)}\x1f([0-9a-f]+)\x1f(.*)")
+    local ref, oid, message = line:match("stash@{(%-?%d*)}\031([0-9a-f]+)\031(.*)")
     local idx = tonumber(ref)
     if not idx or not oid or not message then
       return nil

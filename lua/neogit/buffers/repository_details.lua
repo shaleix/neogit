@@ -18,8 +18,6 @@ local text = Ui.text
 local col = Ui.col
 local row = Ui.row
 
-local M = {}
-
 ---Parse `git diff <range>` output into per-file Diff tables (the shape
 ---`common.Diff` renders), the same way the log module splits `git show`.
 ---@param range string

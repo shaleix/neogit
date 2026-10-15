@@ -2,7 +2,6 @@ local Ui = require("neogit.lib.ui")
 local Component = require("neogit.lib.ui.component")
 local util = require("neogit.lib.util")
 local common = require("neogit.buffers.common")
-local config = require("neogit.config")
 local hl = require("neogit.lib.hl")
 
 local col = Ui.col
