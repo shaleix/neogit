@@ -10,6 +10,22 @@ local function worktree_root()
   return require("neogit.lib.git").repo.worktree_root
 end
 
+---`git config --get` prints the value and strips the final line terminator,
+---so the CLI-facing value of `key = value\n` is `value`. libgit2's
+---get_string/entries return the stored value verbatim, trailing newline
+---included (`git branch --edit-description` stores the editor buffer as-is).
+---Values that keep the newline break callers that render one line per value
+---(nvim_buf_set_lines rejects embedded newlines), so twins must strip it to
+---match CLI semantics. git strips exactly one trailing newline.
+---@param value? string
+---@return string?
+local function cli_strip_trailing_newline(value)
+  if value == nil then
+    return nil
+  end
+  return (value:gsub("\n$", ""))
+end
+
 ---Entries of the LOCAL config only (matches `git config --list --local`).
 ---Returns nil when the libgit2 path cannot serve the query, so callers fall
 ---back to the CLI rather than rendering a partial config.
@@ -39,7 +55,7 @@ function M.local_entries()
 
     local out = {}
     for _, entry in ipairs(entries) do
-      out[entry.name:lower()] = entry.value or ""
+      out[entry.name:lower()] = cli_strip_trailing_newline(entry.value) or ""
     end
 
     return out
@@ -62,7 +78,7 @@ function M.merged_get(key)
       return cfg:get_string(key)
     end)
 
-    return ok and value or nil
+    return ok and cli_strip_trailing_newline(value) or nil
   end)
 end
 
@@ -86,7 +102,7 @@ function M.global_get(key)
     return nil
   end
 
-  return value
+  return cli_strip_trailing_newline(value)
 end
 
 ---Composite twin for git.config.get_global: merged lookup mirroring
