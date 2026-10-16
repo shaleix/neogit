@@ -428,6 +428,7 @@ function Process:spawn(cb)
   end
 
   logger.trace("[PROCESS] Spawning: " .. vim.inspect(self.cmd))
+  require("neogit.lib.git.backend_stats").record_spawn(self.cmd)
   local job = fn.jobstart(self.cmd, {
     cwd = self.cwd,
     env = self.env,

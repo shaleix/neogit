@@ -55,7 +55,11 @@ end
 ---@return boolean served
 ---@return ... extra trailing twin results, when the twin returns multiple values
 function M.twin(capability, module, fn_name, level, ...)
+  local stats = require("neogit.lib.git.backend_stats")
+  local op = module .. "." .. fn_name
+
   if backend.capability(capability) ~= "libgit2" then
+    stats.record_query(op, "skipped")
     return nil, false
   end
 
@@ -65,15 +69,18 @@ function M.twin(capability, module, fn_name, level, ...)
   local results = { xpcall(fn, debug.traceback, ...) }
 
   if not results[1] then
+    stats.record_query(op, "failed")
     log_fallback(level, module, fn_name, "failed", results[2])
     return nil, false
   end
 
   if #results < 2 or results[2] == nil then
+    stats.record_query(op, "cli")
     log_fallback(level, module, fn_name, "unavailable")
     return nil, false
   end
 
+  stats.record_query(op, "libgit2")
   results[#results + 1] = true
   return unpack(results, 2, #results)
 end

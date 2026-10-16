@@ -40,3 +40,30 @@ end, {
   nargs = "?",
   desc = "Open git commit view for specified commit, or HEAD",
 })
+
+api.nvim_create_user_command("NeogitBackendStats", function(o)
+  local stats = require("neogit.lib.git.backend_stats")
+  if o.fargs[1] == "reset" then
+    stats.reset()
+    vim.notify("[neogit] backend stats reset", vim.log.levels.INFO)
+    return
+  end
+
+  local lines = vim.split(stats.report(), "\n", { plain = true })
+  vim.schedule(function()
+    vim.cmd([[vnew]])
+    vim.bo.buftype = "nofile"
+    vim.bo.bufhidden = "hide"
+    vim.bo.filetype = "NeogitBackendStats"
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+    vim.keymap.set("n", "q", "<cmd>close<cr>", { buffer = true, silent = true })
+  end)
+end, {
+  nargs = "?",
+  desc = "Show which operations were served by libgit2 vs the git CLI (reset to clear)",
+  complete = function(arglead)
+    return vim.tbl_filter(function(x)
+      return vim.startswith(x, arglead)
+    end, { "reset" })
+  end,
+})

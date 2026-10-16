@@ -411,12 +411,14 @@ function Repo:tasks(filter, state, ctx)
         local ok, err = xpcall(twin, debug.traceback, state, filter, ctx)
         if ok then
           logger.debug(("[REPO]: Refreshed %s (libgit2) in %d ms"):format(name, vim.uv.now() - start))
+          require("neogit.lib.git.backend_stats").record_update(name, true)
           return
         end
 
         log_twin_failure(name, err)
       end
 
+      require("neogit.lib.git.backend_stats").record_update(name, false)
       fn(state, filter, ctx)
       logger.debug(("[REPO]: Refreshed %s in %d ms"):format(name, vim.uv.now() - start))
     end)
