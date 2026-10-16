@@ -18,10 +18,13 @@ local M = {}
 ---@field skipped integer queries never offered to a twin (capability/backend off)
 ---@field failed integer twin raised; counted under cli as well
 
+---Counters per seam. `queries` maps "module.fn" -> BackendStatsEntry,
+---`updates` maps the refresh task name -> libgit2/cli run counts, and
+---`spawns` maps "git <subcommand>" -> process count.
 M.counters = {
-  queries = {}, ---@type table<string, BackendStatsEntry>
-  updates = {}, ---@type table<string, { libgit2 = integer, cli = integer }>
-  spawns = {}, ---@type table<string, integer> "git <subcommand>" -> count
+  queries = {},
+  updates = {},
+  spawns = {},
 }
 
 local events = {}
@@ -82,13 +85,13 @@ function M.record_update(task, used_libgit2)
   push_event("update", task, used_libgit2 and "libgit2" or "cli")
 end
 
+local VALUE_FLAGS =
+  { ["-c"] = true, ["-C"] = true, ["--git-dir"] = true, ["--work-tree"] = true, ["--namespace"] = true }
+
 ---Record one spawned git CLI process (coarse: "git <subcommand>", skipping
 ---global flags and their values (--no-pager, -c <cfg>, ...) so the key
 ---names the actual operation).
 ---@param cmd string[] full argv
-local VALUE_FLAGS =
-  { ["-c"] = true, ["-C"] = true, ["--git-dir"] = true, ["--work-tree"] = true, ["--namespace"] = true }
-
 function M.record_spawn(cmd)
   if not cmd or cmd[1] == nil then
     return
