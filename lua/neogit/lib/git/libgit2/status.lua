@@ -8,12 +8,87 @@
 --     out of scope)
 local git2 = require("neogit.lib.git2")
 local bit = require("bit")
+local ffi = require("ffi")
 local logger = require("neogit.logger")
+local config = require("neogit.config")
 
 local M = {}
 
 local function worktree_root()
   return require("neogit.lib.git").repo.worktree_root
+end
+
+---Per-file +N/-M counts for one git_diff, keyed by the delta's new path
+---(what numstat prints for adds/modifies/renames; deleted files keep the
+---same path on both sides). Binary deltas are skipped to match `git diff
+-----numstat`, which prints "-" for them. Assumes rename detection has
+---already run on the diff (find_similar below).
+---@param lg2 table vendored libgit2 binding module
+---@param diff ffi.cdata* git_diff*
+---@return table<string, {additions: number, deletions: number}>
+local function diff_numstat(lg2, diff)
+  local counts = {}
+  local n = tonumber(lg2.C.git_diff_num_deltas(diff)) or 0
+
+  for i = 0, n - 1 do
+    local delta = lg2.C.git_diff_get_delta(diff, i)
+    if delta ~= nil and bit.band(delta.flags, lg2.GIT_DIFF_FLAG.BINARY) == 0 then
+      local patch = ffi.new("git_patch*[1]")
+      if lg2.C.git_patch_from_diff(patch, diff, i) == 0 then
+        local add, del = ffi.new("size_t[1]"), ffi.new("size_t[1]")
+        if lg2.C.git_patch_line_stats(nil, add, del, patch[0]) == 0 then
+          local path = delta.new_file.path
+          if path == nil or path[0] == 0 then
+            path = delta.old_file.path
+          end
+          counts[ffi.string(path)] = { additions = tonumber(add[0]), deletions = tonumber(del[0]) }
+        end
+        lg2.C.git_patch_free(patch[0])
+      end
+    end
+  end
+
+  return counts
+end
+
+---Both numstat maps in-process: staged = HEAD-tree <-> index, unstaged =
+---index <-> workdir. Rename detection runs on both diffs so renamed paths
+---key the same new path (with 0/0 counts for pure renames) as the CLI's
+---numstat output. An unborn HEAD (no HEAD^{tree}) diffs against the empty
+---tree, which is what `git diff --cached` does too.
+---@param repo table git2 repository wrapper
+---@param lg2 table vendored libgit2 binding module
+---@return table unstaged map
+---@return table staged map
+local function numstat_maps(repo, lg2)
+  local head_tree = ffi.new("git_object*[1]")
+  local have_head = lg2.C.git_revparse_single(head_tree, repo.repo, "HEAD^{tree}") == 0
+
+  local opts = ffi.new("git_diff_options[1]", lg2.GIT_DIFF_OPTIONS_INIT)
+  local find = ffi.new("git_diff_find_options[1]", lg2.GIT_DIFF_FIND_OPTIONS_INIT)
+  find[0].flags = lg2.GIT_DIFF_FIND.FIND_RENAMES
+
+  local staged_counts, unstaged_counts = {}, {}
+
+  local diff = ffi.new("git_diff*[1]")
+  local head_tree_ptr = have_head and ffi.cast("git_tree*", head_tree[0]) or nil
+  if lg2.C.git_diff_tree_to_index(diff, repo.repo, head_tree_ptr, nil, opts) == 0 then
+    lg2.C.git_diff_find_similar(diff[0], find)
+    staged_counts = diff_numstat(lg2, diff[0])
+    lg2.C.git_diff_free(diff[0])
+  end
+
+  if lg2.C.git_diff_index_to_workdir(diff, repo.repo, nil, opts) == 0 then
+    lg2.C.git_diff_find_similar(diff[0], find)
+    unstaged_counts = diff_numstat(lg2, diff[0])
+    lg2.C.git_diff_free(diff[0])
+  end
+
+  if have_head then
+    lg2.C.git_object_free(head_tree[0])
+  end
+
+  return unstaged_counts, staged_counts
 end
 
 -- porcelain letter for one side of an unmerged path
@@ -100,6 +175,10 @@ end
 ---@param ctx { repo: table? }?
 function M.update_status(state, filter, ctx)
   local status = require("neogit.lib.git.status")
+
+  -- Populated inside the git2.run callback below; applied to items after
+  -- the executor returns (see the attach comment at the end of the twin).
+  local numstat = { enabled = false }
 
   git2.run(function()
     local repo = (ctx and ctx.repo) or git2.open_repo(worktree_root(), true)
@@ -283,18 +362,47 @@ function M.update_status(state, filter, ctx)
     end
 
     lg2.C.git_status_list_free(list[0])
+
+    -- Per-file +N/-M counts in-process (replaces the two `git diff
+    -- --numstat` spawns the CLI attach makes): build the same two diffs
+    -- (HEAD-tree <-> index, index <-> workdir), run rename detection to
+    -- match the status deltas, then take whole-patch line stats. Binary
+    -- deltas are skipped (CLI numstat prints "-" for them). Failure is
+    -- tolerated: nil maps leave item.stats unset, like a failed CLI numstat.
+    if config.values.status.file_line_counts then
+      numstat.enabled = true
+      local ok, unstaged_counts, staged_counts = pcall(numstat_maps, repo, lg2)
+      if ok then
+        numstat.unstaged = unstaged_counts
+        numstat.staged = staged_counts
+      else
+        numstat.failed = tostring(unstaged_counts)
+      end
+    end
   end)
 
-  -- Attach per-file +N/-M line counts here, OUTSIDE the git2.run callback:
-  -- the staged/unstaged item lists are final once the executor returns, and
+  -- Attach per-file +N/-M line counts OUTSIDE the git2.run callback: the
+  -- staged/unstaged item lists are final once the executor returns, and
   -- control is back in the caller's coroutine on the Neovim main loop. The
   -- git2.run seam (git2.lua, "Executor seam") currently executes its
   -- callback synchronously on the main thread, but reserves a uv.new_work
   -- replacement that would run the callback in a worker thread -- where
-  -- spawning the `git diff --numstat` subprocesses (a vim API operation)
-  -- would be unsafe. The CLI backend attaches at the end of its own
-  -- update_status (lib/git/status.lua).
-  status.attach_file_stats(state)
+  -- neither vim APIs nor (now) any CLI numstat fallback would be safe.
+  -- In-process counts computed inside the callback survive that move.
+  if not numstat.enabled then
+    return
+  end
+
+  if numstat.failed then
+    status.attach_file_stats(state)
+  else
+    for _, item in ipairs(state.unstaged.items) do
+      item.stats = numstat.unstaged[item.name]
+    end
+    for _, item in ipairs(state.staged.items) do
+      item.stats = numstat.staged[item.name]
+    end
+  end
 end
 
 -- Quick checks replacing the porcelain scans in anything_staged/unstaged.

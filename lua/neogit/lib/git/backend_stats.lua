@@ -159,7 +159,7 @@ function M.report()
 
   table.insert(lines, "")
   table.insert(lines, "update tasks (refresh waves):")
-  table.insert(lines, string.format("  %-34s %9s %9s", "task", "libgit2", "cli"))
+  table.insert(lines, string.format("  %-34s %9s %9s", "task", "libgit2", "legacy"))
   local ukeys = sorted_by_total(M.counters.updates)
   if #ukeys == 0 then
     table.insert(lines, "  (none recorded)")
@@ -168,6 +168,11 @@ function M.report()
     local e = M.counters.updates[task]
     table.insert(lines, string.format("  %-34s %9d %9d", task, e.libgit2, e.cli))
   end
+  table.insert(
+    lines,
+    "  (legacy = task body not twin-registered; it may still twin queries"
+      .. " internally - see the query table - or read .git files with no spawn)"
+  )
 
   table.insert(lines, "")
   table.insert(lines, "cli spawns (process level, includes fallbacks):")
