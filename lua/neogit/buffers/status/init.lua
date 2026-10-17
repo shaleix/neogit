@@ -216,7 +216,7 @@ function M:open(kind)
   end
 
   -- Toggle-reopen: fold state carries over, but the last cursor/view position
-  -- must not - the freshly opened buffer anchors on the second section.
+  -- must not - the freshly opened buffer anchors on the first section.
   self.cursor_state = nil
   self.view_state = nil
   self._programmatic = self._programmatic or false
@@ -370,7 +370,7 @@ function M:open(kind)
       -- Best-effort immediate anchor (when state is already rendered). The
       -- authoritative anchor lands in redraw after the first refresh: at open
       -- time the repo may not be refreshed yet.
-      local target = buffer.ui:section_at_index(2) or buffer.ui:first_section()
+      local target = buffer.ui:first_section()
       if target then
         buffer:move_cursor(target.first)
       end
@@ -616,9 +616,9 @@ function M:redraw(cursor, view, fold_state)
   -- repo may not be refreshed yet). Cancelled by any user cursor movement.
   if self._anchor_pending then
     self._anchor_pending = false
-    local target = self.buffer.ui:section_at_index(2) or self.buffer.ui:first_section()
+    local target = self.buffer.ui:first_section()
     if target then
-      logger.debug("[STATUS] Anchoring cursor on second section")
+      logger.debug("[STATUS] Anchoring cursor on first section")
       self._programmatic = true
       pcall(function()
         self.buffer:move_cursor(target.first)
