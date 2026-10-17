@@ -86,14 +86,14 @@ end
 neogit.setup { filewatcher = { enabled = false }, disable_context_highlighting = true }
 
 describe("status buffer cursor anchoring", function()
-  it("anchors the cursor on the second visible section after open", function()
+  it("anchors the cursor on the first visible section after open", function()
     local dir = workdir(true)
     local buf = open_status(dir)
 
-    local second = buf.buffer.ui:section_at_index(2)
-    assert.truthy(second, "expected a second section")
-    assert.equal("unstaged", second.name)
-    assert.equal(second.first, cursor_line(buf))
+    local first = buf.buffer.ui:first_section()
+    assert.truthy(first, "expected at least one section")
+    assert.equal("untracked", first.name)
+    assert.equal(first.first, cursor_line(buf))
   end)
 
   it("falls back to the first section when there is only one", function()
@@ -127,9 +127,9 @@ describe("status buffer cursor anchoring", function()
 
     watcher_refresh(buf)
 
-    local second = buf.buffer.ui:section_at_index(2)
-    assert.truthy(second)
-    assert.equal(second.first, cursor_line(buf))
+    local first = buf.buffer.ui:first_section()
+    assert.truthy(first)
+    assert.equal(first.first, cursor_line(buf))
   end)
 
   it("restores the semantic position after the user moves the cursor", function()
@@ -201,8 +201,8 @@ describe("status buffer cursor anchoring", function()
     assert.truthy(wait_refreshed(), "reopen refresh did not complete")
     vim.wait(50)
 
-    local second = reopened.buffer.ui:section_at_index(2)
-    assert.truthy(second)
-    assert.equal(second.first, cursor_line(reopened), "reopen must anchor the second section")
+    local first = reopened.buffer.ui:first_section()
+    assert.truthy(first)
+    assert.equal(first.first, cursor_line(reopened), "reopen must anchor the first section")
   end)
 end)
