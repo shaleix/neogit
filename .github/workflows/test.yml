@@ -15,7 +15,10 @@ jobs:
       fail-fast: false
       matrix:
         release: [stable, nightly]
-        os: [ubuntu-latest]
+        # ubuntu-latest is now 26.04, whose toolcache only carries the
+        # latest patch release per ruby series - ruby 3.3.6 (.ruby-version)
+        # is unavailable there. Pin 24.04 until .ruby-version is bumped.
+        os: [ubuntu-24.04]
     env:
       CI: "1"
     steps:
