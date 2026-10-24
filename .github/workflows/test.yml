@@ -122,6 +122,79 @@ jobs:
           fi
           echo "No backend-specific failures."
 
+      # Lua E2E (rspec replacement path - see tests/README.md "E2E tests"):
+      # same differential-guard design as the rspec steps above. Strict mode
+      # (NEOGIT_E2E_STRICT=1) executes the known-fail examples so the
+      # cli/libgit2 comparison is meaningful; the plain `make test` gate
+      # below keeps them pending.
+      - name: E2E Lua (CLI backend)
+        continue-on-error: true
+        env:
+          NEOGIT_GIT_BACKEND: cli
+          NEOGIT_E2E_STRICT: "1"
+          TEST_FILES: tests/specs/neogit/e2e
+        run: |
+          make test > /tmp/lua-e2e-cli.log 2>&1 || true
+          tail -5 /tmp/lua-e2e-cli.log
+
+      - name: E2E Lua (libgit2 backend)
+        continue-on-error: true
+        env:
+          NEOGIT_GIT_BACKEND: auto
+          NEOGIT_E2E_STRICT: "1"
+          TEST_FILES: tests/specs/neogit/e2e
+        run: |
+          make test > /tmp/lua-e2e-lg2.log 2>&1 || true
+          tail -5 /tmp/lua-e2e-lg2.log
+
+      - name: Guard Lua E2E (libgit2 must not add failures beyond the CLI baseline)
+        run: |
+          extract() {
+            sed 's/\x1b\[[0-9;]*m//g' "$1" \
+              | grep -oE 'Fail[[:space:]]*\|\|[[:space:]]*[^[:space:]].*' \
+              | sed -e 's/^[^|]*||[[:space:]]*//' -e 's/[[:space:]]*$//' \
+              | grep -v 'FAILED TO LOAD FILE' | sort -u
+          }
+          extract /tmp/lua-e2e-cli.log > /tmp/lua-fails-cli.txt
+          extract /tmp/lua-e2e-lg2.log > /tmp/lua-fails-lg2.txt
+          echo "Lua CLI failures:    $(wc -l < /tmp/lua-fails-cli.txt)"
+          echo "Lua libgit2 failures: $(wc -l < /tmp/lua-fails-lg2.txt)"
+
+          echo "--- Lua CLI backend failure list ---"
+          cat /tmp/lua-fails-cli.txt
+          echo "--- Lua libgit2 backend failure list ---"
+          cat /tmp/lua-fails-lg2.txt
+
+          check() {
+            NEW_FAILURES=$(comm -13 /tmp/lua-fails-cli.txt /tmp/lua-fails-lg2.txt)
+            [ -z "$NEW_FAILURES" ]
+          }
+
+          if ! check; then
+            echo "First pass shows backend-specific failures; retrying the libgit2 run once to filter flakiness..."
+            cp /tmp/lua-fails-lg2.txt /tmp/lua-fails-lg2-first.txt
+            NEOGIT_GIT_BACKEND=auto NEOGIT_E2E_STRICT=1 TEST_FILES=tests/specs/neogit/e2e make test > /tmp/lua-e2e-lg2.log 2>&1 || true
+            extract /tmp/lua-e2e-lg2.log > /tmp/lua-fails-lg2.txt
+            echo "Lua libgit2 failures (retry): $(wc -l < /tmp/lua-fails-lg2.txt)"
+
+            echo "appearing in both libgit2 runs:"
+            comm -12 /tmp/lua-fails-lg2-first.txt /tmp/lua-fails-lg2.txt | tee /tmp/lua-fails-lg2-both.txt | head -20
+          else
+            : > /tmp/lua-fails-lg2-both.txt
+          fi
+
+          check() {
+            NEW_FAILURES=$(comm -13 /tmp/lua-fails-cli.txt /tmp/lua-fails-lg2-both.txt)
+            [ -z "$NEW_FAILURES" ]
+          }
+
+          if ! check; then
+            echo "::error::Lua E2E failures only under the libgit2 backend (both runs):"
+            comm -13 /tmp/lua-fails-cli.txt /tmp/lua-fails-lg2-both.txt
+            exit 1
+          fi
+          echo "No backend-specific Lua E2E failures."
+
       - name: Unit Test
         run: |
           make test
