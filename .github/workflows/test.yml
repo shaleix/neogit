@@ -15,10 +15,13 @@ jobs:
       fail-fast: false
       matrix:
         release: [stable, nightly]
-        # ubuntu-latest is now 26.04, whose toolcache only carries the
-        # latest patch release per ruby series - ruby 3.3.6 (.ruby-version)
-        # is unavailable there. Pin 24.04 until .ruby-version is bumped.
-        os: [ubuntu-24.04]
+        # ubuntu-latest (26.04) ships libgit2 1.9, inside the overlay's
+        # supported version matrix (1.7/1.8/1.9, major!=1 hard reject) -
+        # the libgit2 probe sanity step below prints the version on every
+        # run. If a future image moves outside the matrix, auto silently
+        # degrades the backend to cli (guard stays green but stops
+        # comparing); pin back to 24.04 (libgit2 1.7) in that case.
+        os: [ubuntu-latest]
     env:
       CI: "1"
     steps:
