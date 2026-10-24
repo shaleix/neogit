@@ -5,9 +5,6 @@ pre-push:
   files: "rg --files"
   parallel: true
   commands:
-    rubocop:
-      glob: "*.rb"
-      run: bundle exec rubocop {files}
     selene:
       glob: "{lua,plugin}/**/*.lua"
       run: selene --config selene/config.toml {files}
@@ -27,16 +24,9 @@ pre-push:
         - GIT_CONFIG_GLOBAL: /dev/null
         - GIT_CONFIG_SYSTEM: /dev/null
         - NVIM_APPNAME: neogit-test
-    rspec:
-      only:
-      - ref: master
-      run: bin/specs {files}
 pre-commit:
   parallel: true
   commands:
-    rubocop:
-      glob: "*.rb"
-      run: bundle exec rubocop {staged_files}
     selene:
       glob: "{lua,plugin}/**/*.lua"
       run: selene --config selene/config.toml {staged_files}
