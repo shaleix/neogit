@@ -88,7 +88,7 @@ rather than:
 
 ### Testing
 
-Neogit is tested using [`Plenary`](https://github.com/nvim-lua/plenary.nvim#plenarytest_harness) for unit tests, and `rspec` (yes, ruby) for e2e tests.
+Neogit is tested using [`Plenary`](https://github.com/nvim-lua/plenary.nvim#plenarytest_harness) for both unit tests and e2e tests (the e2e specs drive a real headless child nvim over RPC - see `tests/README.md`). The historical `rspec` (ruby) e2e suite under `spec/` is kept as an upstream-sync reference and can be run locally with `make specs`; it no longer runs in CI.
 
 It uses a *Busted* style testing, where each lua file inside [`./tests/specs/{test_name}_spec.lua`] is run.
 

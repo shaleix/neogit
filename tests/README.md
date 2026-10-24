@@ -55,6 +55,9 @@ replacement path for the Ruby suite:
   fork's baseline are registered via `known_fail` (pending) so `make test`
   stays green; run `NEOGIT_E2E_STRICT=1` to execute them for parity
   verification against rspec.
+- CI gates backend equivalence (cli vs libgit2) on this suite via
+  `NEOGIT_E2E_STRICT` differential runs; the ruby rspec suite is retained
+  only as a local upstream-sync reference (`make specs`).
 - The harness honors `NEOGIT_GIT_BACKEND` (cli/auto/libgit2) exactly like the
   rspec `:nvim` context does, so the same spec can gate both backends in CI.
 - Porting conventions (see `child_nvim.lua` header): rspec's `nvim.screen[n]`
