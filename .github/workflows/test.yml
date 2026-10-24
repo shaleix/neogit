@@ -15,13 +15,15 @@ jobs:
       fail-fast: false
       matrix:
         release: [stable, nightly]
-        # ubuntu-latest (26.04) ships libgit2 1.9, inside the overlay's
-        # supported version matrix (1.7/1.8/1.9, major!=1 hard reject) -
-        # the libgit2 probe sanity step below prints the version on every
-        # run. If a future image moves outside the matrix, auto silently
-        # degrades the backend to cli (guard stays green but stops
-        # comparing); pin back to 24.04 (libgit2 1.7) in that case.
-        os: [ubuntu-latest]
+        # ubuntu-latest (26.04) was validated 2026-10-24: libgit2 1.9.1 is
+        # inside the overlay's version matrix and the nightly leg is green,
+        # but action-setup-vim's stable-asset download fails on the 26.04
+        # image with EXDEV (cross-device rename), so the stable leg cannot
+        # start. Pin 24.04 (libgit2 1.7, both legs green) until that action
+        # handles the new image; the libgit2 probe sanity step below prints
+        # the version every run so a silent auto->cli degradation (version
+        # outside 1.7/1.8/1.9, major!=1) stays visible.
+        os: [ubuntu-24.04]
     env:
       CI: "1"
     steps:
