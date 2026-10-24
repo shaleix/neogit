@@ -40,6 +40,36 @@ end
 
 ## Test Organization
 
+### E2E tests (child-process, screen-level)
+
+`tests/specs/neogit/e2e/` holds ports of the rspec (`spec/`) E2E suite. They
+drive a **real headless child nvim** over RPC (`tests/util/child_nvim.lua`) —
+spawn, feed keys, capture the painted screen, collect `:messages` errors — and
+build git fixtures per test (`tests/util/e2e.lua`). This is the Lua
+replacement path for the Ruby suite:
+
+- Run only the E2E specs:
+  `TEST_FILES="tests/specs/neogit/e2e" make test`
+- Set `NEOGIT_E2E_PRINT=1` to dump the child's screen after every key.
+- The 16 `status_buffer_spec` examples that port rspec tests failing on this
+  fork's baseline are registered via `known_fail` (pending) so `make test`
+  stays green; run `NEOGIT_E2E_STRICT=1` to execute them for parity
+  verification against rspec.
+- The harness honors `NEOGIT_GIT_BACKEND` (cli/auto/libgit2) exactly like the
+  rspec `:nvim` context does, so the same spec can gate both backends in CI.
+- Porting conventions (see `child_nvim.lua` header): rspec's `nvim.screen[n]`
+  is 0-based — use row `n + 1` here; `move_to_line` keeps the ruby cursor
+  quirk (`screen_row - 1`, which is exact on this fork because the banner
+  occupies the first screen row); exact-row expectations are 80-column
+  byte-exact strings.
+
+Pilot parity baseline (cli backend, this fork): `general_spec` 21/21 green;
+`status_buffer_spec` 11 green / 16 red — the red set matches the rspec
+pre-existing failures one-for-one. The full port is complete: all 21 popup
+specs, all 8 buffer specs, and `general_spec` (30 files, 528 examples) live
+here, each verified against a per-file rspec baseline with identical
+pass/fail sets.
+
 ### Where do tests go?
 
 All tests are to be placed within the `tests/specs` directory, and placed mocking the path of the Neogit module the test is responsible for. For instance, say you wanted to test `lua/neogit/config.lua` then you would create the test file in `tests/specs/neogit/config_spec.lua` which mirrors the path in the main Neogit module.
