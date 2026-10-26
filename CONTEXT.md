@@ -53,6 +53,15 @@ by `status.recent_commit_count`. Its rows render the same Commit Graph
 styling as the Log view.
 _Avoid_: log section, history section
 
+### Drop
+
+Removing a commit from history by rewriting it: commits before the target
+stay untouched, commits after it are replayed. Triggered on a Recent Commits
+row by the Discard key (`x`); dropping a merge commit also removes the
+commits it merged in. Distinct from Discard (working-tree changes) and from
+revert (an inverse commit that leaves history alone).
+_Avoid_: delete commit, remove commit
+
 ### Head Line
 
 The status buffer's single header row for the checked-out worktree: sync

@@ -188,6 +188,12 @@ M.v_discard = function(self)
       end
     end
 
+    -- Selection covered nothing discardable (e.g. Recent Commits rows):
+    -- don't prompt when there is nothing to do.
+    if file_count == 0 and #stashes == 0 then
+      return
+    end
+
     if input.get_permission(discard_message) then
       if #untracked_files > 0 then
         cleanup_items(untracked_files)
@@ -972,6 +978,21 @@ M.n_discard = function(self)
           git.stash.drop(selection.item.name:match("(stash@{%d+})"))
         end
         refresh = {}
+      elseif section == "recent" then
+        local commit = selection.item.commit
+        local merge = #git.log.parents(commit.oid) > 2
+
+        if merge then
+          message = ("Drop merge commit %q? This will also drop the commits it merged in"):format(
+            commit.subject
+          )
+        else
+          message = ("Drop commit %q?"):format(commit.subject)
+        end
+
+        action = function()
+          git.rebase.drop(commit.oid)
+        end
       end
     else -- Discard Section
       if section == "untracked" then

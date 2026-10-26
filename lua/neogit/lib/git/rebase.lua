@@ -132,18 +132,46 @@ function M.modify(commit)
   end
 end
 
+---Drop a commit from history via an interactive rebase whose todo list is
+---rewritten without user interaction: the target's `pick` line becomes
+---`drop`; a merge commit's `merge -C` line is removed, which also drops
+---everything it merged in. Commits before the target are untouched; commits
+---after it are replayed with their merge structure preserved
+---(`--rebase-merges`), stopping on conflicts like any rebase.
+---@param commit string
+---@return ProcessResult
 function M.drop(commit)
   local short_commit = git.rev_parse.abbreviate_commit(commit)
-  local editor = "nvim -c '%s/^pick \\(" .. short_commit .. ".*\\)/drop \\1/' -c 'wq'"
-  local result = git.cli.rebase.interactive.autosquash.autostash
-    .commit(commit)
-    .in_pty(true)
+  local editor = "nvim -c 'g/^merge -C "
+    .. short_commit
+    .. "/d'"
+    .. " -c '%s/^pick \\("
+    .. short_commit
+    .. ".*\\)/drop \\1/e'"
+    .. " -c 'wq'"
+
+  local cmd = git.cli.rebase.interactive.autostash
+    .args("--no-autosquash", "--keep-empty", "--rebase-merges")
     .env({ GIT_SEQUENCE_EDITOR = editor })
-    .call()
+    .in_pty(true)
+
+  -- A root commit has no parent to rebase onto: rewrite history from --root
+  if git.log.parent(commit) then
+    cmd = cmd.args(commit .. "^")
+  else
+    cmd = cmd.args("--root")
+  end
+
+  local result = cmd.call()
 
   if result:success() then
     event.send("Rebase", { commit = commit, status = "ok" })
+  else
+    notification.error("Rebasing failed. Resolve conflicts before continuing")
+    event.send("Rebase", { commit = commit, status = "conflict" })
   end
+
+  return result
 end
 
 function M.continue()

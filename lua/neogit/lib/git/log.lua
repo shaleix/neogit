@@ -508,14 +508,23 @@ function M.is_ancestor(ancestor, descendant)
     :success()
 end
 
+---Lists a commit's parents in order. The rev-list line leads with the
+---commit itself, so a root commit yields only itself and a merge commit
+---yields three entries.
+---@param commit string
+---@return string[]
+function M.parents(commit)
+  return vim.split(
+    git.cli["rev-list"].max_count(1).parents.args(commit).call({ hidden = true }).stdout[1],
+    " "
+  )
+end
+
 ---Finds parent commit of a commit. If no parent exists, will return nil
 ---@param commit string
 ---@return string|nil
 function M.parent(commit)
-  return vim.split(
-    git.cli["rev-list"].max_count(1).parents.args(commit).call({ hidden = true }).stdout[1],
-    " "
-  )[2]
+  return M.parents(commit)[2]
 end
 
 ---Lists merge commits within a revision range (`git rev-list --merges`).
