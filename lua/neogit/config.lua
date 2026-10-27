@@ -100,6 +100,9 @@ end
 ---@field style? string
 ---@field border? string
 
+---@class NeogitConfigConfirm
+---@field use_vim? boolean Fall back to vim's built-in confirm prompt instead of the Confirm Dialog
+
 ---@alias StagedDiffSplitKind
 ---| "split" Open in a split
 ---| "vsplit" Open in a vertical split
@@ -378,6 +381,7 @@ end
 ---@field initial_branch_rename? string Default for rename branch prompt. If not set, the current branch name is used
 ---@field kind? WindowKind The default type of window neogit should open in
 ---@field floating? NeogitConfigFloating The floating window style
+---@field confirm? NeogitConfigConfirm Confirm dialog options
 ---@field disable_line_numbers? boolean Whether to disable line numbers
 ---@field disable_relative_line_numbers? boolean Whether to disable line numbers
 ---@field console_timeout? integer Time in milliseconds after a console is created for long running commands
@@ -509,6 +513,9 @@ function M.get_default_values()
       height = 0.7,
       style = "minimal",
       border = "rounded",
+    },
+    confirm = {
+      use_vim = false,
     },
     initial_branch_name = "",
     disable_line_numbers = true,
@@ -660,6 +667,13 @@ function M.get_default_values()
         cherry_pick = "󰆏", -- nf-md-content_copy
         revert = "󰕌", -- nf-md-undo
         bisect = "󰍉", -- nf-md-magnify
+      },
+      -- Nerd font icons prefixing the Confirm Dialog's message, one per
+      -- level; set an entry to nil to disable that level's icon.
+      confirm = {
+        danger = "󰀚 ", -- nf-md-alert_octagon
+        warning = "󰀪 ", -- nf-md-alert
+        info = "󰋗 ", -- nf-md-information
       },
       -- Nerd font file-type icons shown before file names in the status
       -- buffer; keys are lowercase file extensions ("default" for unknown
@@ -1186,6 +1200,7 @@ function M.validate_config()
     validate_type(config.icons, "icons", { "table", "nil" })
     if config.icons then
       validate_type(config.icons.sections, "icons.sections", { "table", "nil" })
+      validate_type(config.icons.confirm, "icons.confirm", { "table", "nil" })
       validate_type(config.icons.file_icons, "icons.file_icons", { "table", "nil" })
       validate_type(config.icons.use_devicons, "icons.use_devicons", { "boolean", "nil" })
     end
@@ -1209,6 +1224,9 @@ function M.validate_config()
       validate_type(config.floating.height, "height", "number")
       validate_type(config.floating.style, "style", "string")
       validate_type(config.floating.border, "border", "string")
+    end
+    if validate_type(config.confirm, "confirm", { "table", "nil" }) then
+      validate_type(config.confirm.use_vim, "confirm.use_vim", { "boolean", "nil" })
     end
     validate_type(config.disable_line_numbers, "disable_line_numbers", "boolean")
     validate_type(config.disable_relative_line_numbers, "disable_relative_line_numbers", "boolean")

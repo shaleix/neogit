@@ -62,6 +62,15 @@ commits it merged in. Distinct from Discard (working-tree changes) and from
 revert (an inverse commit that leaves history alone).
 _Avoid_: delete commit, remove commit
 
+### Confirm Dialog
+
+The centered, masked yes/no dialog behind every permission prompt: a level
+bar (Danger/Warning/Info) titles a panel offering `[y]es` / `[n]o`, where Tab
+moves the selection and Enter submits it, y/n jump-select and commit after a
+short beat, and Esc answers No. Danger-tinted prompts default to No;
+informational ones default to Yes.
+_Avoid_: confirm popup, yes/no prompt
+
 ### Head Line
 
 The status buffer's single header row for the checked-out worktree: sync

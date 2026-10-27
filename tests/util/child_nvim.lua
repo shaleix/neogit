@@ -206,7 +206,14 @@ function ChildNvim:input(...)
 end
 
 function ChildNvim:confirm(state)
-  self:exec_lua(("vim.fn.confirm = function() return %d end"):format(state and 1 or 0))
+  -- The stub only intercepts vim.fn.confirm, so also route neogit's confirm
+  -- through it (confirm.use_vim); the Confirm Dialog would otherwise block
+  -- on real key input in the headless child. Dialog behavior itself is
+  -- covered by specs/specs/neogit/lib/confirm_spec.lua.
+  self:exec_lua(([[
+    vim.fn.confirm = function() return %d end
+    require("neogit.config").values.confirm.use_vim = true
+  ]]):format(state and 1 or 0))
 end
 
 ---Feed keys, one nvim_input() call per key, `<...>` sequences kept whole.

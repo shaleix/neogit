@@ -187,6 +187,7 @@ describe("Branch Config Popup", function()
           end, 50),
           "description editor did not open"
         )
+        nvim:confirm(true) -- "Save changes?" on closing the description editor
         nvim:keys("hello world<esc>q")
         assert(
           vim.wait(2000, function()

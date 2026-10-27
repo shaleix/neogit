@@ -179,6 +179,17 @@ function M.setup(config)
   -- background and stay subordinate to file names.
   local indent_guide = Color.from_hex(palette.bg0):shade(bg_factor * 0.2):to_css()
 
+  -- Confirm dialog (buffers/confirm.lua): the panel shades NormalFloat one
+  -- step so the dialog reads as a solid card over the backdrop; title bars
+  -- carry a brightened level color with panel-colored text (inverted).
+  local confirm_panel =
+    Color.from_hex(get_bg("NormalFloat") or (vim.o.bg == "dark" and "#1a1b26" or "#eeeeee"))
+      :shade(bg_factor * -0.18)
+      :to_css()
+  local confirm_title = function(c)
+    return Color.from_hex(c):shade(0.3):to_css()
+  end
+
   -- stylua: ignore
   hl_store = {
     NeogitGraphAuthor              = { fg = palette.orange, ctermfg = 3 },
@@ -300,6 +311,27 @@ function M.setup(config)
     NeogitFloatHeader              = { bg = palette.bg0, bold = palette.bold, ctermfg = 5 },
     NeogitFloatHeaderHighlight     = { bg = palette.bg2, fg = palette.cyan, bold = palette.bold, ctermfg = 5 },
     NeogitActiveItem               = { bg = palette.bg_orange, fg = palette.bg0, bold = palette.bold, ctermfg = 5 },
+    -- Confirm Dialog levels: level-colored choice text, a dim unselected
+    -- choice, the solid panel background (shared by the invisible border
+    -- slots so the backdrop can't bleed through), inverted level title
+    -- bars, and the pure-black backdrop pushed through winblend.
+    NeogitConfirmDanger            = { fg = palette.red, bold = palette.bold, ctermfg = 1 },
+    NeogitConfirmWarn              = { fg = palette.yellow, bold = palette.bold, ctermfg = 3 },
+    NeogitConfirmInfo              = { fg = palette.blue, bold = palette.bold, ctermfg = 4 },
+    -- fg only: the hint footer and unselected choices must not carry their
+    -- own background - they inherit the border slot's / panel's background
+    -- (linking to Comment would import theme backgrounds)
+    NeogitConfirmDim               = { fg = palette.grey, ctermfg = 7 },
+    -- The footer hint lives on the border slot: nvim composes footer cells
+    -- from the chunk's highlight alone, so a bg-less group would fall back
+    -- to something other than the panel. Pin the panel background here so
+    -- the hint strip reads as part of the border.
+    NeogitConfirmHint              = { fg = palette.grey, bg = confirm_panel, ctermfg = 7 },
+    NeogitConfirmNormal            = { fg = palette.white, bg = confirm_panel },
+    NeogitConfirmTitleDanger       = { fg = confirm_panel, bg = confirm_title(palette.red), bold = palette.bold },
+    NeogitConfirmTitleWarn         = { fg = confirm_panel, bg = confirm_title(palette.yellow), bold = palette.bold },
+    NeogitConfirmTitleInfo         = { fg = confirm_panel, bg = confirm_title(palette.blue), bold = palette.bold },
+    NeogitConfirmBackdrop          = { bg = "#000000" },
   }
 
   -- Change-label highlights are composed at render time as

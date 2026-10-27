@@ -1,18 +1,55 @@
 local a = require("neogit.lib.async")
+local config = require("neogit.config")
+local confirm_buffer = require("neogit.buffers.confirm")
 local input = a.wrap(vim.ui.input, 2)
 
 local M = {}
+
+-- Fallback path (vim's built-in prompt). Also a seam so tests can observe
+-- when routing chose the fallback without opening vim.fn.confirm headless.
+M._vim_confirm = function(msg, values, default)
+  return vim.fn.confirm(msg, table.concat(values, "\n"), default) == 1
+end
+
+-- Shared yes/no implementation. Routes to the Confirm Dialog unless:
+--   * confirm.use_vim is set (escape hatch back to vim's prompt),
+--   * the caller customized the choices (only [y]es/[n]o are supported), or
+--   * a dialog is already open (reentrancy - e.g. a refresh firing during
+--     another dialog; nesting would steal its focus).
+-- Level: explicit options.level wins; otherwise the default answer decides -
+-- defaulting to No marks the action dangerous-ish (warning), defaulting to
+-- Yes is informational (info).
+---@param msg string
+---@param options table|nil
+---@param default integer 1 = Yes, 2 = No
+---@return boolean
+local function confirm(msg, options, default)
+  options = options or {}
+  default = options.default or default
+  local values = options.values or { "&Yes", "&No" }
+
+  local custom_values = #values ~= 2 or values[1] ~= "&Yes" or values[2] ~= "&No"
+  local level = options.level
+  if level ~= nil and not vim.tbl_contains({ "danger", "warning", "info" }, level) then
+    level = nil
+  end
+  if level == nil then
+    level = (default == 2) and "warning" or "info"
+  end
+
+  if config.values.confirm.use_vim or custom_values or confirm_buffer.is_open() then
+    return M._vim_confirm(msg, values, default)
+  end
+
+  return confirm_buffer.open(msg, level, default == 1)
+end
 
 --- Provides the user with a confirmation
 ---@param msg string Prompt to use for confirmation
 ---@param options table|nil
 ---@return boolean Confirmation (Yes/No)
 function M.get_confirmation(msg, options)
-  options = options or {}
-  options.values = options.values or { "&Yes", "&No" }
-  options.default = options.default or 1
-
-  return vim.fn.confirm(msg, table.concat(options.values, "\n"), options.default) == 1
+  return confirm(msg, options, 1)
 end
 
 --- Provides the user with a confirmation. Like get_confirmation, but defaults to false
@@ -20,11 +57,7 @@ end
 ---@param options table|nil
 ---@return boolean Confirmation (Yes/No)
 function M.get_permission(msg, options)
-  options = options or {}
-  options.values = options.values or { "&Yes", "&No" }
-  options.default = options.default or 2
-
-  return vim.fn.confirm(msg, table.concat(options.values, "\n"), options.default) == 1
+  return confirm(msg, options, 2)
 end
 
 ---@class UserChoiceOptions

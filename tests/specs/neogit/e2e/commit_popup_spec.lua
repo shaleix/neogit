@@ -247,6 +247,7 @@ describe("Commit Popup", function()
       it("can make a commit", function()
         local head = head_commit_line()
 
+        nvim:confirm(true) -- "Save changes?" on closing the commit editor
         nvim:keys("c")
         nvim:keys("commit message")
         nvim:keys("<esc>q")

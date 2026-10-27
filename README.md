@@ -25,6 +25,7 @@
 
 ## Installation
 
+
 Here's an example spec for [Lazy](https://github.com/folke/lazy.nvim), but you're free to use whichever plugin manager suits you.
 
 ```lua
