@@ -103,12 +103,12 @@ local function open_status(dir)
   return buf
 end
 
----Stub the confirmation; asked collects the prompts, answer decides confirm
----vs cancel. Returns the restore function.
+---Stub the confirmation; asked collects the prompts (with their level
+---options), answer decides confirm vs cancel. Returns the restore function.
 local function stub_confirm(asked, answer)
   local original = input.get_permission
-  input.get_permission = function(msg)
-    table.insert(asked, msg)
+  input.get_permission = function(msg, opts)
+    table.insert(asked, { msg = msg, level = opts and opts.level })
     return answer
   end
   return function()
@@ -153,9 +153,10 @@ describe("status recent-commit drop (x)", function()
 
     assert.equal(1, #asked, "confirmation must be asked exactly once; " .. vim.inspect(asked))
     assert.truthy(
-      asked[1] and asked[1]:find('Drop commit "bbb-middle"', 1, true),
-      "confirmation must name the subject; got: " .. tostring(asked[1])
+      asked[1] and asked[1].msg and asked[1].msg:find('Drop commit "bbb-middle"', 1, true),
+      "confirmation must name the subject; got: " .. tostring(asked[1] and asked[1].msg)
     )
+    assert.equal("danger", asked[1].level, "history rewrite must prompt at danger level")
     assert.same({ oid_of(dir, "bbb-middle") }, dropped, "must drop the cursor commit's full OID")
   end)
 
@@ -206,7 +207,10 @@ describe("status recent-commit drop (x)", function()
 
     assert.equal(1, #asked, "confirmation must be asked exactly once; " .. vim.inspect(asked))
     assert.truthy(
-      asked[1] and asked[1]:find("merge commit", 1, true) and asked[1]:find("merged in", 1, true),
+      asked[1]
+        and asked[1].msg
+        and asked[1].msg:find("merge commit", 1, true)
+        and asked[1].msg:find("merged in", 1, true),
       "merge warning must spell out the consequence; got: " .. tostring(asked[1])
     )
     assert.same({ oid_of(dir, "merge-them") }, dropped, "must drop the merge commit's OID")

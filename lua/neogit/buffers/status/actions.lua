@@ -907,6 +907,7 @@ M.n_discard = function(self)
 
     local section = selection.section.name
     local action, message, own_prompt
+    local level
     local refresh = {}
 
     if selection.item and selection.item.first == fn.line(".") then -- Discard File
@@ -989,6 +990,9 @@ M.n_discard = function(self)
         else
           message = ("Drop commit %q?"):format(commit.subject)
         end
+
+        -- History rewrite: prompt at danger level (red title bar)
+        level = "danger"
 
         action = function()
           git.rebase.drop(commit.oid)
@@ -1079,7 +1083,7 @@ M.n_discard = function(self)
       end
     end
 
-    if action and (own_prompt or input.get_permission(message)) then
+    if action and (own_prompt or input.get_permission(message, level and { level = level })) then
       action()
       self:dispatch_refresh(refresh, "n_discard")
     end
