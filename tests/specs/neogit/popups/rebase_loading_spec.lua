@@ -135,4 +135,55 @@ describe("rebase loading banner", function()
       ("banner text must report the stop: %q"):format(loading.internal.settled_text())
     )
   end)
+
+  it("shows the banner while dropping a commit and settles green", function()
+    local dir = vim.fn.tempname()
+    vim.uv.fs_mkdir(dir, 493)
+    local function run(...)
+      local r = vim.system({ "git", "-C", dir, ... }):wait()
+      assert(r.code == 0, tostring(r.stderr))
+    end
+
+    run("init", "-q", "-b", "main")
+    run("config", "user.email", "t@t")
+    run("config", "user.name", "t")
+    for _, s in ipairs { "aaa-init", "bbb-middle", "ccc-top" } do
+      run("commit", "--allow-empty", "-qm", s)
+    end
+
+    local oid = vim.trim(
+      vim
+        .system({ "git", "-C", dir, "log", "--format=%H", "--grep=^bbb-middle$", "--max-count=1" })
+        :wait().stdout
+    )
+    local short = vim.trim(vim.system({ "git", "-C", dir, "rev-parse", "--short", oid }):wait().stdout)
+
+    vim.cmd.cd(dir)
+    Repo.instance(dir, { autorefresh = false }):dispatch_refresh()
+    assert.truthy(
+      vim.wait(10000, function()
+        return require("neogit.lib.git").repo.state.hooks ~= nil
+      end, 10),
+      "repo state must load before dropping"
+    )
+
+    require("neogit.lib.git").rebase.drop(oid)
+
+    assert.truthy(
+      vim.wait(15000, function()
+        return loading.internal.state.result ~= nil
+      end),
+      "banner must settle after the drop"
+    )
+    assert.equal("NeogitSpinnerSuccess", loading.internal.state.result.hl)
+    assert.truthy(
+      loading.internal.settled_text():find("Dropped " .. short, 1, true) ~= nil,
+      ("banner text must report the drop: %q"):format(loading.internal.settled_text())
+    )
+
+    local subjects = vim.system({ "git", "-C", dir, "log", "--format=%s" }):wait().stdout or ""
+    assert.truthy(subjects:find("bbb-middle", 1, true) == nil, "dropped commit must be gone")
+    assert.truthy(subjects:find("ccc-top", 1, true) ~= nil, "later commit must survive")
+    assert.truthy(subjects:find("aaa-init", 1, true) ~= nil, "earlier commit must survive")
+  end)
 end)

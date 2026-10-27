@@ -137,7 +137,8 @@ end
 ---`drop`; a merge commit's `merge -C` line is removed, which also drops
 ---everything it merged in. Commits before the target are untouched; commits
 ---after it are replayed with their merge structure preserved
----(`--rebase-merges`), stopping on conflicts like any rebase.
+---(`--rebase-merges`), stopping on conflicts like any rebase. The bottom
+---loading banner tracks the run the way pull/push do.
 ---@param commit string
 ---@return ProcessResult
 function M.drop(commit)
@@ -162,11 +163,15 @@ function M.drop(commit)
     cmd = cmd.args("--root")
   end
 
-  local result = cmd.call()
+  local result
+  loading.show(("Dropping %s"):format(short_commit))
+  result = cmd.call()
 
   if result:success() then
+    loading.done(("Dropped %s"):format(short_commit), vim.log.levels.INFO)
     event.send("Rebase", { commit = commit, status = "ok" })
   else
+    loading.done(("Dropping %s stopped"):format(short_commit), vim.log.levels.ERROR)
     notification.error("Rebasing failed. Resolve conflicts before continuing")
     event.send("Rebase", { commit = commit, status = "conflict" })
   end
