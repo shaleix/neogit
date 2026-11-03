@@ -672,7 +672,7 @@ function M.get_default_values()
       -- level; set an entry to nil to disable that level's icon.
       confirm = {
         danger = "󰀚 ", -- nf-md-alert_octagon
-        warning = "󰀪 ", -- nf-md-alert
+        warning = "󰀨 ", -- nf-md alert family, U+F0028
         info = "󰋗 ", -- nf-md-information
       },
       -- Nerd font file-type icons shown before file names in the status
