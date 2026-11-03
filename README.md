@@ -605,7 +605,8 @@ neogit.setup {
     status = {
       ["j"] = "MoveDown",
       ["k"] = "MoveUp",
-      ["o"] = "OpenTree",
+      ["o"] = "GoToFile",
+      ["O"] = "OpenTree",
       ["q"] = "Close",
       ["I"] = "InitRepo",
       ["1"] = "Depth1",
